@@ -20,8 +20,8 @@
     },
     {
       "path": "CITATION.cff",
-      "bytes": 689,
-      "sha256": "3dbab3c8d8a6c86477e0d966d53925a8f8e802aaefe452a727f8ad9032922a69"
+      "bytes": 693,
+      "sha256": "4cb3381c40c2ae255e9ed0711a0a5a85a726cf213d18cd06836e56872880ad62"
     },
     {
       "path": "Cargo.lock",
@@ -45,8 +45,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 5555,
-      "sha256": "b1284113022cb024e7a54df9f1d0683b9241d8fdda3144b5165a7b360cca4267"
+      "bytes": 5574,
+      "sha256": "b60ac71c0bd448450670ca80e237cc9455b22380affb9d518e295d417e347f36"
     },
     {
       "path": "RELEASE-v0.1.md",

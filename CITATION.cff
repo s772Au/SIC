@@ -19,4 +19,5 @@ preferred-citation:
       orcid: "https://orcid.org/0009-0006-2401-1937"
   year: 2026
   version: "v1 preprint"
-  url: "https://github.com/s772Au/SIC/blob/main/paper/sic_paper_zh_v1.md"
+  doi: "10.5281/zenodo.24051713"
+  url: "https://zenodo.org/records/24051713"

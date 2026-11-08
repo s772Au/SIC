@@ -2,7 +2,7 @@
 
 **Streaming incremental context editing for continuing agent work.** Worker models, semantic Editor models and deterministic programs maintain one Agent's working context. Compression is one available edit.
 
-This is the public **v0.1 prerelease**. The release is updated in place; pin a source commit and artifact SHA256 for reproducibility. The Chinese [preprint v1](paper/sic_paper_zh_v1.md) describes the mechanism and cost conditions. **Zenodo: pending** — no DOI has been assigned in this release record.
+This is the public **v0.1 prerelease**. The release is updated in place; pin a source commit and artifact SHA256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)). Paper DOI: **10.5281/zenodo.24051713**.
 
 ## Current results
 
