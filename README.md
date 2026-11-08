@@ -4,6 +4,8 @@
 
 This is the public **v0.1 prerelease**. The release is updated in place; pin a source commit and artifact SHA256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)). Paper DOI: **10.5281/zenodo.24051713**.
 
+Source code and experimental-materials archive: [Zenodo v0.1](https://doi.org/10.5281/zenodo.24052123). The archived snapshot remains fixed while GitHub v0.1 may be updated in place.
+
 ## Video demo
 
 [YouTube](https://youtu.be/s0I9LJ9-By8) · [Bilibili](https://www.bilibili.com/video/BV1TTWn6aERh/)

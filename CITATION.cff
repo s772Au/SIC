@@ -9,6 +9,7 @@ authors:
     given-names: Qi
     orcid: "https://orcid.org/0009-0006-2401-1937"
 repository-code: "https://github.com/s772Au/SIC"
+doi: "10.5281/zenodo.24052123"
 license: MIT
 preferred-citation:
   type: article

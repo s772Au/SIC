@@ -20,8 +20,8 @@
     },
     {
       "path": "CITATION.cff",
-      "bytes": 693,
-      "sha256": "4cb3381c40c2ae255e9ed0711a0a5a85a726cf213d18cd06836e56872880ad62"
+      "bytes": 724,
+      "sha256": "101a30579a296b316ad4ef3ea2e0ee7efb6e18037e7007243ae19318ec644b66"
     },
     {
       "path": "Cargo.lock",
@@ -45,8 +45,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 5805,
-      "sha256": "a7ecacd250a0eb80a7742976aa4f4b43d99c818bb6bfc9678be387e52b6976ac"
+      "bytes": 5991,
+      "sha256": "da52b6a77e7ea19ec028bdfafb8ab61ce99673b3036a127cdd7d7d301ae84bdc"
     },
     {
       "path": "RELEASE-v0.1.md",
@@ -1230,8 +1230,8 @@
     },
     {
       "path": "research/publication-v0.1/README.md",
-      "bytes": 3516,
-      "sha256": "4f899d584253dd6ba397c03e4688151c0485b39b357db3181c2e684f77084a14"
+      "bytes": 3655,
+      "sha256": "b4f573fc0a003c97817afd000dd83778436bab4d508c2df18368c3d46692002b"
     },
     {
       "path": "research/publication-v0.1/results/core-regression-summary.json",

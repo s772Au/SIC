@@ -2,6 +2,8 @@
 
 This supplement accompanies the [v1 preprint](https://doi.org/10.5281/zenodo.24051713) and [GitHub v0.1](https://github.com/s772Au/SIC/releases/tag/v0.1).
 
+The corresponding fixed source and experimental-materials snapshot is archived at [Zenodo v0.1](https://doi.org/10.5281/zenodo.24052123).
+
 Demo: [YouTube](https://youtu.be/s0I9LJ9-By8) · [Bilibili](https://www.bilibili.com/video/BV1TTWn6aERh/).
 
 ## Contents and evidence boundary
