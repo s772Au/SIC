@@ -1,0 +1,53 @@
+{
+  "runtime": {
+    "questions": 451,
+    "question_images": 29,
+    "trajectories": 1870,
+    "trajectory_domains": {
+      "enterprise": 941,
+      "web": 929
+    },
+    "screenshot_references": {
+      "enterprise": 34292,
+      "web": 14317
+    },
+    "missing_screenshots": {},
+    "missing_examples": [],
+    "haystacks": {
+      "small": {
+        "question_count": 451,
+        "all_ids_and_domains_valid": true
+      },
+      "medium": {
+        "question_count": 451,
+        "all_ids_and_domains_valid": true
+      }
+    },
+    "elapsed_seconds": 4.06,
+    "all_runtime_screenshots_present": true
+  },
+  "official": {
+    "official_repository_commit": "2cc8c540bdb87fe6761629b585e727e1c4704520",
+    "script_sha256": {
+      "public_data.py": "d2b868bfb0b6f8b66489c9445389eb6d0f26975f940a9c2365be154e63649c89",
+      "validate_data.py": "b5c7367a4ff26f5e57d2e2dd580aa179b10ad788680f753720d05645b5a1e332"
+    },
+    "results": {
+      "small": {
+        "questions": 451,
+        "trajectories": 1870,
+        "haystack_questions": 451,
+        "tier": "small",
+        "check_screenshots": true
+      },
+      "medium": {
+        "questions": 451,
+        "trajectories": 1870,
+        "haystack_questions": 451,
+        "tier": "medium",
+        "check_screenshots": true
+      }
+    },
+    "model_calls": 0
+  }
+}

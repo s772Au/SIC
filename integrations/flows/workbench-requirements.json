@@ -1,0 +1,142 @@
+{
+  "name": "SIC 工作台 — requirements",
+  "description": "官方SIC语义工作台。固定CB/op只读；仅候选与授权配置可改。各输出提供表格与真实版本。",
+  "is_component": false,
+  "data": {
+    "nodes": [
+      {
+        "id": "SICCoverage-1",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "id": "SICCoverage-1",
+          "type": "SICCoverage",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\nfrom pathlib import Path\n\nfrom sic_workflow.workbench_component import WorkbenchComponent as Component\nfrom lfx.io import StrInput, Output\nfrom lfx.schema import Data, DataFrame\nfrom sic_workflow.v2_client import CoreClient\nfrom sic_workflow.workbench_support import table\n\n\nclass SICCoverage(Component):\n    display_name = \"SIC F01–F73验收与缺口\"\n    description = \"逐需求显示真实证据范围；接口/节点/测试数量不替代需求完成，两个官方GUI分别记录。\"\n    icon = \"ClipboardCheck\"\n    name = \"SICCoverage\"\n    inputs = [StrInput(name=\"requirement_filter\", display_name=\"需求ID或关键词（空则全部）\", value=\"\")]\n    outputs = [Output(name=\"requirements\", display_name=\"逐需求覆盖表\", method=\"requirements\", group_outputs=True),\n               Output(name=\"capabilities\", display_name=\"当前核心实际能力与缺失\", method=\"capabilities\", group_outputs=True)]\n\n    def requirements(self) -> DataFrame:\n        import sic_workflow\n        root = Path(sic_workflow.__file__).resolve().parent.parent\n        coverage = json.loads((root / \"functional-acceptance.json\").read_text(encoding=\"utf-8\"))\n        query = self.requirement_filter.casefold()\n        return table([{\"需求\":row['id'],\"行为\":row['title'],\"输入\":row['inputs'],\"操作\":row['operation'],\"输出\":row['outputs'],\n                       \"机械范围\":row['mechanical_acceptance']['scenario_summary'],\n                       \"GUI\":row['gui_acceptance']['status'],\"GUI边界\":row['gui_acceptance']['boundary'],\n                       \"研究\":row['research_evaluation']['status'],\n                       \"完整通过\":row['mechanical_acceptance']['entire_requirement_declared_passed'],\n                       \"通过条件\":json.dumps(row['pass_conditions'],ensure_ascii=False),\n                       \"来源\":json.dumps(row['sources'],ensure_ascii=False)}\n                      for row in coverage['features'] if not query or query in json.dumps(row,ensure_ascii=False).casefold()])\n\n    def capabilities(self) -> Data:\n        return Data(data={\"capabilities\": CoreClient().capabilities(), \"claim\": \"Core declaration; requirement acceptance is listed separately\"})\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "requirement_filter": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "requirement_filter",
+                "value": "",
+                "display_name": "需求ID或关键词（空则全部）",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "逐需求显示真实证据范围；接口/节点/测试数量不替代需求完成，两个官方GUI分别记录。",
+            "icon": "ClipboardCheck",
+            "base_classes": [
+              "JSON",
+              "Table"
+            ],
+            "display_name": "SIC F01–F73验收与缺口",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "requirements",
+                "display_name": "逐需求覆盖表",
+                "method": "requirements",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "capabilities",
+                "display_name": "当前核心实际能力与缺失",
+                "method": "capabilities",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "requirement_filter"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICCoverage",
+              "module": "custom_components.sic_f01f73",
+              "code_hash": "543755cc6832",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  },
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      }
+    ],
+    "edges": [],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.6
+    }
+  }
+}

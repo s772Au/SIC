@@ -1,0 +1,2644 @@
+{
+  "name": "SIC - explicit draft lifecycle",
+  "description": "SIC Rust API control plane. Writes disabled until explicitly enabled per node.",
+  "is_component": false,
+  "data": {
+    "nodes": [
+      {
+        "id": "SICOperation-1",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-1",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{\"session_id\": \"REPLACE_SESSION_ID\"}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "wb_create",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"source\": \"first\\nsecond\", \"units\": [\"first\\n\", \"second\"]}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Create WB",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-2",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-2",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "wb_units",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Inspect source units",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-3",
+        "type": "genericNode",
+        "position": {
+          "x": 840,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-3",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "draft_create",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Create draft",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-4",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-4",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "preflight",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Inspect preflight (no model)",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-5",
+        "type": "genericNode",
+        "position": {
+          "x": 1680,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-5",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "draft_edit",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"base_revision\": 0, \"edits\": [{\"target_id\": \"u000001\", \"op\": \"COMPRESS\", \"risk\": \"low\", \"content\": \"1\\n\"}]}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Edit draft revision",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-6",
+        "type": "genericNode",
+        "position": {
+          "x": 2100,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-6",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "draft_validate",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Validate draft",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-7",
+        "type": "genericNode",
+        "position": {
+          "x": 2520,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-7",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "draft_commit",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Commit immutable CB",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-8",
+        "type": "genericNode",
+        "position": {
+          "x": 2940,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-8",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "commit_publish",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Publish CB",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICOperation-9",
+        "type": "genericNode",
+        "position": {
+          "x": 3360,
+          "y": 120
+        },
+        "data": {
+          "id": "SICOperation-9",
+          "type": "SICOperation",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous step",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "Connect another SIC node; carries IDs without copying its historical result.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Explicitly enable state changes on this node. Re-running a write can create another record.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.client import OPERATIONS, SicClient\n\n\nclass SICOperation(Component):\n    display_name = \"SIC Operation\"\n    description = \"Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.\"\n    icon = \"Workflow\"\n    name = \"SICOperation\"\n    inputs = [\n        DropdownInput(name=\"operation_name\", display_name=\"Operation\", options=list(OPERATIONS), value=\"bootstrap\"),\n        DataInput(name=\"previous\", display_name=\"Previous step\", required=False,\n                  info=\"Connect another SIC node; carries IDs without copying its historical result.\"),\n        CodeInput(name=\"context_json\", display_name=\"Context overrides (JSON)\", value=\"{}\",\n                       info='IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.'),\n        CodeInput(name=\"payload_json\", display_name=\"Editable request (JSON)\", value=\"{}\",\n                       info=\"Only the API request body/query. Read the integration guide for operation examples.\"),\n        BoolInput(name=\"allow_write\", display_name=\"Allow write\", value=False,\n                  info=\"Explicitly enable state changes on this node. Re-running a write can create another record.\"),\n        BoolInput(name=\"allow_model\", display_name=\"Allow model request\", value=False,\n                  info=\"Only draft_single_pass: sends one real upstream request and may incur cost. Requires Allow write too.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"API result + context\", method=\"execute_operation\")]\n\n    def execute_operation(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        context = dict(previous.get(\"context\", {}))\n        context_values = self.context_json if isinstance(self.context_json, dict) else json.loads(self.context_json or \"{}\")\n        payload_values = self.payload_json if isinstance(self.payload_json, dict) else json.loads(self.payload_json or \"{}\")\n        if not isinstance(context_values, dict) or not isinstance(payload_values, dict):\n            raise ValueError(\"Context and request must be JSON objects\")\n        context.update(context_values)\n        result = SicClient().execute(self.operation_name, context,\n                                     payload_values, allow_write=self.allow_write, allow_model=self.allow_model)\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context overrides (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "IDs, for example {\"session_id\":\"...\", \"draft_id\":\"...\"}.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "bootstrap",
+                  "session_create",
+                  "blocks",
+                  "wb_create",
+                  "timeline",
+                  "wb_source",
+                  "wb_units",
+                  "drafts",
+                  "draft_create",
+                  "draft_read",
+                  "draft_edit",
+                  "draft_validate",
+                  "preflight",
+                  "draft_single_pass",
+                  "draft_commit",
+                  "commit_read",
+                  "commit_publish",
+                  "draft_jobs",
+                  "edit_job",
+                  "mount_read",
+                  "mount_edit",
+                  "mount_publish",
+                  "mount_revisions",
+                  "projection",
+                  "roots",
+                  "promotion_candidates",
+                  "promotion_preview",
+                  "promotion_commit",
+                  "node_read",
+                  "archive_search",
+                  "archive_read",
+                  "assemble_chat",
+                  "assemble_responses",
+                  "test_catalog",
+                  "test_plan_read",
+                  "test_plan_edit",
+                  "test_plan_validate"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "projection",
+                "display_name": "Operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable request (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Only the API request body/query. Read the integration guide for operation examples.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "Inspect Rust history, edit drafts, or explicitly enable one single-pass model request.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Inspect projection",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "API result + context",
+                "method": "execute_operation",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "allow_write",
+              "allow_model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICOperation",
+              "module": "custom_components.sic_operation",
+              "code_hash": "e51e8c3c3883",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-1",
+        "source": "SICOperation-1",
+        "target": "SICOperation-2",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-1\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-2\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-1",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-2",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-2",
+        "source": "SICOperation-2",
+        "target": "SICOperation-3",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-2\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-3\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-2",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-3",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-3",
+        "source": "SICOperation-3",
+        "target": "SICOperation-4",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-3\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-4\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-3",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-4",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-4",
+        "source": "SICOperation-4",
+        "target": "SICOperation-5",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-4\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-5\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-4",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-5",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-5",
+        "source": "SICOperation-5",
+        "target": "SICOperation-6",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-5\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-6\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-5",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-6",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-6",
+        "source": "SICOperation-6",
+        "target": "SICOperation-7",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-6\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-7\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-6",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-7",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-7",
+        "source": "SICOperation-7",
+        "target": "SICOperation-8",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-7\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-8\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-7",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-8",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-8",
+        "source": "SICOperation-8",
+        "target": "SICOperation-9",
+        "sourceHandle": "{\"dataType\": \"SICOperation\", \"id\": \"SICOperation-8\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICOperation-9\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICOperation",
+            "id": "SICOperation-8",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICOperation-9",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.7
+    }
+  }
+}

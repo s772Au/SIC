@@ -1,0 +1,997 @@
+{
+  "schema": "sic-frontend-requirements-v1",
+  "contract_sha256": "608e9c72ffe9972a3fa16374a493b7265f4eca34dbb06fc20751ac90b9725bb1",
+  "scope": "Historical scenario evidence only. Superseded baseline; never infer new-design completeness from this table, node counts, API names or tests.",
+  "requirements": [
+    {
+      "id": "R01",
+      "requirement": "Agent组成",
+      "domain": "角色/持续编辑",
+      "interaction": "SICConfiguration / SICRuntime / sic_configuration / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "角色、安全profile、模型预算、主动程序/有限运行已有HTTP与域事务证据；后台触发/失败恢复的完整GUI场景待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R02",
+      "requirement": "编辑目标",
+      "domain": "角色/持续编辑",
+      "interaction": "SICConfiguration / SICRuntime / sic_configuration / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "角色、安全profile、模型预算、主动程序/有限运行已有HTTP与域事务证据；后台触发/失败恢复的完整GUI场景待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R03",
+      "requirement": "角色配置",
+      "domain": "角色/持续编辑",
+      "interaction": "SICConfiguration / SICRuntime / sic_configuration / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "角色、安全profile、模型预算、主动程序/有限运行已有HTTP与域事务证据；后台触发/失败恢复的完整GUI场景待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R04",
+      "requirement": "主动程序编辑",
+      "domain": "角色/持续编辑",
+      "interaction": "SICConfiguration / SICRuntime / sic_configuration / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "角色、安全profile、模型预算、主动程序/有限运行已有HTTP与域事务证据；后台触发/失败恢复的完整GUI场景待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R05",
+      "requirement": "持续触发",
+      "domain": "角色/持续编辑",
+      "interaction": "SICConfiguration / SICRuntime / sic_configuration / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "角色、安全profile、模型预算、主动程序/有限运行已有HTTP与域事务证据；后台触发/失败恢复的完整GUI场景待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R06",
+      "requirement": "部署独立",
+      "domain": "正文与协议",
+      "interaction": "SICConfiguration / SICRuntime / sic_configuration / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "角色、安全profile、模型预算、主动程序/有限运行已有HTTP与域事务证据；后台触发/失败恢复的完整GUI场景待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R07",
+      "requirement": "正文解析与回组",
+      "domain": "正文与协议",
+      "interaction": "SICNativeInput / SICWorkspace / sic_source",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "三格式解码/encode受核心catalog约束；正文/协议对照、字面反斜杠与保护target拒绝已测；复杂原生格式支持边界仍按核心实际返回显示。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_acceptance.py"
+      ]
+    },
+    {
+      "id": "R08",
+      "requirement": "协议控制保护",
+      "domain": "正文与协议",
+      "interaction": "SICNativeInput / SICWorkspace / sic_source",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "三格式解码/encode受核心catalog约束；正文/协议对照、字面反斜杠与保护target拒绝已测；复杂原生格式支持边界仍按核心实际返回显示。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_acceptance.py"
+      ]
+    },
+    {
+      "id": "R09",
+      "requirement": "适配复用与支持范围",
+      "domain": "正文与协议",
+      "interaction": "SICNativeInput / SICWorkspace / sic_source",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "三格式解码/encode受核心catalog约束；正文/协议对照、字面反斜杠与保护target拒绝已测；复杂原生格式支持边界仍按核心实际返回显示。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_acceptance.py"
+      ]
+    },
+    {
+      "id": "R10",
+      "requirement": "原始材料与定位单元",
+      "domain": "正文与协议",
+      "interaction": "SICNativeInput / SICWorkspace / sic_source",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "三格式解码/encode受核心catalog约束；正文/协议对照、字面反斜杠与保护target拒绝已测；复杂原生格式支持边界仍按核心实际返回显示。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_acceptance.py"
+      ]
+    },
+    {
+      "id": "R11",
+      "requirement": "WB边界",
+      "domain": "增量与不可变CB",
+      "interaction": "SICNativeInput / SICWorkspace / sic_source",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "三格式解码/encode受核心catalog约束；正文/协议对照、字面反斜杠与保护target拒绝已测；复杂原生格式支持边界仍按核心实际返回显示。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_acceptance.py"
+      ]
+    },
+    {
+      "id": "R12",
+      "requirement": "增量延伸",
+      "domain": "增量与不可变CB",
+      "interaction": "SICNativeInput / SICWorkspace / sic_source",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "三格式解码/encode受核心catalog约束；正文/协议对照、字面反斜杠与保护target拒绝已测；复杂原生格式支持边界仍按核心实际返回显示。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_acceptance.py"
+      ]
+    },
+    {
+      "id": "R13",
+      "requirement": "发布后固定",
+      "domain": "增量与不可变CB",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R14",
+      "requirement": "后续纠正",
+      "domain": "增量与不可变CB",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R15",
+      "requirement": "确定的编辑输入",
+      "domain": "候选与有序操作",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R16",
+      "requirement": "内容操作全集",
+      "domain": "候选与有序操作",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R17",
+      "requirement": "默认保留",
+      "domain": "候选与有序操作",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R18",
+      "requirement": "持久操作通信",
+      "domain": "候选与有序操作",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R19",
+      "requirement": "单轮交付",
+      "domain": "候选与有序操作",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R20",
+      "requirement": "多Editor协作",
+      "domain": "候选与有序操作",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R21",
+      "requirement": "一致发布",
+      "domain": "发布与PVI",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R22",
+      "requirement": "持久P",
+      "domain": "发布与PVI",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R23",
+      "requirement": "易失V",
+      "domain": "发布与PVI",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R24",
+      "requirement": "即时I",
+      "domain": "发布与PVI",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R25",
+      "requirement": "分类独立",
+      "domain": "发布与PVI",
+      "interaction": "SICEditorTask / SICCandidate / sic_editor / sic_candidate",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际单轮模型交付→候选CAS修订→PVI→校验→固定发布全链已测，原始响应与旧CB不变；两官方GUI最终操作待验。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_flow_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R26",
+      "requirement": "当前决策目录",
+      "domain": "决策与工具",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R27",
+      "requirement": "教学与语义目标",
+      "domain": "决策与工具",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R28",
+      "requirement": "Lazy工具更新",
+      "domain": "决策与工具",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R29",
+      "requirement": "生成时序索引",
+      "domain": "长期记忆与导航",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R30",
+      "requirement": "CB与WB对应索引",
+      "domain": "长期记忆与导航",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R31",
+      "requirement": "块内精细定位",
+      "domain": "长期记忆与导航",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R32",
+      "requirement": "实际追溯工具",
+      "domain": "长期记忆与导航",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R33",
+      "requirement": "长链维护",
+      "domain": "长期记忆与导航",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R34",
+      "requirement": "Editor自身上下文",
+      "domain": "长期记忆与导航",
+      "interaction": "SICDecision / SICMemory / SICEditorTask / sic_decision / sic_memory / sic_editor",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "四视角事件/真实程序维护、两维导航、分页proposal/op/I、有限投影及单轮前冻结档案页已测；长期模型自主检索维护的完整任务质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R35",
+      "requirement": "前沿与实际请求",
+      "domain": "覆写与调度",
+      "interaction": "SICRuntime / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实frontier同cut请求、宿主事件与wait/interleave动作执行已测；物理缓存命中unknown，实际DSH工具重叠证据由宿主联调另记。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R36",
+      "requirement": "同次编辑机会",
+      "domain": "覆写与调度",
+      "interaction": "SICRuntime / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实frontier同cut请求、宿主事件与wait/interleave动作执行已测；物理缓存命中unknown，实际DSH工具重叠证据由宿主联调另记。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R37",
+      "requirement": "原生布局影响",
+      "domain": "覆写与调度",
+      "interaction": "SICRuntime / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实frontier同cut请求、宿主事件与wait/interleave动作执行已测；物理缓存命中unknown，实际DSH工具重叠证据由宿主联调另记。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R38",
+      "requirement": "真实工具窗口",
+      "domain": "覆写与调度",
+      "interaction": "SICRuntime / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实frontier同cut请求、宿主事件与wait/interleave动作执行已测；物理缓存命中unknown，实际DSH工具重叠证据由宿主联调另记。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R39",
+      "requirement": "三类推进",
+      "domain": "覆写与调度",
+      "interaction": "SICRuntime / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实frontier同cut请求、宿主事件与wait/interleave动作执行已测；物理缓存命中unknown，实际DSH工具重叠证据由宿主联调另记。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R40",
+      "requirement": "每WB破坏预算",
+      "domain": "覆写与调度",
+      "interaction": "SICRuntime / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实frontier同cut请求、宿主事件与wait/interleave动作执行已测；物理缓存命中unknown，实际DSH工具重叠证据由宿主联调另记。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R41",
+      "requirement": "调度输入与等待声明",
+      "domain": "覆写与调度",
+      "interaction": "SICRuntime / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实frontier同cut请求、宿主事件与wait/interleave动作执行已测；物理缓存命中unknown，实际DSH工具重叠证据由宿主联调另记。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R42",
+      "requirement": "完整调用账",
+      "domain": "计量与比较",
+      "interaction": "SICAccounting / sic_accounting / independent runner",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "逐类账、unknown、测量/费率/区间及两臂独立验证已实现；fixture计价为虚构，真实模型费用/缓存/质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "../scripts/verify_v2_experiment.py"
+      ]
+    },
+    {
+      "id": "R43",
+      "requirement": "不重叠计费类别",
+      "domain": "计量与比较",
+      "interaction": "SICAccounting / sic_accounting / independent runner",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "逐类账、unknown、测量/费率/区间及两臂独立验证已实现；fixture计价为虚构，真实模型费用/缓存/质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "../scripts/verify_v2_experiment.py"
+      ]
+    },
+    {
+      "id": "R44",
+      "requirement": "内容与输出分开",
+      "domain": "计量与比较",
+      "interaction": "SICAccounting / sic_accounting / independent runner",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "逐类账、unknown、测量/费率/区间及两臂独立验证已实现；fixture计价为虚构，真实模型费用/缓存/质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "../scripts/verify_v2_experiment.py"
+      ]
+    },
+    {
+      "id": "R45",
+      "requirement": "逐项成本对照",
+      "domain": "计量与比较",
+      "interaction": "SICAccounting / sic_accounting / independent runner",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "逐类账、unknown、测量/费率/区间及两臂独立验证已实现；fixture计价为虚构，真实模型费用/缓存/质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "../scripts/verify_v2_experiment.py"
+      ]
+    },
+    {
+      "id": "R46",
+      "requirement": "时间与价值记录",
+      "domain": "计量与比较",
+      "interaction": "SICAccounting / sic_accounting / independent runner",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "逐类账、unknown、测量/费率/区间及两臂独立验证已实现；fixture计价为虚构，真实模型费用/缓存/质量未评。",
+      "evidence_code": [
+        "tests/workbench_acceptance.py",
+        "tests/workbench_graph_acceptance.py",
+        "../scripts/verify_v2_experiment.py"
+      ]
+    },
+    {
+      "id": "R47",
+      "requirement": "路线身份",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R48",
+      "requirement": "历史checkpoint",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R49",
+      "requirement": "平级分叉",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R50",
+      "requirement": "从空白创建",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R51",
+      "requirement": "Socket寻址",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R52",
+      "requirement": "Signal控制",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R53",
+      "requirement": "Message投递",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R54",
+      "requirement": "分工处理与回传",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R55",
+      "requirement": "共享公示牌",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R56",
+      "requirement": "协作的活性与代价",
+      "domain": "路线与协作",
+      "interaction": "SICRoutes / SICBoard / sic_routes",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "真实chain目录/历史点/peerfork/socket/Signal/消息/并发分身工作与回传/共享任务CAS已测；失败取消/迟到完整前端GUI场景仍待验。",
+      "evidence_code": [
+        "tests/v2_acceptance.py",
+        "tests/workbench_graph_acceptance.py"
+      ]
+    },
+    {
+      "id": "R57",
+      "requirement": "DSH原生消费",
+      "domain": "DSH同核",
+      "interaction": "同Core bridge / 宿主DSH插件 / 两官方只读导航",
+      "status": "live-cross-runtime-evidence-gui-and-host-scenarios-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "根代理真实DSH CLI两独立会话正常工具往返exit0；精确session→chain绑定与LF/LG同Core只读观察通过。并非仅桥端口或HTTP模拟DSH成功；StudioGUI未验。",
+      "evidence_code": [
+        "tests/replay_runtime_binding.py"
+      ]
+    },
+    {
+      "id": "R58",
+      "requirement": "会话与历史恢复",
+      "domain": "DSH同核",
+      "interaction": "同Core bridge / 宿主DSH插件 / 两官方只读导航",
+      "status": "live-cross-runtime-evidence-gui-and-host-scenarios-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "Core重启后未继续会话与旧报告的chain/cut/三CB归档SHA/五调用账一致；同session续轮CLI成功后五CB/八调用账同时可由LF/LG读取。其他损坏/冲突恢复未由此推定。",
+      "evidence_code": [
+        "tests/replay_runtime_binding.py"
+      ]
+    },
+    {
+      "id": "R59",
+      "requirement": "工具事件与同核观察",
+      "domain": "DSH同核",
+      "interaction": "同Core bridge / 宿主DSH插件 / 两官方只读导航",
+      "status": "live-cross-runtime-evidence-gui-and-host-scenarios-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "最终两条真实DSH链跨LF/LG/18888读取一致，观察零Core写/零模型；带进展文字后的工具期Editor重叠由后端严格时序核验，不凭五调用账或状态名推定。",
+      "evidence_code": [
+        "tests/replay_runtime_binding.py"
+      ]
+    },
+    {
+      "id": "R60",
+      "requirement": "全过程可见",
+      "domain": "官方双GUI",
+      "interaction": "所有语义工作台 / manage-runtime.ps1",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-seven-node-representative-canvas-not-all-domains",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "本轮四服务健康，10份语义flow官方导入/字段保存/7节点实际执行通过，9个Studio图已注册且15条持久history的CAS/PVI生效；两个官方GUI最终目视编辑/结果检查待验。Core最后一批窄补丁尚待宿主协调重载。 官方七节点画布可见并一次实际执行，Inspect Output发布与来源映射已目视确认。",
+      "evidence_code": [
+        "tests/workbench_flow_acceptance.py"
+      ]
+    },
+    {
+      "id": "R61",
+      "requirement": "合法状态可编辑",
+      "domain": "官方双GUI",
+      "interaction": "所有语义工作台 / manage-runtime.ps1",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "passed-representative-candidate-pvi-publish-inspection",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "本轮四服务健康，10份语义flow官方导入/字段保存/7节点实际执行通过，9个Studio图已注册且15条持久history的CAS/PVI生效；两个官方GUI最终目视编辑/结果检查待验。Core最后一批窄补丁尚待宿主协调重载。 根代理真实Langflow GUI代表路径已通过，typed正文/理由/PVI与revision1固定结果经只读DB核验；仅该场景，其他域不自动划过。",
+      "evidence_code": [
+        "tests/workbench_flow_acceptance.py",
+        "tests/verify_gui_publication.py"
+      ]
+    },
+    {
+      "id": "R62",
+      "requirement": "常驻运行与界面验收",
+      "domain": "官方双GUI",
+      "interaction": "所有语义工作台 / manage-runtime.ps1",
+      "status": "live-cross-runtime-evidence-gui-and-host-scenarios-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "17861/12026到同18888两次实际同链发布重放通过；最终ownedCore重启后固定档案/绑定不变及DSH同session续轮新cut跨runtime已核。Langflow代表GUI路径过，StudioGUI仍工具URL强制停止。",
+      "evidence_code": [
+        "tests/workbench_flow_acceptance.py",
+        "tests/replay_runtime_binding.py"
+      ]
+    },
+    {
+      "id": "R63",
+      "requirement": "独立授权与撤销",
+      "domain": "授权恢复与证据",
+      "interaction": "Core权限 / SICRuntime恢复 / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际权限/撤销拒绝与显式resume_queue已测；进程中断、Editor不确定与协作失败取消需保留专项证据，不推定全完成。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R64",
+      "requirement": "可恢复且不重复执行",
+      "domain": "授权恢复与证据",
+      "interaction": "Core权限 / SICRuntime恢复 / sic_runtime",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "实际权限/撤销拒绝与显式resume_queue已测；进程中断、Editor不确定与协作失败取消需保留专项证据，不推定全完成。",
+      "evidence_code": [
+        "tests/v2_acceptance.py"
+      ]
+    },
+    {
+      "id": "R65",
+      "requirement": "运行证据与隐私",
+      "domain": "授权恢复与证据",
+      "interaction": "SICCoverage / SICAccounting / sic_accounting / independent runner",
+      "status": "mechanical-scenarios-executed-gui-pending",
+      "langflow_gui": "not_verified",
+      "studio_gui": "not_verified-browser-url-enforcement-stop",
+      "complete": false,
+      "notes": "新runner原始调用/代码/模型/任务/规则/费率manifest可重验，fixture独立scorer明确不评分；最终发布隐私审计及双GUI核验尚待。",
+      "evidence_code": [
+        "../scripts/run_v2_experiment.py",
+        "../scripts/verify_v2_experiment.py",
+        "../scripts/score_v2_experiment.py"
+      ]
+    }
+  ],
+  "baseline_status": "superseded-incomplete-baseline-not-proof-of-new-design-completeness",
+  "baseline_notice": "旧R01–R65遗漏/误提WB与CB双链及N阶递归，完整契约正在从作者两稿重建；保留旧场景证据，不能证明新设计全功能完成。"
+}

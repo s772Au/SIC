@@ -1,0 +1,251 @@
+{
+  "schema": "sic-research-data-readiness-v2",
+  "sources_lock_sha256": "9dbe5994e31b9612a7398d3971e18f89e19356efe754136ae2c43f43c43eabbd",
+  "files": [
+    {
+      "id": "corpusqa-4m",
+      "path": "benchmarks/data/corpusqa/4m_4domains.jsonl",
+      "exists": true,
+      "bytes": 4422636843,
+      "size_matches_lock": true,
+      "sha256": "a3e1ce956bfc40f447e582bd2ea2e23730fe725b91cfaf1e529451a96f6efd70",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "corpusqa-10m",
+      "path": "benchmarks/data/corpusqa/10m_4domains.jsonl",
+      "exists": true,
+      "bytes": 9787758915,
+      "size_matches_lock": true,
+      "sha256": "1d6656260ae47ad84058871689f70339d37deef84cfafad5fe33e3c66f06acb4",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "beam-10m-0",
+      "path": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "exists": true,
+      "bytes": 153844664,
+      "size_matches_lock": true,
+      "sha256": "31d96fd47ec56221d202e68792f26c00e49467dd4b36ee105c36ebd19ef78ad5",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "beam-10m-1",
+      "path": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "exists": true,
+      "bytes": 189980875,
+      "size_matches_lock": true,
+      "sha256": "a4f13fe25af51d57405ae41008689c31d1421377f3efde56a024b441deb2ee65",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "babilong-qa3-10m-first20-derived",
+      "path": "benchmarks/data/babilong/qa3-10m-first20.jsonl",
+      "exists": true,
+      "bytes": 803915786,
+      "size_matches_lock": true,
+      "sha256": "87f48469d373c07d3d940a26c39fe3052546ab0a0820ed950a166e4a951f9a92",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "babilong-qa1-10m",
+      "path": "benchmarks/data/babilong/data/qa1/10M.json",
+      "exists": true,
+      "bytes": 4018016805,
+      "size_matches_lock": true,
+      "sha256": "41691cba6b804d5b973bfff0bed92df9165f1716cc3c3ac6433ae9529a881118",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "babilong-qa2-10m",
+      "path": "benchmarks/data/babilong/data/qa2/10M.json",
+      "exists": true,
+      "bytes": 4019960532,
+      "size_matches_lock": true,
+      "sha256": "9ff8c0bb749908e1e2daa4ce624c8aaacbcb3bcc9064f64f2769d7be65e55336",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "babilong-qa3-10m",
+      "path": "benchmarks/data/babilong/data/qa3/10M.json",
+      "exists": true,
+      "bytes": 4025904013,
+      "size_matches_lock": true,
+      "sha256": "6a3d703f32ba18fa8d562b8581f025ddc49699817a3a6633bbeb9cc356c7d434",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "babilong-qa4-10m",
+      "path": "benchmarks/data/babilong/data/qa4/10M.json",
+      "exists": true,
+      "bytes": 4016999567,
+      "size_matches_lock": true,
+      "sha256": "0ae3f921d7fa4af250e153c89fa6d38c45946c22c5f6425608978d9ed1a989ab",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "babilong-qa5-10m",
+      "path": "benchmarks/data/babilong/data/qa5/10M.json",
+      "exists": true,
+      "bytes": 4017418339,
+      "size_matches_lock": true,
+      "sha256": "833b3c706bde3c7c74be3b5826a35c3efce1c253b07044af8e0c6cff8534d9ce",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "longmemeval-v2-trajectories",
+      "path": "benchmarks/data/longmemeval-v2/trajectories.jsonl",
+      "exists": true,
+      "bytes": 1195604539,
+      "size_matches_lock": true,
+      "sha256": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "longmemeval-v2-enterprise-images",
+      "path": "benchmarks/data/longmemeval-v2/trajectory_screenshots/enterprise_screenshots_base.tar.gz",
+      "exists": true,
+      "bytes": 3354163660,
+      "size_matches_lock": true,
+      "sha256": "5c4a67ae0856aa1ede9b040e7da7c7a2d0b76fdd6344ef87380bcdf9f4b6d7a3",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    },
+    {
+      "id": "longmemeval-v2-web-images",
+      "path": "benchmarks/data/longmemeval-v2/trajectory_screenshots/web_screenshots.tar.gz",
+      "exists": true,
+      "bytes": 2562302847,
+      "size_matches_lock": true,
+      "sha256": "68699c6842412e09a6f89d3c05c5ae8813275918002b52d82dec43ab24dd01fb",
+      "prior_hash_verified": true,
+      "hash_verification_date": "2026-11-07",
+      "current_hash_status": "prior_verified_current_size_matches"
+    }
+  ],
+  "full_rehash_performed": false,
+  "no_private_paths": true,
+  "text_adapters": [
+    "corpusqa-4m",
+    "corpusqa-10m",
+    "beam-10m",
+    "babilong-qa3-sample",
+    "babilong-qa1",
+    "babilong-qa2",
+    "babilong-qa3",
+    "babilong-qa4",
+    "babilong-qa5"
+  ],
+  "limitations": {
+    "longmemeval_multimodal": "native screenshot carrier and official Memory/harness wrapper available separately; use prepared media task plus explicit data root or pinned official wrapper, never text flattening; real task quality not_evaluated"
+  },
+  "control_source_cache": [
+    {
+      "url": "https://github.com/badlogic/pi-mono/blob/6e2222a8dda06e3d69fad46d630f152f5873567a/LICENSE",
+      "commit": "6e2222a8dda06e3d69fad46d630f152f5873567a",
+      "sha256": "0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/badlogic/pi-mono/blob/6e2222a8dda06e3d69fad46d630f152f5873567a/packages/coding-agent/src/core/compaction/compaction.ts",
+      "commit": "6e2222a8dda06e3d69fad46d630f152f5873567a",
+      "sha256": "32714966eb644da31cd84e8eb172965256160626b3d26ae9752c3894300f2b0b",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/badlogic/pi-mono/blob/6e2222a8dda06e3d69fad46d630f152f5873567a/packages/coding-agent/src/core/compaction/utils.ts",
+      "commit": "6e2222a8dda06e3d69fad46d630f152f5873567a",
+      "sha256": "ba2b7e4b4fa02795ca2482b3f63d6ee7510c6a660240bb9bb0d5fa75f85a8a6e",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/anomalyco/opencode/blob/4ada59972a9f4788222422fc7db38f86f6a6f1e7/LICENSE",
+      "commit": "4ada59972a9f4788222422fc7db38f86f6a6f1e7",
+      "sha256": "625f0f619133f89bbbb2abe37369613dfa1885eba1e50d02170deb62bb42cb6b",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/anomalyco/opencode/blob/4ada59972a9f4788222422fc7db38f86f6a6f1e7/packages/core/src/session/compaction.ts",
+      "commit": "4ada59972a9f4788222422fc7db38f86f6a6f1e7",
+      "sha256": "102e73a4d2d928632bb5f471e445ffe56f6c4affa4efda55dba3d361aa133ffb",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/microsoft/LLMLingua/blob/01b9e9481d7395e1e83a48df4a062b11f6304325/LICENSE",
+      "commit": "01b9e9481d7395e1e83a48df4a062b11f6304325",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/microsoft/LLMLingua/blob/01b9e9481d7395e1e83a48df4a062b11f6304325/README.md",
+      "commit": "01b9e9481d7395e1e83a48df4a062b11f6304325",
+      "sha256": "c402d1b259523cb0b18c45d807e57a0dc039dc67b8ea342fb549d524e11cea69",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/microsoft/LLMLingua/blob/01b9e9481d7395e1e83a48df4a062b11f6304325/llmlingua/prompt_compressor.py",
+      "commit": "01b9e9481d7395e1e83a48df4a062b11f6304325",
+      "sha256": "814e02e8dfaf33c2cd91d3990c0ecd9c42c1cb11ca57b665730bcf8fb2e4a2a4",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/langchain-ai/langchain/blob/d9caf083577c43a91c5bf6bd1f7dfc289581184d/LICENSE",
+      "commit": "d9caf083577c43a91c5bf6bd1f7dfc289581184d",
+      "sha256": "4ec67e4ca6e6721dba849b2ca82261597c86a61ee214bbf21416006b7b2d0478",
+      "cache_present": true,
+      "cache_matches": true
+    },
+    {
+      "url": "https://github.com/langchain-ai/langchain/blob/d9caf083577c43a91c5bf6bd1f7dfc289581184d/libs/core/langchain_core/messages/utils.py",
+      "commit": "d9caf083577c43a91c5bf6bd1f7dfc289581184d",
+      "sha256": "113831a1a017a00aaabec5276ae3607d45681d06d181428dd5990331c0b4858d",
+      "cache_present": true,
+      "cache_matches": true
+    }
+  ],
+  "existing_control_packages": [
+    {
+      "path": "benchmarks/packages/sic-high-resource.zip",
+      "bytes": 50977,
+      "sha256": "659509da773f4b71014e0c132327f1e83c0b47f939e9b703b2e34db1112fc0ef",
+      "zip_crc_ok": true
+    },
+    {
+      "path": "benchmarks/packages/sic-low-resource.zip",
+      "bytes": 51434,
+      "sha256": "63be01efa3f6a04701cac6f54199731b6f4545a18ba8d7d48284a4fc5f0b0e33",
+      "zip_crc_ok": true
+    }
+  ]
+}

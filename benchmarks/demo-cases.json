@@ -1,0 +1,8 @@
+{
+  "schema": "sic-demo-cases-v1",
+  "purpose": "Synthetic plumbing checks only; no model quality or long-context claim.",
+  "cases": [
+    {"id":"location-01","units":["FACT answer=杭州\n","The planned move to Shanghai was cancelled.\n"],"question":"Return only the value of FACT answer.","expected":"杭州"},
+    {"id":"status-02","units":["FACT answer=proposed\n","The backup has been proposed, not executed.\n"],"question":"Return only the value of FACT answer.","expected":"proposed"}
+  ]
+}

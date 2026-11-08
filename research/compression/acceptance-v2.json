@@ -1,0 +1,192 @@
+{
+  "schema": "sic-research-preparation-acceptance-v2",
+  "source_contract": "paper/review/sic_implementation_contract.md",
+  "requirements": {
+    "F61": {
+      "preparation": "independent normalized-reference scorer and evidence-bound five-criterion human rubric implemented",
+      "mechanical_acceptance": "passed; fixture guard, missing answer/reference unknown, evidence and digest rejection, final-answer-only scoring",
+      "research_evaluation": "not_evaluated"
+    },
+    "F62": {
+      "preparation": "public data adapters, full media carrier and official pinned Memory/harness/LAFS plugin, real local processor and all source/dependency locks prepared",
+      "mechanical_acceptance": "final communication/return-policy Core clean portable: 11 research tests passed; 20 current Core Python files and 19 frozen media/LME files exact; actual seven controls and native media program/LLMLingua replay with independent artifact/accounting validation passed; no private dataset fallback",
+      "research_evaluation": "not_evaluated"
+    },
+    "F66": {
+      "preparation": "three separate noise categories, independent span/evidence annotations, explicit suggestions and unknowns, per-edit source length and level exported",
+      "mechanical_acceptance": "four injected rubric cases distinguished; actual 1/2/3-level edit exports and final selected third-level request passed",
+      "research_evaluation": "not_evaluated"
+    },
+    "F73": {
+      "preparation": "seven executable controls including official pinned LLMLingua-2 with real verified CPU weights, complete code/weight licenses, tokenizer and hashed isolated dependency locks",
+      "mechanical_acceptance": "six fixture controls plus real local LLMLingua inference and exact post-edit final Worker consumption passed; disconnected network engine; portable model restoration verified separately",
+      "research_evaluation": "not_evaluated"
+    }
+  },
+  "final_consumption_regression": {
+    "six_controls_worker_calls_each": 3,
+    "editor_calls": {
+      "batch": 1,
+      "sic": 3,
+      "structured_summary": 1,
+      "program_exact": 0,
+      "langchain_trim": 0,
+      "unchanged": 0
+    },
+    "fixture_final_answer_differs_from_intermediate": true,
+    "actual_final_request_includes_selected_edited_cbs": true,
+    "endpoint_policy": "retain final question/answer pending; no post-answer edit",
+    "scorer_input": "final_answer only"
+  },
+  "counts": {
+    "local_unit_tests": 11,
+    "clean_portable_unit_tests": 11,
+    "six_control_owned_model_calls": 23,
+    "third_order_owned_model_calls": 10,
+    "configured_provider_branch_owned_loopback_calls": 3,
+    "real_provider_calls": 0,
+    "seven_control_owned_provider_calls": 26,
+    "seven_control_real_local_compressor_forward_calls": 1,
+    "current_research_unit_tests": 11
+  },
+  "data_verification": "prior full SHA evidence reused; this round existence/size checks, not a new 42GB rehash",
+  "missing_dependencies": {
+    "real_research": "author fixed provider/model/price/task selection and independent annotations/judge needed; no quality outcome inferred"
+  },
+  "new_package": {
+    "path": "benchmarks/packages/sic-research-controls-v2.zip",
+    "bytes": 338622,
+    "sha256": "a4966c6bad03c94b907764c7ef8009c5574ceed428be2323392e89e1871196b4"
+  },
+  "private_evidence": [
+    ".local/research-v2/final-consumption-summary.json",
+    ".local/research-v2/final-consumption-six-controls-independent-score.json",
+    ".local/research-v2/final-consumption-hierarchy-independent-score.json",
+    ".local/research-v2/configured-final-consumption-test.json",
+    ".local/research-v2/portable-verification.json",
+    ".local/research-v2/actual-adapter-smoke.json",
+    ".local/research-v2/lme-small-prepared.json",
+    ".local/research-v2/negative-checks.json",
+    ".local/research-v2/seven-controls-final-score.json",
+    ".local/research-v2/final-media-llmlingua-portable-verification.json",
+    ".local/research-v2/media-controls-real-llmlingua-final-score.json",
+    ".local/research-v2/final-communication-portable-verification.json",
+    ".local/research-v2/final-communication-seven-score.json",
+    ".local/research-v2/final-communication-media-score.json"
+  ],
+  "source_sha256": {
+    "scripts/run_compression_research.py": "ae17d90d022cdd2cb4be37b89776b31cea77f8448bfa3873dc1bba48b754e0a6",
+    "scripts/score_compression_research.py": "13441fb53680fd1ec016650002cb3023cfc592aa1af06af0944cffeacbcd4012",
+    "scripts/research_scoring.py": "0886a9a1f2a8859732ac13125848c441c161f8e66f2cee62ee7f3a01de5de4c3",
+    "scripts/research_provider.py": "8dda8bb7576a55588bd06cbc2e84ed50406248f9bdfcb706d0141b8330a75142",
+    "scripts/prepare_compression_research.py": "b6d3f4fda4617be71a8313ba25578022cb1ee045068555a5cff1645717d2ddd8",
+    "scripts/v2_experiment_fixture.py": "ef7e0795cf2936b7b1004653c9689be174c4bb41e8c294ef2440821ff6ce9092",
+    "scripts/prepare_llmlingua.py": "963d2ec9e60c00d680335248e60c82565fcb07bfc8de16cc9039d3b4cab20876",
+    "scripts/llmlingua_worker.py": "5eb77e2ac0858df50a1dee1efce4d9bd429182531810f94f39a18c7001d1fe67",
+    "scripts/llmlingua_adapter.py": "dfaba9d618ac0b2ef1fa9d864f6ca82cecce1f828a1129ab52af601640b580f0",
+    "scripts/package_llmlingua.py": "a4758bda7ec2a9b10f3d97d39ff1c11d06c3a8cc03a798bda58a011f48c0e759",
+    "benchmarks/core_adapters.py": "89872f5948a21a2d0912da03caef23df381a194797db9847563168143ecad3dd",
+    "benchmarks/test_research_v2.py": "0bf3b65efdb15027cdd3dc44dff3548af6f2b51df9a7b36cd25d05c011586bf1",
+    "benchmarks/test_research_media.py": "b2305c1dcfb492f435cdb5e4bdcf6a886b0bbac99e51fc8681d8376c1944e62f",
+    "benchmarks/test_llmlingua_adapter.py": "a02c1aff9ddc6f8604a12ff1a33652b224e6c39e23485f7a6a7e9afe0b2d6636",
+    "research/compression/pack/control-pack.json": "56f8ca4e3e271435d6b6c6800cf3627367abde5828c90fe2186183c62a0b56e5",
+    "research/compression/pack/controls.py": "cccf6421fa804cbed0ab5ad8bbcdd48c193e9ff2a22bb5ba6634e05edcd14113",
+    "research/compression/pack/data-readiness.json": "7c98b1960611371737825a433f6742c622b828882865e17c71e47af15b506f03",
+    "research/compression/pack/dependencies.lock.json": "3179571775130c71b3862cd0badce03a344011862d1fcb5e37524613abf8245b",
+    "research/compression/pack/editor-response.schema.json": "2d974c74d9589c7e357c35fff5999ad11bb81ccf5dde0b7a7bd5774e41c30ec9",
+    "research/compression/pack/llmlingua-bundle.json": "991e05fe9ed78ace38e242ecec509b3b72339901925e1aa653689688c9918e5b",
+    "research/compression/pack/llmlingua-licenses.json": "b8613fcb15246266902d4c82286a113e8abd516218db83bf11a3b961d91c4d41",
+    "research/compression/pack/llmlingua-model.lock.json": "79207f2ef8ee1e320dec0e4431d0b35debe7d051cb0526d835609764e633e8ba",
+    "research/compression/pack/llmlingua-runtime.lock.json": "dfcdde9bfb5cf3686aada20d22a5dcc5294b9c9f2f87de9f340ef4ddf014af63",
+    "research/compression/pack/manifest.json": "d7537fa6a7b386612f384d4b46630876adeeeec88626bc2d0e1524c8d604b20b",
+    "research/compression/pack/media-lme-sources.lock.json": "09f947c97182b3cf7c82199925454bc952d86ebf09d5d81b5ed24604cb21ef12",
+    "research/compression/pack/provider.example.json": "00db8bca67e31b0c4cf512963956ce5797cd9ea084e2a1d770bff7ee1a3c5fb0",
+    "research/compression/pack/rubric.json": "a357f2caabd7ad01f7a4b31d66752fa0a55938c539594cd805a980c5e74c2856",
+    "research/compression/pack/llmlingua-licenses/CODE-MIT.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "research/compression/pack/llmlingua-licenses/MODEL-APACHE-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "research/compression/pack/__pycache__/controls.cpython-312.pyc": "de85035080dec248c0df30f28de4faf90a78f885db10882a5dfafdb0be3d3009",
+    "sic_core/accounting.py": "9fa02b8b83f5905adbc5b5c2cc2c7bf3ed1919e177c4c4542df7d58f5e327a5b",
+    "sic_core/adapters.py": "4efa57980637060b004ebaabdd58be86219d8c72f49beb16190e3ee7a3d78620",
+    "sic_core/bridge.py": "069b94818a177eb664e4375f3eff0401cd49bdffba064315d4492421e2034a94",
+    "sic_core/communication.py": "087760363ff7c09c883c9365bf50a61d78d755a208ee7291656ceaed30cf9095",
+    "sic_core/decision.py": "18ed6f6bb6ff7d311f22926d8715131e1bac0c3ba81e90f3dd641ba22b2b5de4",
+    "sic_core/editing.py": "a5acb6cdce6a0780f07fb1a68285f31f41d469782e6f7355950d94d6c844f6c5",
+    "sic_core/frontier.py": "4bb89cd3247ba2703c6c380e09de072dc7bcdb75bc2e93b6e67b5a8c49507970",
+    "sic_core/hierarchy.py": "0022b34b86966ceb95173f039bb4f8b72f2305e5e9f585e1e1f21636c80afa65",
+    "sic_core/history.py": "0da170c96a2edc69edeef09d9da585b6dadaf750308049898c850e3a73d219fe",
+    "sic_core/host_tools.py": "966f4dfb42a02a4799caa39476c06230c33f98a7642fc173d35d202581cf449c",
+    "sic_core/mechanisms.py": "77531eb704a0a6621c152d58a8ca523ac257654de28bf2571be0970eeccf3977",
+    "sic_core/media.py": "7c158cc8beecb86f1aaba052b47fccfd54241364aaccf70c87bbe05150a684d8",
+    "sic_core/memory.py": "c4c092bf1e26d939e7368d6bbda3cf84d766411da9f550b404c5fdd96c627355",
+    "sic_core/runtime.py": "c06c1b92b425203f1959147f374976900c58417e21700ecb2e562ff8e5b6823c",
+    "sic_core/server.py": "5a868067bcd58d7e75d96c4c7c1e0948d737fae445214d1cf97113320fc30b66",
+    "sic_core/service.py": "36145ce5a90b574576d534874900a2c8e34e678f76a0a77ba60be961bf96081d",
+    "sic_core/store.py": "d3a6f4d27eede8edefbc923dd6b39d2d3752eb4c3050df94c960b175fcc5dbac",
+    "sic_core/task_ledger.py": "a1f39d5c368948f162845cc258e77a20791fa37c9689c871812b20b50fef9d94",
+    "sic_core/wait_windows.py": "87c5a260c4e825b4c7b74efc96ae665f7016e130dcad3135cac09c44726843e3",
+    "sic_core/__init__.py": "091c708e4289e8197eb9b7ba19eb475a02c7b566d366591ceaae214617cb6df1",
+    "sic_core/operations.json": "dbe35076463652b3a2d044d7768c18810563eb5301858a584909929e41e1c496"
+  },
+  "services_touched": false,
+  "old_results_reused": false,
+  "llmlingua": {
+    "model": "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
+    "revision": "5f0c82792b7ea14c6484e015b6a072009496b7f2",
+    "weight_bytes": 709388104,
+    "weight_sha256": "22b9ecde52fec5c97e8c54a293be768727df95a81c6c8dccb03f262a50c58324",
+    "model_provider_api_calls": 0,
+    "actual_local_weight_forward_calls": 1,
+    "controlled_fixture_worker_calls": 3,
+    "final_exact_compressed_body_consumed": true,
+    "isolated_environment": true,
+    "network_connect_attempts": 0,
+    "model_quality": "not_evaluated",
+    "model_bundle": {
+      "schema": "sic-public-local-model-bundle-v1",
+      "path": "benchmarks/packages/sic-llmlingua2-mbert-model.zip",
+      "bytes": 715080944,
+      "sha256": "fad89da8f96db6319aba5318cfee430def5c11f772585827dfe387ba9c8eff59",
+      "revision": "5f0c82792b7ea14c6484e015b6a072009496b7f2",
+      "weight_license": "Apache-2.0",
+      "code_license": "MIT",
+      "contains_private_configuration": false,
+      "entries": 13,
+      "restoration": "Extract in any private directory; set SIC_LLMLINGUA_MODEL_DIR to models/llmlingua2-mbert and SIC_LLMLINGUA_TOKENIZER_CACHE to tokenizer-cache; install hashed dependencies into separate Python3.12 x86_64 environment."
+    },
+    "private_evidence": [
+      ".local/research-v2/llmlingua-network-blocked-final-score.json",
+      ".local/llmlingua/real-compression.json",
+      ".local/llmlingua/portable-model-verification.json"
+    ],
+    "native_media_control_consumption": "passed: original 3 image SHA/order preserved with real local text compression"
+  },
+  "lightweight_source_bundle_status": "prepared-final-Core-communication-return-policy-media-and-research-source; clean11 tests and real local weight/media replay passed",
+  "new_local_engine_acceptance": "research/compression/llmlingua-acceptance.json",
+  "official_lme_preparation": {
+    "source_freeze": "research/compression/pack/media-lme-sources.lock.json",
+    "processor_offline_bundle": {
+      "path": ".local/contract-rebuild/lme-qwen-processor-offline.zip",
+      "bytes": 7043203,
+      "sha256": "c4c63bafc8ac5dad5c6de3a0afdb6b29163fb4ddccf62617496b942269c9e447"
+    },
+    "quality": "not_evaluated",
+    "mechanical_acceptance": "frontier: Core media7/7 and officialMemory/harness/processor7/7; actual10-state10-Editor+Worker retains10 image bytes/order"
+  },
+  "final_source_portable_replay": {
+    "status": "passed",
+    "bundle_sha256": "a4966c6bad03c94b907764c7ef8009c5574ceed428be2323392e89e1871196b4",
+    "bundle_bytes": 338622,
+    "frozen_media_and_core_files_exact": 19,
+    "current_core_python_files_exact": 20,
+    "clean_research_tests": 11,
+    "private_dataset_fallback": false,
+    "integrations_included": false,
+    "old_quality_results_included": false,
+    "recursive_privacy_entries": 137,
+    "real_provider_calls": 0,
+    "environment": "existing pinned interpreter/dependencies; clean project tree; no private source configuration",
+    "seven_control_actual_core_replay": "passed",
+    "media_program_and_real_llmlingua": "passed",
+    "model_and_processor_relocation_evidence": "unchanged source/model asset bundles reused; original independent relocation execution preserved"
+  }
+}

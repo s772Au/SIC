@@ -1,0 +1,249 @@
+{
+  "catalogVersion": "2026-11-07.3",
+  "status": "source-prepared-cli-runner-available-evaluation-pending",
+  "defaultGatewayUrl": "",
+  "gatewayStatus": "testing-only-unstable-route; 8341 is excluded from formal experiments; configure a fixed provider explicitly",
+  "estimatesAreMeasured": false,
+  "tokenGate": "Count chronological source tokens with the configured gateway tokenizer; accept a case only above 2000000. Repeated prefixes and cumulative API input do not count.",
+  "datasets": [
+    {
+      "id": "beam-10m",
+      "tier": "low",
+      "status": "local-data-verified",
+      "source": "benchmarks/data/beam10m/data/*.parquet",
+      "index": "benchmarks/prepared/beam10m/inventory.json",
+      "publishedScaleTokens": 10000000,
+      "historyCount": 10,
+      "caseCount": 10,
+      "questionCount": 200,
+      "questionsPerHistoryMax": 20,
+      "resourceEstimate": {
+        "cpuCoresPerWorker": 1,
+        "ramMiBPerWorker": 1024,
+        "gpu": 0,
+        "sourceDiskMiB": 328
+      },
+      "requestEstimate": {
+        "compressorCallsPerHistory": 77,
+        "answerCallsPerQuestion": 1,
+        "judgeCallsPerQuestion": 1,
+        "basis": "128Ki WB; excludes N-order or retry calls"
+      },
+      "scoring": "official ability rubric; judge calls depend on selected scoring mode",
+      "reuse": "one conversation history can answer many questions",
+      "sourceUrl": "https://huggingface.co/datasets/Mohammadta/BEAM-10M",
+      "sourceVerificationDate": "2026-11-07",
+      "tokenizerStatus": "gateway-tokenizer-unverified",
+      "verificationEvidence": "docs/dataset-validation.json",
+      "sourceRevision": "9b2096193fe74e2837e4713e483351e19817773c",
+      "scoringStatus": "local-fixed-judge-available-official-evaluator-pending"
+    },
+    {
+      "id": "corpusqa-4m",
+      "tier": "low",
+      "status": "local-file-verified",
+      "source": "benchmarks/data/corpusqa/4m_4domains.jsonl",
+      "index": "benchmarks/prepared/corpusqa/4m_4domains.index.jsonl",
+      "publishedScaleTokens": 4000000,
+      "cl100kProxyTokenRange": [
+        3394340,
+        3980894
+      ],
+      "historyCount": 4,
+      "caseCount": 329,
+      "questionsPerHistoryMax": 83,
+      "resourceEstimate": {
+        "cpuCoresPerWorker": 1,
+        "ramMiBPerWorker": 1024,
+        "gpu": 0,
+        "sourceDiskMiB": 4218
+      },
+      "requestEstimate": {
+        "compressorCallsPerHistory": 31,
+        "answerCallsPerQuestion": 1,
+        "judgeCallsPerQuestion": 1,
+        "basis": "128Ki WB; shared document corpus must be verified before reuse"
+      },
+      "scoring": "official answer with semantic equivalence judge; exact numeric checks where valid",
+      "reuse": "verified four identical ordered document contexts, one per domain",
+      "sourceUrl": "https://github.com/Tongyi-Zhiwen/CorpusQA",
+      "sourceVerificationDate": "2026-11-07",
+      "tokenizerStatus": "gateway-tokenizer-unverified",
+      "verificationEvidence": "docs/dataset-validation.json",
+      "scoringStatus": "local-fixed-judge-available-official-evaluator-pending"
+    },
+    {
+      "id": "corpusqa-10m",
+      "tier": "low",
+      "status": "local-file-verified",
+      "source": "benchmarks/data/corpusqa/10m_4domains.jsonl",
+      "index": "benchmarks/prepared/corpusqa/10m_4domains.index.jsonl",
+      "publishedScaleTokens": 10000000,
+      "cl100kProxyTokenRange": [
+        5858341,
+        8635223
+      ],
+      "historyCount": 4,
+      "caseCount": 329,
+      "questionsPerHistoryMax": 83,
+      "resourceEstimate": {
+        "cpuCoresPerWorker": 1,
+        "ramMiBPerWorker": 1536,
+        "gpu": 0,
+        "sourceDiskMiB": 9335
+      },
+      "requestEstimate": {
+        "compressorCallsPerHistory": 77,
+        "answerCallsPerQuestion": 1,
+        "judgeCallsPerQuestion": 1,
+        "basis": "128Ki WB; shared document corpus must be verified before reuse"
+      },
+      "scoring": "official answer with semantic equivalence judge; exact numeric checks where valid",
+      "reuse": "verified four identical ordered document contexts, one per domain",
+      "sourceUrl": "https://modelscope.cn/datasets/iic/CorpusQA/files",
+      "sourceVerificationDate": "2026-11-07",
+      "tokenizerStatus": "gateway-tokenizer-unverified",
+      "verificationEvidence": "docs/dataset-validation.json",
+      "scoringStatus": "local-fixed-judge-available-official-evaluator-pending"
+    },
+    {
+      "id": "babilong-10m-sample",
+      "tier": "low",
+      "status": "local-derived-fixed-subset-full-source-verified-evaluator-pending",
+      "source": "benchmarks/data/babilong/qa3-10m-first20.jsonl",
+      "index": "benchmarks/prepared/babilong/qa3-10m-sample-inventory.json",
+      "publishedScaleTokens": 10000000,
+      "historyCount": 20,
+      "caseCount": 20,
+      "questionsPerHistoryMax": 1,
+      "caseCountMeaning": "fixed first 20 qa3 cases derived from the complete SHA-256-verified official file",
+      "resourceEstimate": {
+        "cpuCoresPerWorker": 1,
+        "ramMiBPerWorker": 1024,
+        "gpu": 0,
+        "sourceDiskMiB": 767
+      },
+      "requestEstimate": {
+        "compressorCallsPerHistory": 77,
+        "answerCallsPerQuestion": 1,
+        "judgeCallsPerQuestion": 0,
+        "basis": "128Ki WB; one call per answer, exact-match scoring"
+      },
+      "scoring": "pinned official label-match metric plus strict_exact; official prompt not reproduced",
+      "reuse": "different samples have different haystacks",
+      "sourceUrl": "https://huggingface.co/datasets/RMT-team/babilong",
+      "sourceVerificationDate": "2026-11-07",
+      "tokenizerStatus": "gateway-tokenizer-unverified",
+      "verificationEvidence": "docs/dataset-validation.json",
+      "sourceRevision": "ee0d588794c7ac098062ee0d247c733d62e94fe2",
+      "scoringStatus": "official-evaluator-pending",
+      "cliDatasets": [
+        "babilong-qa3-sample"
+      ]
+    },
+    {
+      "id": "longmemeval-v2-small",
+      "tier": "high",
+      "status": "local-source-verified-evaluator-pending",
+      "source": "benchmarks/data/longmemeval-v2/trajectories.jsonl",
+      "index": "benchmarks/data/longmemeval-v2/haystacks/lme_v2_small.json",
+      "publishedScaleTokens": 25000000,
+      "historyCount": 2,
+      "caseCount": 451,
+      "questionsPerHistoryMax": 451,
+      "resourceEstimate": {
+        "cpuCoresPerWorker": 2,
+        "ramMiBPerWorker": 4096,
+        "gpu": 0,
+        "sourceDiskMiB": 8000
+      },
+      "requestEstimate": {
+        "compressorCallsPerHistory": 191,
+        "answerCallsPerQuestion": 1,
+        "judgeCallsPerQuestion": 1,
+        "basis": "128Ki WB; shared trajectories can reduce repeated imports"
+      },
+      "scoring": "official multimodal harness and LAFS; image support required for comparable score",
+      "reuse": "domain-shared trajectory history",
+      "sourceUrl": "https://github.com/xiaowu0162/LongMemEval-V2",
+      "sourceVerificationDate": "2026-11-07",
+      "tokenizerStatus": "gateway-tokenizer-unverified",
+      "verificationEvidence": "docs/dataset-validation.json",
+      "sourceRevision": "f152293e235517d504809563c833d7190b8c713b",
+      "runtimeScreenshotsVerified": true,
+      "scoringStatus": "official-evaluator-pending",
+      "cliAdapterStatus": "official-multimodal-memory-adapter-pending"
+    },
+    {
+      "id": "longmemeval-v2-medium",
+      "tier": "high",
+      "status": "local-source-verified-evaluator-pending",
+      "source": "benchmarks/data/longmemeval-v2/trajectories.jsonl",
+      "index": "benchmarks/data/longmemeval-v2/haystacks/lme_v2_medium.json",
+      "publishedScaleTokens": 115000000,
+      "historyCount": 451,
+      "caseCount": 451,
+      "questionsPerHistoryMax": 1,
+      "resourceEstimate": {
+        "cpuCoresPerWorker": 2,
+        "ramMiBPerWorker": 4096,
+        "gpu": 0,
+        "sourceDiskMiB": 8000
+      },
+      "requestEstimate": {
+        "compressorCallsPerHistory": 878,
+        "answerCallsPerQuestion": 1,
+        "judgeCallsPerQuestion": 1,
+        "basis": "128Ki WB; question-specific histories, very high total model traffic"
+      },
+      "scoring": "official multimodal harness and LAFS; image support required for comparable score",
+      "reuse": "limited; question-specific trajectory history",
+      "sourceUrl": "https://github.com/xiaowu0162/LongMemEval-V2",
+      "sourceVerificationDate": "2026-11-07",
+      "tokenizerStatus": "gateway-tokenizer-unverified",
+      "verificationEvidence": "docs/dataset-validation.json",
+      "sourceRevision": "f152293e235517d504809563c833d7190b8c713b",
+      "runtimeScreenshotsVerified": true,
+      "scoringStatus": "official-evaluator-pending",
+      "cliAdapterStatus": "official-multimodal-memory-adapter-pending"
+    },
+    {
+      "id": "babilong-10m-full",
+      "tier": "high",
+      "status": "local-source-verified-evaluator-pending",
+      "source": "benchmarks/data/babilong/data/qa[1-5]/10M.json",
+      "publishedScaleTokens": 10000000,
+      "historyCount": 500,
+      "caseCount": 500,
+      "questionsPerHistoryMax": 1,
+      "resourceEstimate": {
+        "cpuCoresPerWorker": 1,
+        "ramMiBPerWorker": 1024,
+        "gpu": 0,
+        "sourceDiskMiB": 19165
+      },
+      "requestEstimate": {
+        "compressorCallsPerHistory": 77,
+        "answerCallsPerQuestion": 1,
+        "judgeCallsPerQuestion": 0,
+        "basis": "128Ki WB; 500 unique haystacks"
+      },
+      "scoring": "pinned official label-match metric plus strict_exact; official prompt not reproduced",
+      "reuse": "no common history across fixed samples",
+      "sourceUrl": "https://huggingface.co/datasets/RMT-team/babilong",
+      "sourceVerificationDate": "2026-11-07",
+      "tokenizerStatus": "gateway-tokenizer-unverified",
+      "verificationEvidence": "docs/dataset-validation.json",
+      "sourceRevision": "ee0d588794c7ac098062ee0d247c733d62e94fe2",
+      "scoringStatus": "official-evaluator-pending",
+      "index": "benchmarks/prepared/babilong/full-inventory.json",
+      "cliDatasets": [
+        "babilong-qa1",
+        "babilong-qa2",
+        "babilong-qa3",
+        "babilong-qa4",
+        "babilong-qa5"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+langchain-core==1.7.6
+litellm==1.103.10
+pyarrow==26.0.1
+ijson==3.6.0
+Pillow==13.0.0

@@ -1,0 +1,45 @@
+{
+  "schema": "sic-research-dependencies-v2",
+  "packages": [
+    {
+      "distribution": "langchain-core",
+      "version": "1.7.6",
+      "module": "langchain_core.messages.utils",
+      "module_sha256": "113831a1a017a00aaabec5276ae3607d45681d06d181428dd5990331c0b4858d",
+      "license": "MIT",
+      "purpose": "actual imported dependency, not a model-weight license"
+    },
+    {
+      "distribution": "litellm",
+      "version": "1.103.10",
+      "module": "litellm",
+      "module_sha256": "a26f06a4cfd0dbf492270510198fabeeb6cff24f34c8d221b2e317489af34ea0",
+      "license": "MIT",
+      "purpose": "actual imported dependency, not a model-weight license"
+    },
+    {
+      "distribution": "pyarrow",
+      "version": "26.0.1",
+      "module": "pyarrow",
+      "module_sha256": "88d0400612985244905c2303a0789d97cdfe825db7cfb1d34a7c54f22aa73b21",
+      "license": "Apache-2.0",
+      "purpose": "actual imported dependency, not a model-weight license"
+    },
+    {
+      "distribution": "ijson",
+      "version": "3.6.0",
+      "module": "ijson",
+      "module_sha256": "161650e42af10ee56d46249d3a607ef4e5ef29d7f6458a40139587ce667c5ad3",
+      "license": "BSD-3-Clause AND ISC",
+      "purpose": "actual imported dependency, not a model-weight license"
+    },
+    {
+      "distribution": "Pillow",
+      "version": "13.0.0",
+      "module": "PIL.Image",
+      "module_sha256": "6646cf8a0aa91c440293112934d0e0802cd90c207a07137281a1926c3465e23f",
+      "license": "MIT-CMU",
+      "purpose": "verified image dimensions and native lossless screenshot carrier"
+    }
+  ]
+}

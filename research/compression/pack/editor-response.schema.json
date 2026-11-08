@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Assigned scope, ordered active targets and primary reserved I-op decoded decision shape require Core context-aware validation; content remains a string and no global rule rejects private/higher generic I text.",
+  "type": "object",
+  "required": [
+    "ops",
+    "pvi"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "ops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "op": {
+            "enum": [
+              "KEEP",
+              "DELETE",
+              "FLAG",
+              "REORDER",
+              "COMPRESS",
+              "REPLACE",
+              "ADD"
+            ]
+          },
+          "target": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string",
+            "description": "Generated text. For the primary main level-1 reserved I/view_key=decision_tree, encode the complete four-view object as JSON text; host context-aware validation parses once. Private/higher generic I text is unchanged."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "anchor": {
+            "type": "object",
+            "required": [
+              "target",
+              "position"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "type": "string"
+              },
+              "position": {
+                "enum": [
+                  "before",
+                  "after"
+                ]
+              }
+            }
+          },
+          "risk": {
+            "enum": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "unknown"
+            ]
+          },
+          "lifecycle": {
+            "enum": [
+              "P",
+              "V",
+              "I"
+            ]
+          },
+          "view_key": {
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "op": {
+                  "const": "ADD"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "target"
+                ]
+              }
+            },
+            "else": {
+              "required": [
+                "target"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "op": {
+                  "enum": [
+                    "ADD",
+                    "COMPRESS",
+                    "REPLACE",
+                    "FLAG"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "content"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "op": {
+                  "const": "REORDER"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "order"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "anchor"
+              ]
+            },
+            "then": {
+              "properties": {
+                "op": {
+                  "const": "ADD"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "lifecycle"
+              ],
+              "properties": {
+                "lifecycle": {
+                  "enum": [
+                    "V",
+                    "I"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "op": {
+                  "enum": [
+                    "ADD",
+                    "COMPRESS",
+                    "REPLACE",
+                    "FLAG"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "lifecycle"
+              ],
+              "properties": {
+                "lifecycle": {
+                  "const": "I"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "view_key"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "pvi": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "P": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "V": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "I": {
+          "type": "object",
+          "properties": {
+            "decision_tree": {
+              "type": "object",
+              "required": [
+                "Working on",
+                "Failed Before",
+                "Not Tried Yet",
+                "Overlooked"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "Working on": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "text",
+                          "evidence"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "evidence": {
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Failed Before": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "text",
+                          "evidence"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "evidence": {
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Not Tried Yet": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "text",
+                          "evidence"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "evidence": {
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Overlooked": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "text",
+                          "evidence"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "evidence": {
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

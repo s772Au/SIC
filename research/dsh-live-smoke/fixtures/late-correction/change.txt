@@ -1,0 +1,2 @@
+[C1] Revision R2 supersedes R1 for destination only: use violet-station.
+[C2] Revision R2 also replaces the courier with rowan. Other original constraints remain active.

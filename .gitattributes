@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.zip binary
+benchmarks/vendor/babilong_metrics.py -text
+benchmarks/vendor/BABILONG-LICENSE -text

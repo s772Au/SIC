@@ -1,0 +1,6 @@
+{
+  "sources": {
+    "corpusqa-4m": "DATA_ROOT/corpusqa/4m_4domains.jsonl",
+    "corpusqa-10m": "DATA_ROOT/corpusqa/10m_4domains.jsonl"
+  }
+}

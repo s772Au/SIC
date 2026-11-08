@@ -1,0 +1,20 @@
+{
+  "questions": {
+    "rows": 451,
+    "uniqueIds": 451,
+    "domains": {
+      "enterprise": 211,
+      "web": 240
+    },
+    "questionImages": 29
+  },
+  "trajectories": {
+    "rows": 1870,
+    "uniqueIds": 1870,
+    "domains": {
+      "enterprise": 941,
+      "web": 929
+    },
+    "questionImages": null
+  }
+}

@@ -1,0 +1,187 @@
+{
+  "schema": "sic-pi-replay-audit-v1",
+  "package": "@earendil-works/pi-ai",
+  "version": "1.1.0",
+  "source_file": "dist/api/openai-completions.js",
+  "source_sha256": "fba125cffc926f44bbbad10ecb6301516cff027a3ef526cefe25076a96c5c8fb",
+  "network_requests": 0,
+  "mechanism": "actual installed stream() with injected local fetch, followed by convertMessages(); bridge SSE field whitelist reproduced",
+  "samples": [
+    {
+      "name": "empty-metadata",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": "hello",
+        "refusal": null,
+        "annotations": [],
+        "tool_calls": null
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": "hello"
+      },
+      "expected_compatible": true
+    },
+    {
+      "name": "empty-tool-array",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": "hello",
+        "tool_calls": []
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": "hello"
+      },
+      "expected_compatible": true
+    },
+    {
+      "name": "tool-json-reformat",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": null,
+        "refusal": null,
+        "annotations": [],
+        "tool_calls": [
+          {
+            "id": "call_test",
+            "type": "function",
+            "function": {
+              "name": "demo",
+              "arguments": "{ \"b\" : 2, \"a\": 1.0 }"
+            }
+          }
+        ]
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_test",
+            "type": "function",
+            "function": {
+              "name": "demo",
+              "arguments": "{\"b\":2,\"a\":1}"
+            }
+          }
+        ]
+      },
+      "expected_compatible": true
+    },
+    {
+      "name": "tool-empty-content",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_test",
+            "type": "function",
+            "function": {
+              "name": "demo",
+              "arguments": "{}"
+            }
+          }
+        ]
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_test",
+            "type": "function",
+            "function": {
+              "name": "demo",
+              "arguments": "{}"
+            }
+          }
+        ]
+      },
+      "expected_compatible": true
+    },
+    {
+      "name": "inserted-empty-reasoning",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": "hello"
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": "hello",
+        "reasoning_content": ""
+      },
+      "expected_compatible": true
+    },
+    {
+      "name": "lost-nonempty-reasoning",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": "hello",
+        "reasoning_content": "meaningful reasoning"
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": "hello"
+      },
+      "expected_compatible": false
+    },
+    {
+      "name": "lost-nonempty-annotation",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": "hello",
+        "annotations": [
+          {
+            "type": "url_citation",
+            "url": "https://example.invalid/evidence"
+          }
+        ]
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": "hello"
+      },
+      "expected_compatible": false
+    },
+    {
+      "name": "unsafe-integer-rounding",
+      "upstream_assistant": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_test",
+            "type": "function",
+            "function": {
+              "name": "demo",
+              "arguments": "{\"count\":9007199254740993}"
+            }
+          }
+        ]
+      },
+      "pi_replayed_assistant": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_test",
+            "type": "function",
+            "function": {
+              "name": "demo",
+              "arguments": "{\"count\":9007199254740992}"
+            }
+          }
+        ]
+      },
+      "expected_compatible": false
+    }
+  ],
+  "dsh_source_inspection": {
+    "packages/llm/llm-pi-ai/src/adapter.ts": "a83e09594d63e3dae39ccb6e602019b83ef233dad725e564ce23735c6e9a020d",
+    "packages/llm/llm-pi-ai/src/stream.ts": "e3563cc091cc2e6b0c2bdbd4c1614339d7cbb01f747a956931b43f3256e0c640",
+    "packages/llm/llm-pi-ai/src/replay.ts": "5f5e2aee49771ea9849a0852d45c8b65110a4f52f3127f10cd85f0d66783dc92"
+  },
+  "dsh_host_executed": false
+}

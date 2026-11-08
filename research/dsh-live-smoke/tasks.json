@@ -1,0 +1,48 @@
+{
+  "schema": "sic-dsh-live-smoke-tasks-v1",
+  "version": "1.0.0",
+  "license": "CC0-1.0",
+  "data_origin": "New synthetic materials created for this package; no user history or benchmark examples.",
+  "evaluation_scope": "nonfixed-gateway-exploratory; not a fixed-model benchmark or evidence of SIC superiority",
+  "output_rule": "Final response must be exactly one JSON object, without Markdown fences or explanation. Evidence is a set of file#anchor strings.",
+  "cases": [
+    {
+      "id": "retention",
+      "objective": "Retain task-specific facts across an intervening tool-read and another user turn.",
+      "fixtures": ["intake.txt", "operations.txt"],
+      "stages": [
+        {"id": "intake", "prompt": "Synthetic parcel task. Use only the built-in read tool on files under {{MATERIALS}}. Read {{MATERIALS}}/intake.txt now and retain the parcel facts for the next turn. Do not answer the parcel questions yet. Reply exactly {\"phase\":\"ready\"}.", "required_reads": ["intake.txt"]},
+        {"id": "answer", "prompt": "Continue the same parcel task. First read {{MATERIALS}}/operations.txt using built-in read. Its unrelated inventory does not replace the earlier intake. Using the original intake, return exactly one JSON object with keys case_id (retention), parcel_id, destination, seal, items (string array), evidence (file#anchor array). Include anchors supporting all parcel facts. No prose.", "required_reads": ["operations.txt"]}
+      ],
+      "answer": {"case_id": "retention", "parcel_id": "PKG-71", "destination": "locker-K4", "seal": "seal-N904", "items": ["copper-key", "linen-map"], "evidence": ["intake.txt#R1", "intake.txt#R2", "intake.txt#R3"]},
+      "unordered_fields": ["items", "evidence"],
+      "forbidden_values": [],
+      "required_read_order": ["intake.txt", "operations.txt"]
+    },
+    {
+      "id": "late-correction",
+      "objective": "Revise superseded constraints after a completed provisional turn while retaining an unchanged constraint.",
+      "fixtures": ["policy.txt", "change.txt"],
+      "stages": [
+        {"id": "provisional", "prompt": "Synthetic dispatch task. Use built-in read to read {{MATERIALS}}/policy.txt only. Give a provisional JSON plan with keys phase (provisional), destination, courier, handling, evidence (file#anchor array). A later turn may supply a correction; do not invent one now.", "required_reads": ["policy.txt"]},
+        {"id": "corrected", "prompt": "A late correction has now arrived. In this same session, use built-in read on {{MATERIALS}}/change.txt. Apply its overrides; retain unchanged constraints from the original policy. Return exactly one JSON object with keys case_id (late-correction), destination, courier, handling, supersedes, evidence (file#anchor array). Cite current overrides and the retained constraint. No prose.", "required_reads": ["change.txt"]}
+      ],
+      "answer": {"case_id": "late-correction", "destination": "violet-station", "courier": "rowan", "handling": "keep-upright", "supersedes": "R1", "evidence": ["change.txt#C1", "change.txt#C2", "policy.txt#P3"]},
+      "unordered_fields": ["evidence"],
+      "forbidden_values": ["amber-station", "ivy"],
+      "required_read_order": ["policy.txt", "change.txt"]
+    },
+    {
+      "id": "multi-hop",
+      "objective": "Follow two file links using three actual read results and combine route capacity with manifest weights.",
+      "fixtures": ["index.txt", "routing/r6.txt", "manifests/b804.txt"],
+      "stages": [
+        {"id": "resolve", "prompt": "Synthetic routing task. Start with built-in read on {{MATERIALS}}/index.txt and follow the relevant file links under that same material directory, using read for each file. For request CASE-58, report route_id, batch_id, destination, total_mass_kg, remaining_capacity_kg and can_ship (boolean). Return exactly one JSON object with those keys plus case_id (multi-hop) and evidence (file#anchor array). Cite the index link, route capacity/link and manifest destination/weights. Do not use other files or infer unread contents.", "required_reads": ["index.txt", "routing/r6.txt", "manifests/b804.txt"]}
+      ],
+      "answer": {"case_id": "multi-hop", "route_id": "R6", "batch_id": "B-804", "destination": "dock-Q2", "total_mass_kg": 9, "remaining_capacity_kg": 3, "can_ship": true, "evidence": ["index.txt#I1", "routing/r6.txt#R1", "routing/r6.txt#R2", "manifests/b804.txt#M1", "manifests/b804.txt#M2"]},
+      "unordered_fields": ["evidence"],
+      "forbidden_values": [],
+      "required_read_order": ["index.txt", "routing/r6.txt", "manifests/b804.txt"]
+    }
+  ]
+}

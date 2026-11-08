@@ -1,0 +1,268 @@
+{
+  "schema": "sic-native-peer-fault-acceptance-v1",
+  "status": "passed-listed-scenarios-not-all-contract-certified",
+  "scenarios": [
+    {
+      "scenario": "cancel-during-body",
+      "summary": "实际工具体运行后取消，原生AbortSignal中止，无结果采纳",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 0,
+      "native_body_aborted": 1,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "revoke-before-dispatch",
+      "summary": "当前执行权在dispatch前撤回，只有reservation，没有实际工具体",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 0,
+      "native_body_ended": 0,
+      "native_body_aborted": 0,
+      "actual_dispatches": 0,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "revoke-during-body",
+      "summary": "工具体运行后撤权，原生中止，结果拒绝采纳",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 0,
+      "native_body_aborted": 1,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "lost-completion-response",
+      "summary": "Core已提交完成但响应丢失，只重送相同收据，工具一次",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 1,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "unknown-result-recovery",
+      "summary": "完成数据未到Core，unknown持久化；Core及原生Session恢复后不重执行，迟到旧收据拒绝",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 1,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0,
+      "native_resume_after_core_restart": true,
+      "unknown_attempt_redispatches": 0,
+      "late_original_native_receipt_rejected": true
+    },
+    {
+      "scenario": "concurrent-peers",
+      "summary": "两个独立历史peer的真实原生工具体区间重叠并各自完成",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 2,
+      "native_body_started": 2,
+      "native_body_ended": 2,
+      "native_body_aborted": 0,
+      "actual_dispatches": 2,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "lease-expires-during-body",
+      "summary": "在途lease到期归unknown，原生工具中止，不伪造结束/结果",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 0,
+      "native_body_aborted": 1,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "mixed-peer-stop",
+      "summary": "并发中Signal stop一支，该支中止，另一支正常完成",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 2,
+      "native_body_started": 2,
+      "native_body_ended": 1,
+      "native_body_aborted": 1,
+      "actual_dispatches": 2,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "host-transport-disconnect",
+      "summary": "宿主控制传输断连，watcher中止，lease归unknown；重开不重执行",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 0,
+      "native_body_aborted": 1,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0,
+      "native_resume_after_core_restart": true,
+      "unknown_attempt_redispatches": 0
+    },
+    {
+      "scenario": "pause-editor-and-wake",
+      "summary": "在途Editor暂停，单轮结果保留、无新Worker，wake复用候选继续",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 1,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "pause-before-dispatch-and-wake",
+      "summary": "已reservation但未准入的dispatch暂停，wake后只执行一次",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 1,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "pause-body-and-wake",
+      "summary": "已运行工具在wait期间安全结束，暂停不新增Worker，wake消费已有收据",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 1,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "stop-editor-terminal",
+      "summary": "在途Editor stop后有限终态，不再发Worker、不永久waiting",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 0,
+      "native_body_started": 0,
+      "native_body_ended": 0,
+      "native_body_aborted": 0,
+      "actual_dispatches": 0,
+      "real_provider_calls": 0
+    },
+    {
+      "scenario": "explicit-failed-attempt-retry",
+      "summary": "真实工具失败保留，原request重送无新增调用；无ack重试拒绝，明确ack新attempt并由原生请求者消费",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 1,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0,
+      "resend_new_model_calls": 0,
+      "explicit_retry_attempt": 1,
+      "original_native_tool_executions": 1,
+      "retry_result_consumed_by_native_requester": true
+    },
+    {
+      "scenario": "message-only-acl-consumption",
+      "summary": "仅Message角色可P/V投递，不可读历史/spawn/Signal/公示牌；真实目标请求消费P/V及最新公示牌I；peer回信沿冻结P政策，具接收时间与固定收据并进入父CB",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 1,
+      "native_body_ended": 1,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0,
+      "peer_return_lifecycle": "P",
+      "return_policy_frozen": true,
+      "receive_time_and_immutable_receipt": true,
+      "parent_cb_contains_peer_result": true
+    },
+    {
+      "scenario": "builtin-read-roundtrip",
+      "summary": "DSH自带read在唯一allowlist下读取隔离Home随机文本；关闭custom wait，实际内容进入peer下一Worker请求且文件hash未变",
+      "status": "passed-listed-native-scenario",
+      "native_peer_attempts": 1,
+      "native_body_started": 0,
+      "native_body_ended": 0,
+      "native_body_aborted": 0,
+      "actual_dispatches": 1,
+      "real_provider_calls": 0,
+      "native_tool": "read",
+      "tool_origin": "DSH built-in @deepseek-ai/dsh-tool-fs",
+      "custom_wait_enabled": false,
+      "actual_schema_checked": true,
+      "owned_file_content_consumed": true
+    }
+  ],
+  "scenario_count": 16,
+  "actual_native_peer_attempts": 17,
+  "verification": {
+    "native": "Supported installed DSH CLI/profile/Loader and normal native tool runtime, isolated DSH_HOME",
+    "model": "owned deterministic HTTP fixture through actual LiteLLM; no live provider",
+    "transport_faults": "owned loopback proxy only",
+    "independent_correlation": {
+      "path": ".local/native-peer-faults-final-correlation-v5.json",
+      "sha256": "a7549c2d8520951497e28b716e9ac82202ae6ae692724366b0b81971f77156ad",
+      "inference_calls": 0,
+      "original_database_access": "read-only backup to disposable copies",
+      "request_response_native_binding_exact": true,
+      "actual_requester_next_input_checked": true
+    }
+  },
+  "evidence_references": [
+    {
+      "path": ".local/native-peer-faults-batch16-final/matrix.json",
+      "sha256": "a0679a7df06152c1ae696dfe4a51fc0734fe82928f2910a9584ceb752d5388d2",
+      "private_raw_evidence_included": false
+    }
+  ],
+  "producer_source_snapshots": [
+    {
+      "sic_core/__init__.py": "091c708e4289e8197eb9b7ba19eb475a02c7b566d366591ceaae214617cb6df1",
+      "sic_core/accounting.py": "9fa02b8b83f5905adbc5b5c2cc2c7bf3ed1919e177c4c4542df7d58f5e327a5b",
+      "sic_core/adapters.py": "4efa57980637060b004ebaabdd58be86219d8c72f49beb16190e3ee7a3d78620",
+      "sic_core/bridge.py": "069b94818a177eb664e4375f3eff0401cd49bdffba064315d4492421e2034a94",
+      "sic_core/communication.py": "087760363ff7c09c883c9365bf50a61d78d755a208ee7291656ceaed30cf9095",
+      "sic_core/decision.py": "18ed6f6bb6ff7d311f22926d8715131e1bac0c3ba81e90f3dd641ba22b2b5de4",
+      "sic_core/editing.py": "a5acb6cdce6a0780f07fb1a68285f31f41d469782e6f7355950d94d6c844f6c5",
+      "sic_core/frontier.py": "4bb89cd3247ba2703c6c380e09de072dc7bcdb75bc2e93b6e67b5a8c49507970",
+      "sic_core/hierarchy.py": "0022b34b86966ceb95173f039bb4f8b72f2305e5e9f585e1e1f21636c80afa65",
+      "sic_core/history.py": "0da170c96a2edc69edeef09d9da585b6dadaf750308049898c850e3a73d219fe",
+      "sic_core/host_tools.py": "966f4dfb42a02a4799caa39476c06230c33f98a7642fc173d35d202581cf449c",
+      "sic_core/mechanisms.py": "77531eb704a0a6621c152d58a8ca523ac257654de28bf2571be0970eeccf3977",
+      "sic_core/media.py": "7c158cc8beecb86f1aaba052b47fccfd54241364aaccf70c87bbe05150a684d8",
+      "sic_core/memory.py": "c4c092bf1e26d939e7368d6bbda3cf84d766411da9f550b404c5fdd96c627355",
+      "sic_core/runtime.py": "c06c1b92b425203f1959147f374976900c58417e21700ecb2e562ff8e5b6823c",
+      "sic_core/server.py": "5a868067bcd58d7e75d96c4c7c1e0948d737fae445214d1cf97113320fc30b66",
+      "sic_core/service.py": "36145ce5a90b574576d534874900a2c8e34e678f76a0a77ba60be961bf96081d",
+      "sic_core/store.py": "d3a6f4d27eede8edefbc923dd6b39d2d3752eb4c3050df94c960b175fcc5dbac",
+      "sic_core/task_ledger.py": "a1f39d5c368948f162845cc258e77a20791fa37c9689c871812b20b50fef9d94",
+      "sic_core/wait_windows.py": "87c5a260c4e825b4c7b74efc96ae665f7016e130dcad3135cac09c44726843e3",
+      "sic_core/operations.json": "dbe35076463652b3a2d044d7768c18810563eb5301858a584909929e41e1c496",
+      "sic_core/dsh_plugin/index.mjs": "c958d61ced7e0634478811f60d5a781b0f3310a9fb093eed1d07cad58ed9fa7a",
+      "sic_core/dsh_plugin/peer-host.mjs": "701f89bd46695def4ffe2ac00c055cfd33bb70e67eeecdea9623452fd046f7a3",
+      "integrations/tests/native_peer_faults.py": "2737e02b6633a4445adaaa77057beb6eb8aa0f44c04d2d3f86a2fa57d154c267"
+    }
+  ],
+  "product_sources_match_current": true,
+  "scope_limits": [
+    "Only the listed failure/lifecycle/ACL scenarios are certified, not every SIC function or arbitrary native tool.",
+    "Cooperative wait fixture proves AbortSignal delivery; cancellation does not undo arbitrary external effects.",
+    "Unknown original attempts are retained, never silently replayed or converted to success.",
+    "Paused known pre-admission handshakes may wait; ambiguous transport/reservation/dispatch outcomes are not retried.",
+    "No quality, price-parity, physical provider cache-hit or all-GUI conclusion."
+  ],
+  "services": {
+    "existing_core_or_ui_restarted": false,
+    "native_windows_or_mouse_keyboard_used": false
+  },
+  "reproduce": {
+    "runner": "integrations/tests/native_peer_faults.py",
+    "read_only_verifier": "integrations/tests/verify_native_peer_faults.py",
+    "prerequisites": "installed supported DSH CLI, pinned plugin dependencies, complete owned SDK environment, new empty private output directory"
+  },
+  "privacy": "Repository-relative evidence references and SHA only; no runtime IDs, machine absolute paths, credentials or raw requests copied here."
+}

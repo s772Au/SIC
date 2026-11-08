@@ -1,0 +1,91 @@
+{
+  "generatedAt": "2026-11-07",
+  "hashAlgorithm": "sha256",
+  "note": "CorpusQA hashes are of user-provided ModelScope files; other remote hashes match official Hugging Face LFS oid or LongMemEval-V2 checksums.sha256.",
+  "files": [
+    {
+      "id": "corpusqa-4m",
+      "path": "benchmarks/data/corpusqa/4m_4domains.jsonl",
+      "bytes": 4422636843,
+      "sha256": "a3e1ce956bfc40f447e582bd2ea2e23730fe725b91cfaf1e529451a96f6efd70"
+    },
+    {
+      "id": "corpusqa-10m",
+      "path": "benchmarks/data/corpusqa/10m_4domains.jsonl",
+      "bytes": 9787758915,
+      "sha256": "1d6656260ae47ad84058871689f70339d37deef84cfafad5fe33e3c66f06acb4"
+    },
+    {
+      "id": "beam-10m-0",
+      "path": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "bytes": 153844664,
+      "sha256": "31d96fd47ec56221d202e68792f26c00e49467dd4b36ee105c36ebd19ef78ad5"
+    },
+    {
+      "id": "beam-10m-1",
+      "path": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "bytes": 189980875,
+      "sha256": "a4f13fe25af51d57405ae41008689c31d1421377f3efde56a024b441deb2ee65"
+    },
+    {
+      "id": "babilong-qa3-10m-first20-derived",
+      "path": "benchmarks/data/babilong/qa3-10m-first20.jsonl",
+      "bytes": 803915786,
+      "sha256": "87f48469d373c07d3d940a26c39fe3052546ab0a0820ed950a166e4a951f9a92"
+    },
+    {
+      "id": "babilong-qa1-10m",
+      "path": "benchmarks/data/babilong/data/qa1/10M.json",
+      "bytes": 4018016805,
+      "sha256": "41691cba6b804d5b973bfff0bed92df9165f1716cc3c3ac6433ae9529a881118"
+    },
+    {
+      "id": "babilong-qa2-10m",
+      "path": "benchmarks/data/babilong/data/qa2/10M.json",
+      "bytes": 4019960532,
+      "sha256": "9ff8c0bb749908e1e2daa4ce624c8aaacbcb3bcc9064f64f2769d7be65e55336"
+    },
+    {
+      "id": "babilong-qa3-10m",
+      "path": "benchmarks/data/babilong/data/qa3/10M.json",
+      "bytes": 4025904013,
+      "sha256": "6a3d703f32ba18fa8d562b8581f025ddc49699817a3a6633bbeb9cc356c7d434"
+    },
+    {
+      "id": "babilong-qa4-10m",
+      "path": "benchmarks/data/babilong/data/qa4/10M.json",
+      "bytes": 4016999567,
+      "sha256": "0ae3f921d7fa4af250e153c89fa6d38c45946c22c5f6425608978d9ed1a989ab"
+    },
+    {
+      "id": "babilong-qa5-10m",
+      "path": "benchmarks/data/babilong/data/qa5/10M.json",
+      "bytes": 4017418339,
+      "sha256": "833b3c706bde3c7c74be3b5826a35c3efce1c253b07044af8e0c6cff8534d9ce"
+    },
+    {
+      "id": "longmemeval-v2-trajectories",
+      "path": "benchmarks/data/longmemeval-v2/trajectories.jsonl",
+      "bytes": 1195604539,
+      "sha256": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6"
+    },
+    {
+      "id": "longmemeval-v2-enterprise-images",
+      "path": "benchmarks/data/longmemeval-v2/trajectory_screenshots/enterprise_screenshots_base.tar.gz",
+      "bytes": 3354163660,
+      "sha256": "5c4a67ae0856aa1ede9b040e7da7c7a2d0b76fdd6344ef87380bcdf9f4b6d7a3"
+    },
+    {
+      "id": "longmemeval-v2-web-images",
+      "path": "benchmarks/data/longmemeval-v2/trajectory_screenshots/web_screenshots.tar.gz",
+      "bytes": 2562302847,
+      "sha256": "68699c6842412e09a6f89d3c05c5ae8813275918002b52d82dec43ab24dd01fb"
+    }
+  ],
+  "sourceVerificationDate": "2026-11-07",
+  "officialRevisions": {
+    "RMT-team/babilong": "ee0d588794c7ac098062ee0d247c733d62e94fe2",
+    "Mohammadta/BEAM-10M": "9b2096193fe74e2837e4713e483351e19817773c",
+    "xiaowu0162/longmemeval-v2": "f152293e235517d504809563c833d7190b8c713b"
+  }
+}

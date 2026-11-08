@@ -1,0 +1,2 @@
+[M1] Batch B-804 goes to destination dock-Q2.
+[M2] The complete batch contains three packages with masses 3 kg, 4 kg and 2 kg. There are no additional packages.

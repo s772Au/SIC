@@ -1,0 +1,19 @@
+{
+  "schema": "sic-llmlingua-licenses-v1",
+  "model_card": {
+    "url": "https://huggingface.co/microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank/blob/5f0c82792b7ea14c6484e015b6a072009496b7f2/README.md",
+    "license": "Apache-2.0",
+    "basis": "official fixed revision model card; underlying BERT model and MeetingBank data have their own provenance, not silently relabeled as code MIT"
+  },
+  "code": {
+    "distribution": "llmlingua",
+    "version": "0.2.2",
+    "license": "MIT",
+    "wheel_sha256": "da55137efe0db78063b3395396efe8a0dcfe4ae5a09aea0d503c34b7bf1d800c",
+    "source": "https://pypi.org/project/llmlingua/0.2.2/"
+  },
+  "files": {
+    "CODE-MIT.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "MODEL-APACHE-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  }
+}

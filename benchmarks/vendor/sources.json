@@ -1,0 +1,10 @@
+{
+  "babilong_metrics.py": {
+    "source": "https://github.com/booydar/babilong/blob/7a6efee29f5cac03c3c410e6799c80fd2ffe3610/babilong/metrics.py",
+    "sha256": "f77c139809690588f85ed29c1c93f22394c6b48b1fdc8afeaaa5d0969d973daf"
+  },
+  "BABILONG-LICENSE": {
+    "source": "https://github.com/booydar/babilong/blob/7a6efee29f5cac03c3c410e6799c80fd2ffe3610/LICENSE",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "sources": [
+    {
+      "file": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "size_bytes": 153844664,
+      "sha256": "31d96fd47ec56221d202e68792f26c00e49467dd4b36ee105c36ebd19ef78ad5",
+      "rows": 5
+    },
+    {
+      "file": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "size_bytes": 189980875,
+      "sha256": "a4f13fe25af51d57405ae41008689c31d1421377f3efde56a024b441deb2ee65",
+      "rows": 5
+    }
+  ],
+  "conversations": [
+    {
+      "conversation_id": "1",
+      "source_file": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 0,
+      "messages": 19895,
+      "content_chars": 49336916,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "2",
+      "source_file": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 1,
+      "messages": 19057,
+      "content_chars": 46841613,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "3",
+      "source_file": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 2,
+      "messages": 20192,
+      "content_chars": 50579324,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "4",
+      "source_file": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 3,
+      "messages": 19202,
+      "content_chars": 39558125,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "5",
+      "source_file": "benchmarks/data/beam10m/data/10M-00000-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 4,
+      "messages": 18760,
+      "content_chars": 33875079,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "6",
+      "source_file": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 0,
+      "messages": 19958,
+      "content_chars": 45031280,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "7",
+      "source_file": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 1,
+      "messages": 22652,
+      "content_chars": 49471699,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "8",
+      "source_file": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 2,
+      "messages": 22560,
+      "content_chars": 46441188,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "9",
+      "source_file": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 3,
+      "messages": 22704,
+      "content_chars": 45545492,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    },
+    {
+      "conversation_id": "10",
+      "source_file": "benchmarks/data/beam10m/data/10M-00001-of-00002.parquet",
+      "row_group": 0,
+      "row_in_group": 4,
+      "messages": 23716,
+      "content_chars": 56797788,
+      "question_count": 20,
+      "question_categories": {
+        "abstention": 2,
+        "contradiction_resolution": 2,
+        "event_ordering": 2,
+        "information_extraction": 2,
+        "instruction_following": 2,
+        "knowledge_update": 2,
+        "multi_session_reasoning": 2,
+        "preference_following": 2,
+        "summarization": 2,
+        "temporal_reasoning": 2
+      },
+      "token_count_status": "official ~10M; exact gateway tokenizer unverified"
+    }
+  ]
+}

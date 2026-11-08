@@ -1,0 +1,2 @@
+[R1] Route R6 currently dispatches batch B-804. Its manifest is manifests/b804.txt.
+[R2] Route R6 has maximum mass capacity 12 kg. can_ship is true exactly when the manifest total does not exceed that capacity.

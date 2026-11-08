@@ -1,0 +1,68 @@
+[
+  {
+    "source": "benchmarks/data/corpusqa/4m_4domains.jsonl",
+    "sha256": "a3e1ce956bfc40f447e582bd2ea2e23730fe725b91cfaf1e529451a96f6efd70",
+    "size_bytes": 4422636843,
+    "rows": 329,
+    "prompt_chars_min": 4700956,
+    "prompt_chars_max": 23702426,
+    "prompt_chars_mean": 12211577,
+    "domain_set_counts": [
+      {
+        "domain": "education_en",
+        "set": "128k",
+        "rows": 82
+      },
+      {
+        "domain": "financial_en",
+        "set": "128k",
+        "rows": 83
+      },
+      {
+        "domain": "financial_zh",
+        "set": "128k",
+        "rows": 83
+      },
+      {
+        "domain": "real_estate_en",
+        "set": "128k",
+        "rows": 81
+      }
+    ],
+    "index": "benchmarks/prepared/corpusqa/4m_4domains.index.jsonl",
+    "token_count_status": "unverified; char count is not tokenizer count"
+  },
+  {
+    "source": "benchmarks/data/corpusqa/10m_4domains.jsonl",
+    "sha256": "1d6656260ae47ad84058871689f70339d37deef84cfafad5fe33e3c66f06acb4",
+    "size_bytes": 9787758915,
+    "rows": 329,
+    "prompt_chars_min": 8026977,
+    "prompt_chars_max": 60840474,
+    "prompt_chars_mean": 27555134,
+    "domain_set_counts": [
+      {
+        "domain": "education_en",
+        "set": "128k",
+        "rows": 82
+      },
+      {
+        "domain": "financial_en",
+        "set": "128k",
+        "rows": 83
+      },
+      {
+        "domain": "financial_zh",
+        "set": "128k",
+        "rows": 83
+      },
+      {
+        "domain": "real_estate_en",
+        "set": "128k",
+        "rows": 81
+      }
+    ],
+    "index": "benchmarks/prepared/corpusqa/10m_4domains.index.jsonl",
+    "token_count_status": "unverified; char count is not tokenizer count"
+  }
+]

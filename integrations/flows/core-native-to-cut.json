@@ -1,0 +1,3267 @@
+{
+  "name": "SIC Core — native to immutable CB",
+  "description": "SIC v2 real core actions. Writes/models disabled on import. CB/operation history read-only; corrections via P/V/I.",
+  "is_component": false,
+  "data": {
+    "nodes": [
+      {
+        "id": "SICAction-1",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "id": "SICAction-1",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "capabilities",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Actual capabilities / missing support",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-2",
+        "type": "genericNode",
+        "position": {
+          "x": 460,
+          "y": 0
+        },
+        "data": {
+          "id": "SICAction-2",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "chain.create",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"creators\": []}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Create independent Agent chain",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-3",
+        "type": "genericNode",
+        "position": {
+          "x": 920,
+          "y": 0
+        },
+        "data": {
+          "id": "SICAction-3",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "source.ingest",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"format\": \"openai-chat\", \"request\": {\"messages\": [{\"role\": \"system\", \"content\": \"Keep task constraints and protocol protected.\"}, {\"role\": \"user\", \"content\": \"First working material\"}, {\"role\": \"user\", \"content\": \"First working material\"}]}}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Native API → text + protocol sidecar",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-4",
+        "type": "genericNode",
+        "position": {
+          "x": 1380,
+          "y": 0
+        },
+        "data": {
+          "id": "SICAction-4",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "source.read",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"source_id\": \"$context.source_id\"}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Read immutable source / sidecar",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-5",
+        "type": "genericNode",
+        "position": {
+          "x": 1840,
+          "y": 0
+        },
+        "data": {
+          "id": "SICAction-5",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "edit.program",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"source_id\": \"$context.source_id\", \"rules\": [\"deduplicate_exact\"]}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Active program rules (no model)",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-6",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 820
+        },
+        "data": {
+          "id": "SICAction-6",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "edit.validate",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"job_id\": \"$context.job_id\"}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Validate op / PVI candidate",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-7",
+        "type": "genericNode",
+        "position": {
+          "x": 460,
+          "y": 820
+        },
+        "data": {
+          "id": "SICAction-7",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "cut.publish",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"job_id\": \"$context.job_id\", \"expected_cut\": 0, \"idempotency_key\": \"$context.job_id\"}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Publish immutable CB + operations / cut",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-8",
+        "type": "genericNode",
+        "position": {
+          "x": 920,
+          "y": 820
+        },
+        "data": {
+          "id": "SICAction-8",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "cut.get",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Read CB + persistent ops + two indices",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-9",
+        "type": "genericNode",
+        "position": {
+          "x": 1380,
+          "y": 820
+        },
+        "data": {
+          "id": "SICAction-9",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "provider.preview",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{\"format\": \"openai-chat\"}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Encode legal provider request (preview)",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-10",
+        "type": "genericNode",
+        "position": {
+          "x": 1840,
+          "y": 820
+        },
+        "data": {
+          "id": "SICAction-10",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "chain.get",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Inspect full state and current views",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICAction-11",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 1640
+        },
+        "data": {
+          "id": "SICAction-11",
+          "type": "SICAction",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "Previous stage",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_model": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model",
+                "value": false,
+                "display_name": "Allow this model request",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "Allow this write",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "bindings_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bindings_json",
+                "value": "{}",
+                "display_name": "Save result paths to context (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "import json\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, StrInput, Output\nfrom lfx.schema import Data\nfrom sic_workflow.v2_client import CoreClient, bind_result, resolve_values\n\n\nclass SICAction(Component):\n    display_name = \"SIC Core Action\"\n    description = \"V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.\"\n    icon = \"Workflow\"\n    name = \"SICAction\"\n    inputs = [\n        StrInput(name=\"operation_name\", display_name=\"Core operation\", value=\"capabilities\"),\n        DataInput(name=\"previous\", display_name=\"Previous stage\", required=False),\n        CodeInput(name=\"context_json\", display_name=\"Context / authorized actor (JSON)\", value=\"{}\"),\n        CodeInput(name=\"payload_json\", display_name=\"Editable working material / configuration (JSON)\", value=\"{}\"),\n        CodeInput(name=\"bindings_json\", display_name=\"Save result paths to context (JSON)\", value=\"{}\",\n                  info='For example {\"chain_id\":\"id\"}. Payload values can refer to $context.chain_id.'),\n        BoolInput(name=\"allow_write\", display_name=\"Allow this write\", value=False),\n        BoolInput(name=\"allow_model\", display_name=\"Allow this model request\", value=False),\n        BoolInput(name=\"continue_after_error\", display_name=\"Inspect after previous failure\", value=False,\n                  info=\"Default stops the chain. Enable only for intentional diagnostic/read operations.\"),\n    ]\n    outputs = [Output(name=\"result\", display_name=\"Stage result / state / evidence\", method=\"run_action\")]\n\n    @staticmethod\n    def _object(value):\n        result = value if isinstance(value, dict) else json.loads(value or \"{}\")\n        if not isinstance(result, dict):\n            raise ValueError(\"Fields must be JSON objects\")\n        return result\n\n    def run_action(self) -> Data:\n        previous = self.previous.data if self.previous else {}\n        if previous.get(\"ok\") is False and not self.continue_after_error:\n            result = {**previous, \"blocked_operation\": self.operation_name, \"blocked_by_previous_failure\": True}\n        else:\n            context = dict(previous.get(\"context\", {}))\n            context.update(self._object(self.context_json))\n            payload = resolve_values(self._object(self.payload_json), context)\n            result = CoreClient().execute(self.operation_name, context, payload,\n                                          allow_write=self.allow_write, allow_model=self.allow_model)\n            result = bind_result(result, self._object(self.bindings_json))\n        self.status = result\n        return Data(data=result)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_json",
+                "value": "{}",
+                "display_name": "Context / authorized actor (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "continue_after_error": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "continue_after_error",
+                "value": false,
+                "display_name": "Inspect after previous failure",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Default stops the chain. Enable only for intentional diagnostic/read operations.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "operation_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_name",
+                "value": "usage.report",
+                "display_name": "Core operation",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "payload_json": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "payload_json",
+                "value": "{}",
+                "display_name": "Editable working material / configuration (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "V2 core action. Published CB and protocol sidecars are read-only. Corrections use new P/V/I.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Metering / unknown evidence",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Stage result / state / evidence",
+                "method": "run_action",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "operation_name",
+              "previous",
+              "context_json",
+              "payload_json",
+              "bindings_json",
+              "allow_write",
+              "allow_model",
+              "continue_after_error"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICAction",
+              "module": "custom_components.sic_core_action",
+              "code_hash": "b635587e5b01",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  },
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-1",
+        "source": "SICAction-1",
+        "target": "SICAction-2",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-1\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-2\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-1",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-2",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-2",
+        "source": "SICAction-2",
+        "target": "SICAction-3",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-2\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-3\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-2",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-3",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-3",
+        "source": "SICAction-3",
+        "target": "SICAction-4",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-3\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-4\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-3",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-4",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-4",
+        "source": "SICAction-4",
+        "target": "SICAction-5",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-4\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-5\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-4",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-5",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-5",
+        "source": "SICAction-5",
+        "target": "SICAction-6",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-5\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-6\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-5",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-6",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-6",
+        "source": "SICAction-6",
+        "target": "SICAction-7",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-6\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-7\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-6",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-7",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-7",
+        "source": "SICAction-7",
+        "target": "SICAction-8",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-7\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-8\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-7",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-8",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-8",
+        "source": "SICAction-8",
+        "target": "SICAction-9",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-8\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-9\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-8",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-9",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-9",
+        "source": "SICAction-9",
+        "target": "SICAction-10",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-9\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-10\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-9",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-10",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      },
+      {
+        "id": "edge-10",
+        "source": "SICAction-10",
+        "target": "SICAction-11",
+        "sourceHandle": "{\"dataType\": \"SICAction\", \"id\": \"SICAction-10\", \"name\": \"result\", \"output_types\": [\"JSON\"]}",
+        "targetHandle": "{\"fieldName\": \"previous\", \"id\": \"SICAction-11\", \"inputTypes\": [\"Data\", \"JSON\"], \"type\": \"other\"}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SICAction",
+            "id": "SICAction-10",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "previous",
+            "id": "SICAction-11",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        },
+        "animated": false
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.5
+    }
+  }
+}

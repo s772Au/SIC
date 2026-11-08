@@ -1,0 +1,79 @@
+{
+  "schema": "sic-llmlingua-acceptance-v1",
+  "preparation": "prepared-and-executed",
+  "mechanical_acceptance": "passed",
+  "research_evaluation": "not_evaluated",
+  "engine": "official llmlingua 0.2.2",
+  "model": "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
+  "revision": "5f0c82792b7ea14c6484e015b6a072009496b7f2",
+  "actual_cpu_execution": {
+    "threads": 2,
+    "float": "float32",
+    "weight_sha256": "22b9ecde52fec5c97e8c54a293be768727df95a81c6c8dccb03f262a50c58324",
+    "weight_bytes": 709388104,
+    "classifier_tensor_compared_to_safetensors": true,
+    "model_forward_calls_observed": 1,
+    "network_connect_attempts": 0,
+    "hf_cache_isolated_from_user_home": true
+  },
+  "integration": {
+    "local_weight_compression_published_verbatim": true,
+    "final_worker_request_consumes_exact_compressed_body": true,
+    "same_frozen_final_question": true,
+    "final_pending_tail_not_recompressed": true,
+    "model_cpu_accounted_separately_without_invented_token_price": true,
+    "provider_worker_calls": 3,
+    "provider_editor_calls": 0,
+    "real_provider_calls": 0
+  },
+  "portable_model_restoration": {
+    "status": "passed",
+    "bundle_sha256": "fad89da8f96db6319aba5318cfee430def5c11f772585827dfe387ba9c8eff59",
+    "zip_crc": true,
+    "relocated_real_model_execution": true,
+    "exact_compressed_output_matches": true,
+    "network_attempts": 0,
+    "real_provider_calls": 0,
+    "standalone_new_hf_home_execution": "passed"
+  },
+  "native_media_controls": {
+    "program_exact_and_real_llmlingua": "passed on legal minimal generated structural dataset",
+    "original_image_sha_and_order_preserved": 3,
+    "question_hidden_until_final_query": true,
+    "gold_not_sent_to_model": true,
+    "llmlingua_input_text_only_no_media_flattening": true,
+    "official_benchmark_quality_claimed": false
+  },
+  "evidence": [
+    ".local/llmlingua/real-compression.json",
+    ".local/llmlingua/portable-model-verification.json",
+    ".local/research-v2/llmlingua-network-blocked-final-score.json",
+    ".local/research-v2/media-control-consumption-proof.json"
+  ],
+  "remaining_user_actions_for_local_engine": [],
+  "source_sha256": {
+    "scripts/prepare_llmlingua.py": "963d2ec9e60c00d680335248e60c82565fcb07bfc8de16cc9039d3b4cab20876",
+    "scripts/llmlingua_worker.py": "5eb77e2ac0858df50a1dee1efce4d9bd429182531810f94f39a18c7001d1fe67",
+    "scripts/llmlingua_adapter.py": "dfaba9d618ac0b2ef1fa9d864f6ca82cecce1f828a1129ab52af601640b580f0",
+    "scripts/package_llmlingua.py": "a4758bda7ec2a9b10f3d97d39ff1c11d06c3a8cc03a798bda58a011f48c0e759",
+    "research/compression/requirements-llmlingua.txt": "1fb35e68d2db914c8f61e4a9e755fe6c5d3b52ae587ffff7d81d58f7ae8b8386",
+    "research/compression/llmlingua-requirements.lock.txt": "d12e16bca4eb198fd5307ce485995d4af984844eff4f296438f2d64bbab5ca8e"
+  },
+  "portable_research_source": {
+    "status": "passed",
+    "bundle_sha256": "a4966c6bad03c94b907764c7ef8009c5574ceed428be2323392e89e1871196b4",
+    "bundle_bytes": 338622,
+    "frozen_media_and_core_files_exact": 19,
+    "current_core_python_files_exact": 20,
+    "clean_research_tests": 11,
+    "private_dataset_fallback": false,
+    "integrations_included": false,
+    "old_quality_results_included": false,
+    "recursive_privacy_entries": 137,
+    "real_provider_calls": 0,
+    "environment": "existing pinned interpreter/dependencies; clean project tree; no private source configuration",
+    "seven_control_actual_core_replay": "passed",
+    "media_program_and_real_llmlingua": "passed",
+    "model_and_processor_relocation_evidence": "unchanged source/model asset bundles reused; original independent relocation execution preserved"
+  }
+}

@@ -1,0 +1,93 @@
+[
+  {
+    "dataset": "corpusqa-4m",
+    "path": "USER_HOME\\Downloads\\4m_4domains.jsonl",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "corpusqa-10m",
+    "path": "USER_HOME\\Downloads\\10m_4domains.jsonl",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "beam-10m-0",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\beam10m\\data\\10M-00000-of-00002.parquet",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "beam-10m-1",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\beam10m\\data\\10M-00001-of-00002.parquet",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "babilong-qa3-10m-first20-derived",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\qa3-10m-first20.jsonl",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "babilong-qa1-10m",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa1\\10M.json",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "babilong-qa2-10m",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa2\\10M.json",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "babilong-qa3-10m",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa3\\10M.json",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "babilong-qa4-10m",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa4\\10M.json",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "babilong-qa5-10m",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa5\\10M.json",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "longmemeval-v2-trajectories",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\longmemeval-v2\\trajectories.jsonl",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "longmemeval-v2-enterprise-images",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\longmemeval-v2\\trajectory_screenshots\\enterprise_screenshots_base.tar.gz",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  },
+  {
+    "dataset": "longmemeval-v2-web-images",
+    "path": "PROJECT_ROOT\\benchmarks\\data\\longmemeval-v2\\trajectory_screenshots\\web_screenshots.tar.gz",
+    "exists": true,
+    "sizeOk": true,
+    "hashOk": true
+  }
+]

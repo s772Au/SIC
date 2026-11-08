@@ -1,0 +1,72 @@
+{
+  "sourceVerificationDate": "2026-11-07",
+  "repository": "RMT-team/babilong",
+  "revision": "ee0d588794c7ac098062ee0d247c733d62e94fe2",
+  "source_hashes_verified": true,
+  "histories": 500,
+  "questions": 500,
+  "tokenizer_status": "gateway-tokenizer-unverified",
+  "evaluation_status": "official-evaluator-pending",
+  "sources": [
+    {
+      "task": "qa1",
+      "source": "benchmarks/data/babilong/data/qa1/10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38512513,
+      "input_chars_max": 40000466,
+      "elapsed_seconds": 23.25,
+      "source_id": "babilong-qa1-10m",
+      "bytes": 4018016805,
+      "sha256": "41691cba6b804d5b973bfff0bed92df9165f1716cc3c3ac6433ae9529a881118"
+    },
+    {
+      "task": "qa2",
+      "source": "benchmarks/data/babilong/data/qa2/10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38796074,
+      "input_chars_max": 39971241,
+      "elapsed_seconds": 22.71,
+      "source_id": "babilong-qa2-10m",
+      "bytes": 4019960532,
+      "sha256": "9ff8c0bb749908e1e2daa4ce624c8aaacbcb3bcc9064f64f2769d7be65e55336"
+    },
+    {
+      "task": "qa3",
+      "source": "benchmarks/data/babilong/data/qa3/10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38812909,
+      "input_chars_max": 40079533,
+      "elapsed_seconds": 26.76,
+      "source_id": "babilong-qa3-10m",
+      "bytes": 4025904013,
+      "sha256": "6a3d703f32ba18fa8d562b8581f025ddc49699817a3a6633bbeb9cc356c7d434"
+    },
+    {
+      "task": "qa4",
+      "source": "benchmarks/data/babilong/data/qa4/10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38581935,
+      "input_chars_max": 39948175,
+      "elapsed_seconds": 22.84,
+      "source_id": "babilong-qa4-10m",
+      "bytes": 4016999567,
+      "sha256": "0ae3f921d7fa4af250e153c89fa6d38c45946c22c5f6425608978d9ed1a989ab"
+    },
+    {
+      "task": "qa5",
+      "source": "benchmarks/data/babilong/data/qa5/10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38563856,
+      "input_chars_max": 39971932,
+      "elapsed_seconds": 27.96,
+      "source_id": "babilong-qa5-10m",
+      "bytes": 4017418339,
+      "sha256": "833b3c706bde3c7c74be3b5826a35c3efce1c253b07044af8e0c6cff8534d9ce"
+    }
+  ]
+}

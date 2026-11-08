@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-11-07",
+  "beam-10m": {
+    "license": "CC-BY-SA-4.0",
+    "source": "https://huggingface.co/datasets/Mohammadta/BEAM-10M",
+    "revision": "9b2096193fe74e2837e4713e483351e19817773c"
+  },
+  "corpusqa": {
+    "codeLicense": "MIT",
+    "dataRights": "underlying corpora may have separate terms; source files remain mounted",
+    "source": "https://github.com/Tongyi-Zhiwen/CorpusQA"
+  },
+  "babilong": {
+    "codeLicense": "Apache-2.0",
+    "PG19": "Apache-2.0",
+    "bAbI": "BSD",
+    "source": "https://huggingface.co/datasets/RMT-team/babilong",
+    "revision": "ee0d588794c7ac098062ee0d247c733d62e94fe2"
+  },
+  "longmemeval-v2": {
+    "license": "Apache-2.0",
+    "source": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2",
+    "revision": "f152293e235517d504809563c833d7190b8c713b",
+    "licenseSHA256": "d547f7673579465fcecc8f257fcdb410f51c82fd784a10b1587e83036f9c29e1"
+  }
+}

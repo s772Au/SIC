@@ -1,0 +1,2 @@
+[I1] Request CASE-58 uses route R6; read routing/r6.txt for its current dispatch.
+[I2] Request CASE-12 uses route R2 and is irrelevant to CASE-58.

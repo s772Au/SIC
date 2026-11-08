@@ -1,0 +1,5 @@
+# Optional in-process provider adapter; tested version, MIT license.
+litellm==1.103.10
+
+# Verified immutable image data-URI decoding; imported only for image carriers.
+Pillow==13.0.0

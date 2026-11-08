@@ -1,0 +1,3 @@
+[P1] Initial policy revision R1 assigns destination amber-station.
+[P2] Revision R1 assigns courier ivy.
+[P3] Handling constraint: keep-upright. This remains applicable unless explicitly replaced.

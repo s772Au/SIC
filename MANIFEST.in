@@ -1,0 +1,25 @@
+include pyproject.toml
+include LICENSE
+include MANIFEST.in
+include docs/python-core-package.md
+include scripts/build_python_core.py
+include scripts/verify_installed_core.py
+include sic_core/*.py
+include sic_core/operations.json
+include sic_core/task_ledger.schema.json
+include sic_core/config.example.json
+include sic_core/requirements.txt
+exclude README.md
+prune .local
+prune .git
+prune tests
+prune integrations
+prune video
+prune paper
+prune research
+prune benchmarks
+prune webui
+prune src
+prune target
+prune sic_core/dsh_plugin
+global-exclude __pycache__ *.py[cod] *.db *.db-shm *.db-wal *.env

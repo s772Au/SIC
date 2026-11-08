@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sic-core"
+version = "0.1.0"
+description = "Source-preserving streaming incremental context editing core"
+readme = "docs/python-core-package.md"
+requires-python = ">=3.12,<3.15"
+dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+license = "MIT"
+license-files = ["LICENSE"]
+
+[project.optional-dependencies]
+provider = ["litellm==1.103.10"]
+media = ["Pillow==13.0.0"]
+full = ["litellm==1.103.10", "Pillow==13.0.0"]
+
+[project.scripts]
+sic-core = "sic_core.server:main"
+
+[tool.setuptools]
+packages = ["sic_core"]
+include-package-data = false
+
+[tool.setuptools.package-data]
+sic_core = ["operations.json", "task_ledger.schema.json", "config.example.json", "requirements.txt"]

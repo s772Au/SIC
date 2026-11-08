@@ -1,0 +1,516 @@
+{
+  "name": "SIC 工作台 — source",
+  "description": "官方SIC语义工作台。固定CB/op只读；仅候选与授权配置可改。各输出提供表格与真实版本。",
+  "is_component": false,
+  "data": {
+    "nodes": [
+      {
+        "id": "SICNativeInput-1",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "id": "SICNativeInput-1",
+          "type": "SICNativeInput",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "前一步",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "allow_write": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_write",
+                "value": false,
+                "display_name": "允许保存本次新来源",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "chain_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "chain_id",
+                "value": "SELECT_ROUTE",
+                "display_name": "工作路线",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from sic_workflow.workbench_component import WorkbenchComponent as Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, MultilineInput, StrInput, Output\nfrom lfx.schema import Data, DataFrame\nfrom sic_workflow.workbench_support import cached, error_rows, object_value, perform, reset, table, text\n\n\nclass SICNativeInput(Component):\n    display_name = \"SIC 新工作材料\"\n    description = \"将新材料送入真实解码器；原始存档随后只读。宿主保护字段不交给Editor编辑。R07–11。\"\n    icon = \"FileInput\"\n    name = \"SICNativeInput\"\n    inputs = [DataInput(name=\"previous\", display_name=\"前一步\", required=False),\n              StrInput(name=\"chain_id\", display_name=\"工作路线\", value=\"\"),\n              DropdownInput(name=\"input_mode\", display_name=\"输入方式\", options=[\"工作正文\", \"原生请求（高级）\"], value=\"工作正文\"),\n              DropdownInput(name=\"native_format\", display_name=\"原生格式\", options=[\"openai-chat\", \"openai-responses\", \"anthropic-messages\"], value=\"openai-chat\"),\n              CodeInput(name=\"working_text\", display_name=\"本次新正文（代码/JSON字符原样）\", value=\"\", info=\"只作为正文读取，不执行代码。\"),\n              MultilineInput(name=\"protected_text\", display_name=\"宿主保护指令（新路线可选）\", value=\"\", info=\"不是对旧保护前缀的修改入口；冲突由核心拒绝。\"),\n              CodeInput(name=\"native_request\", display_name=\"完整原生输入对象（高级）\", value=\"{}\", advanced=True),\n              BoolInput(name=\"allow_write\", display_name=\"允许保存本次新来源\", value=False)]\n    outputs = [Output(name=\"result\", display_name=\"已保存来源与WB身份\", method=\"ingest\", group_outputs=True),\n               Output(name=\"units\", display_name=\"解码后的正文单元\", method=\"units\", group_outputs=True)]\n\n    def _pre_run_setup(self):\n        reset(self)\n\n    def _act(self):\n        if self.input_mode == \"原生请求（高级）\":\n            request = object_value(self.native_request)\n        elif self.native_format == \"openai-responses\":\n            request = {\"input\": [{\"role\": \"user\", \"content\": self.working_text}]}\n            if self.protected_text:\n                request[\"instructions\"] = self.protected_text\n        else:\n            request = {\"messages\": [{\"role\": \"user\", \"content\": self.working_text}]}\n            if self.protected_text:\n                if self.native_format == \"anthropic-messages\":\n                    request[\"system\"] = self.protected_text\n                else:\n                    request[\"messages\"].insert(0, {\"role\": \"system\", \"content\": self.protected_text})\n        return perform(self, \"source.ingest\", {\"format\": self.native_format, \"request\": request})\n\n    def ingest(self) -> Data:\n        return Data(data=cached(self, self._act))\n\n    def units(self) -> DataFrame:\n        envelope = cached(self, self._act)\n        if not envelope.get(\"ok\"):\n            return table(error_rows(envelope))\n        return table([{\"来源WB\": envelope[\"result\"].get(\"source_id\"), \"单元\": unit[\"unit_id\"], \"正文（存档后只读）\": unit[\"text\"],\n                       \"原生位置\": text(unit.get(\"anchor\", {})), \"下一步\": \"检查正文/协议后形成编辑候选\"}\n                      for unit in envelope[\"result\"].get(\"units\", [])])\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "input_mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "工作正文",
+                  "原生请求（高级）"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_mode",
+                "value": "工作正文",
+                "display_name": "输入方式",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "native_format": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "openai-chat",
+                  "openai-responses",
+                  "anthropic-messages"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "native_format",
+                "value": "openai-chat",
+                "display_name": "原生格式",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "native_request": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "native_request",
+                "value": "{}",
+                "display_name": "完整原生输入对象（高级）",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              },
+              "protected_text": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "protected_text",
+                "value": "",
+                "display_name": "宿主保护指令（新路线可选）",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "不是对旧保护前缀的修改入口；冲突由核心拒绝。",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "working_text": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "working_text",
+                "value": "",
+                "display_name": "本次新正文（代码/JSON字符原样）",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "只作为正文读取，不执行代码。",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "code",
+                "_input_type": "CodeInput"
+              }
+            },
+            "description": "将新材料送入真实解码器；原始存档随后只读。宿主保护字段不交给Editor编辑。R07–11。",
+            "icon": "FileInput",
+            "base_classes": [
+              "JSON",
+              "Table"
+            ],
+            "display_name": "SIC 新工作材料",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "已保存来源与WB身份",
+                "method": "ingest",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "units",
+                "display_name": "解码后的正文单元",
+                "method": "units",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "previous",
+              "chain_id",
+              "input_mode",
+              "native_format",
+              "working_text",
+              "protected_text",
+              "native_request",
+              "allow_write"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICNativeInput",
+              "module": "custom_components.sic_",
+              "code_hash": "b31d8bd2a1f0",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  },
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      },
+      {
+        "id": "SICWorkspace-2",
+        "type": "genericNode",
+        "position": {
+          "x": 570,
+          "y": 0
+        },
+        "data": {
+          "id": "SICWorkspace-2",
+          "type": "SICWorkspace",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "previous": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "previous",
+                "value": "",
+                "display_name": "前一步",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "chain_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "chain_id",
+                "value": "SELECT_ROUTE",
+                "display_name": "工作路线",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from sic_workflow.workbench_component import WorkbenchComponent as Component\nfrom lfx.io import DataInput, StrInput, Output\nfrom lfx.schema import Data, DataFrame\nfrom sic_workflow.workbench_support import cached, context_of, error_rows, perform, reset, table, text\n\n\nclass SICWorkspace(Component):\n    display_name = \"SIC 正文与协议对照\"\n    description = \"只读核查来源正文、角色和工具关联，及其固定CB结果；这里不修改原文或协议。\"\n    icon = \"Columns2\"\n    name = \"SICWorkspace\"\n    inputs = [DataInput(name=\"previous\", display_name=\"前一步\", required=False),\n              StrInput(name=\"chain_id\", display_name=\"工作路线\", value=\"\"),\n              StrInput(name=\"source_id\", display_name=\"来源WB\", value=\"\", info=\"可沿前一步context继承source_id。\")]\n    outputs = [Output(name=\"result\", display_name=\"来源与固定视图\", method=\"read_workspace\", group_outputs=True),\n               Output(name=\"comparison\", display_name=\"正文 / 协议 / CB 对照表\", method=\"comparison\", group_outputs=True),\n               Output(name=\"protocol\", display_name=\"只读协议控制\", method=\"protocol\", group_outputs=True)]\n\n    def _pre_run_setup(self):\n        reset(self)\n\n    def _load(self):\n        context = context_of(self)\n        source_id = self.source_id or context.get(\"source_id\")\n        if not source_id:\n            return {\"ok\": False, \"context\": context, \"error\": {\"code\": \"source_required\", \"message\": \"请选择来源WB；原始存档只读。\"}}\n        source = perform(self, \"source.read\", {\"source_id\": source_id}, context=context)\n        if not source.get(\"ok\"):\n            return source\n        cut = perform(self, \"cut.get\", context=context)\n        if not cut.get(\"ok\"):\n            return cut\n        return {\"ok\": True, \"operation\": \"workspace.inspect\", \"context\": {**source[\"context\"], \"source_id\": source_id},\n                \"result\": {\"source\": source[\"result\"][\"source\"], \"cut\": cut[\"result\"]},\n                \"evidence\": {\"source\": \"sic-core-v2\", \"read_only\": True, \"editable_original\": False}}\n\n    def read_workspace(self) -> Data:\n        return Data(data=cached(self, self._load))\n\n    def comparison(self) -> DataFrame:\n        envelope = cached(self, self._load)\n        if not envelope.get(\"ok\"):\n            return table(error_rows(envelope))\n        source = envelope[\"result\"][\"source\"]\n        messages = source.get(\"sidecar\", {}).get(\"messages\", [])\n        source_id = envelope[\"context\"][\"source_id\"]\n        cbs = [cb for cb in envelope[\"result\"][\"cut\"].get(\"view\", {}).get(\"cbs\", []) if source_id in cb.get(\"source_ids\", [cb.get(\"source_id\")])]\n        rows = []\n        for unit in source.get(\"units\", []):\n            anchor = unit.get(\"anchor\", {})\n            message_index = anchor.get(\"message\", -1)\n            message = messages[message_index] if 0 <= message_index < len(messages) else {}\n            rows.append({\"来源WB\": source_id, \"单元\": unit.get(\"unit_id\"), \"原始正文（只读）\": unit.get(\"text\", \"\"),\n                         \"角色（只读）\": message.get(\"role\", \"unknown\"), \"工具关联（只读）\": text({key: message[key] for key in (\"tool_call_id\", \"tool_calls\") if key in message}),\n                         \"来源锚\": text(anchor), \"固定CB\": \", \".join(cb[\"cb_id\"] for cb in cbs),\n                         \"固定CB正文（只读）\": \"\\n\\n\".join(cb.get(\"body\", \"\") for cb in cbs),\n                         \"状态\": \"已发布 / 不可改写\" if cbs else \"尚未发布 / 编辑须通过候选\"})\n        return table(rows)\n\n    def protocol(self) -> DataFrame:\n        envelope = cached(self, self._load)\n        if not envelope.get(\"ok\"):\n            return table(error_rows(envelope))\n        source = envelope[\"result\"][\"source\"]\n        sidecar = source.get(\"sidecar\", {})\n        rows = [{\"类别\": \"原生控制\", \"位置\": key, \"内容（只读）\": text(value), \"Editor可改\": False}\n                for key, value in sidecar.items() if key != \"messages\"]\n        for index, message in enumerate(sidecar.get(\"messages\", [])):\n            fields = {key: value for key, value in message.items() if key != \"content\"}\n            rows.append({\"类别\": \"受保护指令\" if message.get(\"role\") in (\"system\", \"developer\") else \"角色 / 关联\",\n                         \"位置\": f\"messages[{index}]\", \"内容（只读）\": text({**fields, **({\"content\": message.get(\"content\")} if message.get(\"role\") in (\"system\", \"developer\") else {})}),\n                         \"Editor可改\": False})\n        rows.append({\"类别\": \"未闭合调用\", \"位置\": \"source.open_calls\", \"内容（只读）\": text(source.get(\"open_calls\", [])), \"Editor可改\": False})\n        return table(rows)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "source_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "source_id",
+                "value": "",
+                "display_name": "来源WB",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "可沿前一步context继承source_id。",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "只读核查来源正文、角色和工具关联，及其固定CB结果；这里不修改原文或协议。",
+            "icon": "Columns2",
+            "base_classes": [
+              "JSON",
+              "Table"
+            ],
+            "display_name": "SIC 正文与协议对照",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "来源与固定视图",
+                "method": "read_workspace",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "comparison",
+                "display_name": "正文 / 协议 / CB 对照表",
+                "method": "comparison",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "protocol",
+                "display_name": "只读协议控制",
+                "method": "protocol",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "previous",
+              "chain_id",
+              "source_id"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "component_class_name": "SICWorkspace",
+              "module": "custom_components.sic_",
+              "code_hash": "b6954dafc174",
+              "dependencies": {
+                "total_dependencies": 2,
+                "dependencies": [
+                  {
+                    "name": "sic_workflow",
+                    "version": "9.0.0a3"
+                  },
+                  {
+                    "name": "lfx",
+                    "version": "1.13.1"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          }
+        }
+      }
+    ],
+    "edges": [],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.6
+    }
+  }
+}

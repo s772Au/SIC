@@ -1,0 +1,152 @@
+{
+  "source": "benchmarks/data/babilong/data/qa3/10M.json",
+  "sourceIsCompleteOfficialFile": true,
+  "officialSourceUrl": "https://huggingface.co/datasets/RMT-team/babilong/resolve/ee0d588794c7ac098062ee0d247c733d62e94fe2/data/qa3/10M.json",
+  "officialFullSourceSha256": "6a3d703f32ba18fa8d562b8581f025ddc49699817a3a6633bbeb9cc356c7d434",
+  "output": "benchmarks/data/babilong/qa3-10m-first20.jsonl",
+  "outputBytes": 803915786,
+  "outputSha256": "87f48469d373c07d3d940a26c39fe3052546ab0a0820ed950a166e4a951f9a92",
+  "items": [
+    {
+      "id": "qa3-10M-001",
+      "inputChars": 39552830,
+      "questionChars": 38,
+      "targetChars": 6,
+      "lineBytes": 40306307
+    },
+    {
+      "id": "qa3-10M-002",
+      "inputChars": 39494419,
+      "questionChars": 43,
+      "targetChars": 7,
+      "lineBytes": 40223483
+    },
+    {
+      "id": "qa3-10M-003",
+      "inputChars": 39134490,
+      "questionChars": 40,
+      "targetChars": 6,
+      "lineBytes": 39851153
+    },
+    {
+      "id": "qa3-10M-004",
+      "inputChars": 39477148,
+      "questionChars": 43,
+      "targetChars": 8,
+      "lineBytes": 40228918
+    },
+    {
+      "id": "qa3-10M-005",
+      "inputChars": 39578560,
+      "questionChars": 42,
+      "targetChars": 8,
+      "lineBytes": 40294351
+    },
+    {
+      "id": "qa3-10M-006",
+      "inputChars": 39015845,
+      "questionChars": 42,
+      "targetChars": 6,
+      "lineBytes": 39752686
+    },
+    {
+      "id": "qa3-10M-007",
+      "inputChars": 39619380,
+      "questionChars": 38,
+      "targetChars": 6,
+      "lineBytes": 40374150
+    },
+    {
+      "id": "qa3-10M-008",
+      "inputChars": 39801635,
+      "questionChars": 39,
+      "targetChars": 8,
+      "lineBytes": 40544461
+    },
+    {
+      "id": "qa3-10M-009",
+      "inputChars": 39521084,
+      "questionChars": 40,
+      "targetChars": 6,
+      "lineBytes": 40276052
+    },
+    {
+      "id": "qa3-10M-010",
+      "inputChars": 39211791,
+      "questionChars": 43,
+      "targetChars": 7,
+      "lineBytes": 39930652
+    },
+    {
+      "id": "qa3-10M-011",
+      "inputChars": 39514492,
+      "questionChars": 39,
+      "targetChars": 7,
+      "lineBytes": 40232501
+    },
+    {
+      "id": "qa3-10M-012",
+      "inputChars": 39655813,
+      "questionChars": 38,
+      "targetChars": 6,
+      "lineBytes": 40426846
+    },
+    {
+      "id": "qa3-10M-013",
+      "inputChars": 39754797,
+      "questionChars": 40,
+      "targetChars": 8,
+      "lineBytes": 40492631
+    },
+    {
+      "id": "qa3-10M-014",
+      "inputChars": 39379067,
+      "questionChars": 44,
+      "targetChars": 7,
+      "lineBytes": 40107248
+    },
+    {
+      "id": "qa3-10M-015",
+      "inputChars": 39307332,
+      "questionChars": 38,
+      "targetChars": 6,
+      "lineBytes": 40023491
+    },
+    {
+      "id": "qa3-10M-016",
+      "inputChars": 39405096,
+      "questionChars": 38,
+      "targetChars": 7,
+      "lineBytes": 40126263
+    },
+    {
+      "id": "qa3-10M-017",
+      "inputChars": 39315319,
+      "questionChars": 40,
+      "targetChars": 6,
+      "lineBytes": 40040513
+    },
+    {
+      "id": "qa3-10M-018",
+      "inputChars": 39472542,
+      "questionChars": 41,
+      "targetChars": 6,
+      "lineBytes": 40209244
+    },
+    {
+      "id": "qa3-10M-019",
+      "inputChars": 39550078,
+      "questionChars": 40,
+      "targetChars": 7,
+      "lineBytes": 40290866
+    },
+    {
+      "id": "qa3-10M-020",
+      "inputChars": 39461294,
+      "questionChars": 41,
+      "targetChars": 6,
+      "lineBytes": 40183970
+    }
+  ],
+  "tokenCountStatus": "official 10M length; exact gateway tokenizer unverified"
+}

@@ -1,0 +1,78 @@
+{
+  "schema": "sic-research-pack-v2",
+  "preparation": {
+    "text_control_pack": "prepared",
+    "independent_reference_and_noise_rubric": "prepared",
+    "public_data_files": "existing-verification-reused-current-size-checked",
+    "llmlingua": "prepared-official-pinned-isolated-cpu-model; actual-weight-and-Core-consumption-acceptance-recorded-separately",
+    "official_lme": "prepared-native-image-carrier-and-pinned-official-Memory-wrapper; see independent acceptance; real quality not_evaluated"
+  },
+  "mechanical_acceptance": "see new isolated test evidence; never implies research quality",
+  "research_evaluation": "not_evaluated",
+  "files": {
+    "research/compression/pack/control-pack.json": {
+      "sha256": "50243e6211a029e092289feaab30af3487df016c6cc997d68911d63e86194624",
+      "bytes": 10398
+    },
+    "research/compression/pack/controls.py": {
+      "sha256": "cccf6421fa804cbed0ab5ad8bbcdd48c193e9ff2a22bb5ba6634e05edcd14113",
+      "bytes": 1301
+    },
+    "research/compression/pack/data-readiness.json": {
+      "sha256": "7c98b1960611371737825a433f6742c622b828882865e17c71e47af15b506f03",
+      "bytes": 10425
+    },
+    "research/compression/pack/dependencies.lock.json": {
+      "sha256": "3179571775130c71b3862cd0badce03a344011862d1fcb5e37524613abf8245b",
+      "bytes": 1621
+    },
+    "research/compression/pack/editor-response.schema.json": {
+      "sha256": "dda93cee97665a24fd61f473607dfc280066079350cde467ef0e473000a5954d",
+      "bytes": 10081
+    },
+    "research/compression/pack/llmlingua-bundle.json": {
+      "sha256": "991e05fe9ed78ace38e242ecec509b3b72339901925e1aa653689688c9918e5b",
+      "bytes": 642
+    },
+    "research/compression/pack/llmlingua-licenses.json": {
+      "sha256": "b8613fcb15246266902d4c82286a113e8abd516218db83bf11a3b961d91c4d41",
+      "bytes": 870
+    },
+    "research/compression/pack/llmlingua-model.lock.json": {
+      "sha256": "79207f2ef8ee1e320dec0e4431d0b35debe7d051cb0526d835609764e633e8ba",
+      "bytes": 3059
+    },
+    "research/compression/pack/llmlingua-runtime.lock.json": {
+      "sha256": "dfcdde9bfb5cf3686aada20d22a5dcc5294b9c9f2f87de9f340ef4ddf014af63",
+      "bytes": 56931
+    },
+    "research/compression/pack/media-lme-sources.lock.json": {
+      "sha256": "09f947c97182b3cf7c82199925454bc952d86ebf09d5d81b5ed24604cb21ef12",
+      "bytes": 2688
+    },
+    "research/compression/pack/provider.example.json": {
+      "sha256": "00db8bca67e31b0c4cf512963956ce5797cd9ea084e2a1d770bff7ee1a3c5fb0",
+      "bytes": 1180
+    },
+    "research/compression/pack/rubric.json": {
+      "sha256": "a357f2caabd7ad01f7a4b31d66752fa0a55938c539594cd805a980c5e74c2856",
+      "bytes": 1594
+    },
+    "research/compression/pack/llmlingua-licenses/CODE-MIT.txt": {
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+      "bytes": 1141
+    },
+    "research/compression/pack/llmlingua-licenses/MODEL-APACHE-2.0.txt": {
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    "research/compression/pack/__pycache__/controls.cpython-312.pyc": {
+      "sha256": "de85035080dec248c0df30f28de4faf90a78f885db10882a5dfafdb0be3d3009",
+      "bytes": 2295
+    },
+    "research/compression/sources.lock.json": {
+      "sha256": "c4d01e99607a50b554ff2fb2dfb35842a705bdc2c99be1e13345a9e10c82d87b",
+      "bytes": 4100
+    }
+  }
+}

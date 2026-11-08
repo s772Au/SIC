@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sic:task-ledger:v1",
+  "title": "SIC ledger.export task payload and result",
+  "$defs": {
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": {"const": "task"},
+        "additional_chain_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "prices_by_chain": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "object"}}},
+        "task_interval": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}}
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["schema", "scope", "snapshot", "calls", "resource_records", "priced_calls", "priced_resource_records", "record_locations", "call_contexts", "prices_by_chain", "pending_attempts", "events", "accounting_intervals", "summary"],
+      "properties": {
+        "schema": {"const": "sic-task-ledger-v1"},
+        "scope": {"type": "object", "required": ["kind", "root_chain_id", "included_chain_ids", "traversal", "excluded_relations", "completeness", "cost_horizon", "unfinished_branches"]},
+        "snapshot": {"type": "object", "required": ["transaction_consistent", "exported_at", "chains"]},
+        "calls": {"type": "array", "items": {"type": "object", "required": ["call_id"]}},
+        "resource_records": {"type": "array", "items": {"type": "object", "required": ["record_id"]}},
+        "priced_calls": {"type": "array"},
+        "priced_resource_records": {"type": "array"},
+        "record_locations": {"type": "object", "required": ["calls", "resources"]},
+        "call_contexts": {"type": "object"},
+        "prices_by_chain": {"type": "object"},
+        "pending_attempts": {"type": "array"},
+        "events": {"type": "array"},
+        "accounting_intervals": {"type": "array"},
+        "summary": {"type": "object", "required": ["rows", "resource_rows", "totals_by_currency", "total_cost", "complete_cost", "unknown", "timing"]}
+      }
+    }
+  },
+  "$ref": "#/$defs/payload"
+}

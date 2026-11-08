@@ -1,0 +1,71 @@
+{
+  "schema": "sic-hierarchy-frontend-evidence-1",
+  "scope": "Selected semantic hierarchy scenarios only, not complete 73-requirement acceptance",
+  "source_baseline": "paper/review/sic_feature_acceptance_matrix.json",
+  "feature_ids_related": [
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F64",
+    "F65",
+    "F70",
+    "F71"
+  ],
+  "isolated_http_lfx_studio_sdk": "passed",
+  "isolated_owned_model_calls": 11,
+  "isolated_real_provider_calls": 0,
+  "constant_runtime_acceptance": "passed-final-owned-fixture-replay",
+  "gui": {
+    "new_langflow_hierarchy": "not_verified",
+    "studio": "not_verified"
+  },
+  "not_loaded_in_constant_runtime": [
+    "sic_memory historical I paging context_id/level/role fields added after reload; second reload rejected blocked by policy",
+    "LF registry runtime work_end option added after reload: present in latest exported component code, not separately registry/GUI verified"
+  ],
+  "hashes": {
+    "integrations/components/sic/hierarchy.py": "498f457a51037955bb4b86c280c01ee12f95e1416df7ede1ee4825c91568309d",
+    "integrations/components/sic/editor_task.py": "d0f776900e71f7039662a07962549edcb53994ae483deaa09913e4f7c56e9169",
+    "integrations/components/sic/candidate.py": "d0d25a028331a1bcfd7c93bdb8adf65387f8dfb0539285b62050e9001453692d",
+    "integrations/components/sic/runtime.py": "a01eab634aa37acf42f05da2bc5b535c4a3a3c407ae0d5528fbc86fd6c853ad8",
+    "integrations/components/sic/memory.py": "01ee1d8a896aab99d10da7c07a99aa1e39900165c8bf9d9686ecb46d47a69225",
+    "integrations/sic_workflow/hierarchy_forms.py": "b110ebe038c13a7f5d4991cb2ca79e637359cb3d4dacbad2868fae44f948cd26",
+    "integrations/sic_workflow/hierarchy_graph.py": "6e277612396c77ad9b1d01e7a319e481391c92593412350d59d1bc13cbf90af0",
+    "integrations/sic_workflow/domain_graphs.py": "6e1da7ce30e8ef85690537300b063d87d65b1531c5ab1126d754cfde893b8d78",
+    "integrations/sic_workflow/workbench_graph.py": "3be410013767ab81671f2ccd35d15e6c7cf0f16adfdc3be7704d41974a19a341",
+    "integrations/sic_workflow/v2_client.py": "18f9af1479a1a7e55acac7c0865004e8c68fb72be6edb3d0ac9feaa0b43c5a11",
+    "integrations/langgraph.json": "26d33e1a0a91e98b83343459eeb001ed60726f0e9f06c5039984be9204edd835",
+    "integrations/generate_workbench_flows.py": "8b26b1a4b22c71047c836e0459ff48b63b66b6337406a91b185257b645f78082",
+    "integrations/flows/workbench-higher-edit-publish.json": "28b5c37de555720e376e78ceb9b8673e6dd6fb33e942578b6ff8dc96cdd62c38",
+    "integrations/flows/workbench-hierarchy.json": "c5f658ebca48c972ee55a17293edfa1bb1da9160433272fd3f767b593f9da4cd",
+    "integrations/tests/hierarchy_runtime_acceptance.py": "cbbe776a6ac6fdca7e9bcddb122a0d35989c296e4fc7035ab9bed8455a84d3c3"
+  },
+  "unit_tests": {
+    "discover_count": 17,
+    "status": "passed"
+  },
+  "constant_runtime_evidence": {
+    "private_report": ".local/integration-test-results/hierarchy-runtime-acceptance.json",
+    "official_langflow_connected_nodes": 12,
+    "official_studio_persistent_interrupt_resume": "passed",
+    "real_levels": [
+      1,
+      2,
+      3
+    ],
+    "ordered_lower_cb_members": 2,
+    "editor_private_third_order_and_alpha_beta_actual_inputs": true,
+    "worker_actual_third_order_input": true,
+    "published_lower_cb_unchanged": true,
+    "candidate_original_response_unchanged": true,
+    "runtime_max_pending_seconds": 0.5,
+    "owned_fixture_model_calls": 5,
+    "real_provider_calls": 0
+  }
+}

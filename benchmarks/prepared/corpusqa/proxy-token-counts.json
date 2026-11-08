@@ -1,0 +1,66 @@
+[
+  {
+    "file": "4m_4domains.jsonl",
+    "domain": "education_en",
+    "representativeId": "education_en_8",
+    "cl100kTokens": 3541746,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 82
+  },
+  {
+    "file": "4m_4domains.jsonl",
+    "domain": "financial_en",
+    "representativeId": "financial_en_5",
+    "cl100kTokens": 3394340,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 83
+  },
+  {
+    "file": "4m_4domains.jsonl",
+    "domain": "financial_zh",
+    "representativeId": "financial_zh_1",
+    "cl100kTokens": 3980894,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 83
+  },
+  {
+    "file": "4m_4domains.jsonl",
+    "domain": "real_estate_en",
+    "representativeId": "real_estate_en_8",
+    "cl100kTokens": 3413430,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 81
+  },
+  {
+    "file": "10m_4domains.jsonl",
+    "domain": "education_en",
+    "representativeId": "education_en_7",
+    "cl100kTokens": 5858341,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 82
+  },
+  {
+    "file": "10m_4domains.jsonl",
+    "domain": "financial_en",
+    "representativeId": "financial_en_4",
+    "cl100kTokens": 8635223,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 83
+  },
+  {
+    "file": "10m_4domains.jsonl",
+    "domain": "financial_zh",
+    "representativeId": "financial_zh_1",
+    "cl100kTokens": 6792368,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 83
+  },
+  {
+    "file": "10m_4domains.jsonl",
+    "domain": "real_estate_en",
+    "representativeId": "real_estate_en_5",
+    "cl100kTokens": 8426519,
+    "actualGatewayTokens": null,
+    "sameContextQuestions": 81
+  }
+]

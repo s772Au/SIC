@@ -1,0 +1,27 @@
+# Merge the provider with your existing llm-pi-ai config; do not replace
+# other providers. Replace model and conversation key before use.
+- id: llm-pi-ai
+  config:
+    providers:
+      sic-local:
+        displayName: SIC local demo
+        apiKeyEnv: SIC_DSH_LOCAL_API_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:8788/v1
+        headers:
+          x-sic-bridge-session: CHANGE_FOR_EACH_CONVERSATION
+        retryPolicy:
+          mode: normal
+          maxRetries: 0
+        models:
+          - id: YOUR_PINNED_MODEL_ID
+            contextWindow: 131072
+            maxTokens: 8192
+            input: [text]
+
+# In this demo the bridge owns historical context changes. Plugin IDs follow
+# the local DSH profile; check your profile before applying this overlay.
+- id: compaction-basic
+  disabled: true
+- id: tool-result-pruner
+  disabled: true

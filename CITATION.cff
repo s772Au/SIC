@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "Please cite the SIC paper when using this implementation."
+title: "SIC: Streaming Incremental Context Editing"
+type: software
+version: "0.1"
+date-released: 2026-11-08
+authors:
+  - family-names: Guan
+    given-names: Qi
+    orcid: "https://orcid.org/0009-0006-2401-1937"
+repository-code: "https://github.com/s772Au/SIC"
+license: MIT
+preferred-citation:
+  type: article
+  title: "SIC：流式增量编辑与可递归的持续工作空间"
+  authors:
+    - family-names: Guan
+      given-names: Qi
+      orcid: "https://orcid.org/0009-0006-2401-1937"
+  year: 2026
+  version: "v1 preprint"
+  url: "https://github.com/s772Au/SIC/blob/main/paper/sic_paper_zh_v1.md"

@@ -1,0 +1,118 @@
+{
+  "release": "v0.1",
+  "surfaces": "official Langflow and LangSmith Studio",
+  "browser": "isolated headless Edge; normal browser security",
+  "user_browser_profile_accessed": false,
+  "native_desktop_input_used": false,
+  "actual_gui_paths": {
+    "langflow_readonly_base_domains": 9,
+    "langflow_additional_readonly": [
+      "media native archive",
+      "communication first-receipt provenance",
+      "selected Editor assignments",
+      "selected Editor private/shared backgrounds and original deliveries"
+    ],
+    "langflow_writes": [
+      "candidate op and P/V/I revision, validate and fixed publication",
+      "decision with source/unit evidence",
+      "board claim with exact operator text",
+      "multiline teaching with new-job activation and old-job freeze",
+      "three named Editor model mappings, explicit clear and restore"
+    ],
+    "langflow_higher_cycles": {
+      "levels": [
+        2,
+        3
+      ],
+      "connected_nodes_each": 12,
+      "started_by_gui_end_node": true,
+      "fixture_grants_prepared_via_api": true,
+      "subsequent_actual_worker_level": 3,
+      "lower_archive_unchanged": true
+    },
+    "studio_readonly_representatives": 8,
+    "studio_additional": [
+      "candidate typed form/interrupt edited resume/fixed publication",
+      "actual private Editor frontier form",
+      "actual DSH task ledger form",
+      "selected Editor scope, assignment, model, original response and background tables",
+      "media archive complete pagination and reassembly",
+      "communication provenance complete pagination and reassembly",
+      "selected Editor scope, assignment, model, original response and background tables",
+      "media archive complete pagination and reassembly",
+      "communication provenance complete pagination and reassembly",
+      "representative expanded selected Editor scope, assignments, alpha model binding, beta profile, delivery identity and frozen background source",
+      "typed Unicode editor:δ readonly projection role preserved in visible manifest and independent thread state"
+    ]
+  },
+  "pending_user_operation": null,
+  "all_feature_combinations_gui_certified": false,
+  "live_provider_calls": 0,
+  "research_quality": "not_evaluated",
+  "raw_private_artifacts_included": false,
+  "historical_pending_user_operation": null,
+  "resolved_operation": {
+    "status": "loaded-and-actually-verified",
+    "evidence_id": "GUI_STUDIO_FINAL"
+  },
+  "evidence_registry": {
+    "GUI_STUDIO_FINAL": {
+      "report_reference": ".local/browser-gui/studio-final-loaded-results.json",
+      "sha256": "4cafec49a9482e738c620df0a82b2bc5e82969290860906e7da7aed6a8e89847",
+      "kind": "actual-browser-gui-visible-input-output-and-complete-page-reassembly",
+      "public_facts": {
+        "loaded_official_studio_schema": true,
+        "selected_editor_scope_assignment_model_response_background_tables": true,
+        "media_all_pages_reassembled": true,
+        "communication_all_pages_reassembled": true,
+        "typed_form_submit_and_visible_output": true,
+        "user_browser_profile_accessed": false,
+        "native_desktop_input_used": false,
+        "selected_editor_inline_values_fully_verified": false,
+        "unicode_identity_gui_case_verified": false
+      },
+      "raw_runtime_contents_included": false,
+      "scope": "Typed input and selected Editor table/list rows visibly verified, not every collapsed inline field value; all media and communication pages reassembled. Unicode identity remains SDK-only in this evidence; not all writes or all 73 combinations."
+    },
+    "GUI_STUDIO_DEEP": {
+      "report_reference": ".local/browser-gui/studio-deep-expand-results.json",
+      "sha256": "8c282f2b2d3c34907222252832c9c1f0261689a4d084dfda18b9340cd590f361",
+      "kind": "actual-browser-gui-expanded-representative-inline-values",
+      "public_facts": {
+        "scope_u1_text_and_alpha_assignment_visible": true,
+        "alpha_frozen_model_binding_visible": true,
+        "beta_profile_name_visible": true,
+        "both_editor_original_delivery_id_and_source_visible": true,
+        "both_editor_frozen_cb_and_instant_background_source_visible": true,
+        "background_material_full_text_visually_verified": false,
+        "nested_original_response_visually_expanded": false,
+        "all_inline_content_visually_verified": false,
+        "user_browser_profile_accessed": false,
+        "native_desktop_input_used": false
+      },
+      "raw_runtime_contents_included": false,
+      "scope": "Representative expanded row values only; material previews remain truncated and original_response subobjects remain collapsed. No Unicode identity case in this evidence."
+    },
+    "GUI_STUDIO_UNICODE": {
+      "report_reference": ".local/browser-gui/studio-unicode-final-results.json",
+      "sha256": "bd2d27044f2eeac5282cee04f35223e19661be133ca443014ba0263e22526338",
+      "kind": "actual-browser-gui-typed-unicode-readonly-projection-and-independent-thread-state",
+      "public_facts": {
+        "typed_raw_submit_unicode_role_preserved": true,
+        "returned_manifest_role_visibly_expanded": true,
+        "active_level": 3,
+        "context_id": "main",
+        "readonly_projection_only": true,
+        "provider_called": false,
+        "configured_unicode_private_editor_or_job_execution_verified": false,
+        "physical_cache_hit": "unknown",
+        "user_browser_profile_accessed": false,
+        "native_desktop_input_used": false
+      },
+      "raw_runtime_contents_included": false,
+      "scope": "One official Studio readonly projection with role editor:δ; verifies input/transport/visible returned role, not existence of configured δ identity, private Editor context or model execution."
+    }
+  },
+  "build_scope": "Historical representative GUI runs before optional shared_i frontend; not a standing-GUI acceptance of publication Core273 or new B controls.",
+  "new_B_GUI_accepted": false
+}

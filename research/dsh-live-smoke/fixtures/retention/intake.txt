@@ -1,0 +1,3 @@
+[R1] Parcel PKG-71 is assigned to destination locker-K4.
+[R2] Its tamper seal is seal-N904.
+[R3] Its complete contents are copper-key and linen-map, with no other items.

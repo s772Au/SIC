@@ -1,0 +1,86 @@
+{
+  "retrieved": "2026-11-08",
+  "scope": "public primary sources; MIT code licenses checked; model weights/data licenses require separate verification",
+  "files": [
+    {
+      "repo": "badlogic/pi-mono",
+      "commit": "6e2222a8dda06e3d69fad46d630f152f5873567a",
+      "path": "LICENSE",
+      "url": "https://github.com/badlogic/pi-mono/blob/6e2222a8dda06e3d69fad46d630f152f5873567a/LICENSE",
+      "sha256": "0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48",
+      "bytes": 1069
+    },
+    {
+      "repo": "badlogic/pi-mono",
+      "commit": "6e2222a8dda06e3d69fad46d630f152f5873567a",
+      "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+      "url": "https://github.com/badlogic/pi-mono/blob/6e2222a8dda06e3d69fad46d630f152f5873567a/packages/coding-agent/src/core/compaction/compaction.ts",
+      "sha256": "32714966eb644da31cd84e8eb172965256160626b3d26ae9752c3894300f2b0b",
+      "bytes": 35401
+    },
+    {
+      "repo": "badlogic/pi-mono",
+      "commit": "6e2222a8dda06e3d69fad46d630f152f5873567a",
+      "path": "packages/coding-agent/src/core/compaction/utils.ts",
+      "url": "https://github.com/badlogic/pi-mono/blob/6e2222a8dda06e3d69fad46d630f152f5873567a/packages/coding-agent/src/core/compaction/utils.ts",
+      "sha256": "ba2b7e4b4fa02795ca2482b3f63d6ee7510c6a660240bb9bb0d5fa75f85a8a6e",
+      "bytes": 6003
+    },
+    {
+      "repo": "anomalyco/opencode",
+      "commit": "4ada59972a9f4788222422fc7db38f86f6a6f1e7",
+      "path": "LICENSE",
+      "url": "https://github.com/anomalyco/opencode/blob/4ada59972a9f4788222422fc7db38f86f6a6f1e7/LICENSE",
+      "sha256": "625f0f619133f89bbbb2abe37369613dfa1885eba1e50d02170deb62bb42cb6b",
+      "bytes": 1065
+    },
+    {
+      "repo": "anomalyco/opencode",
+      "commit": "4ada59972a9f4788222422fc7db38f86f6a6f1e7",
+      "path": "packages/core/src/session/compaction.ts",
+      "url": "https://github.com/anomalyco/opencode/blob/4ada59972a9f4788222422fc7db38f86f6a6f1e7/packages/core/src/session/compaction.ts",
+      "sha256": "102e73a4d2d928632bb5f471e445ffe56f6c4affa4efda55dba3d361aa133ffb",
+      "bytes": 61307
+    },
+    {
+      "repo": "microsoft/LLMLingua",
+      "commit": "01b9e9481d7395e1e83a48df4a062b11f6304325",
+      "path": "LICENSE",
+      "url": "https://github.com/microsoft/LLMLingua/blob/01b9e9481d7395e1e83a48df4a062b11f6304325/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+      "bytes": 1141
+    },
+    {
+      "repo": "microsoft/LLMLingua",
+      "commit": "01b9e9481d7395e1e83a48df4a062b11f6304325",
+      "path": "README.md",
+      "url": "https://github.com/microsoft/LLMLingua/blob/01b9e9481d7395e1e83a48df4a062b11f6304325/README.md",
+      "sha256": "c402d1b259523cb0b18c45d807e57a0dc039dc67b8ea342fb549d524e11cea69",
+      "bytes": 19363
+    },
+    {
+      "repo": "microsoft/LLMLingua",
+      "commit": "01b9e9481d7395e1e83a48df4a062b11f6304325",
+      "path": "llmlingua/prompt_compressor.py",
+      "url": "https://github.com/microsoft/LLMLingua/blob/01b9e9481d7395e1e83a48df4a062b11f6304325/llmlingua/prompt_compressor.py",
+      "sha256": "814e02e8dfaf33c2cd91d3990c0ecd9c42c1cb11ca57b665730bcf8fb2e4a2a4",
+      "bytes": 110078
+    },
+    {
+      "repo": "langchain-ai/langchain",
+      "commit": "d9caf083577c43a91c5bf6bd1f7dfc289581184d",
+      "path": "LICENSE",
+      "url": "https://github.com/langchain-ai/langchain/blob/d9caf083577c43a91c5bf6bd1f7dfc289581184d/LICENSE",
+      "sha256": "4ec67e4ca6e6721dba849b2ca82261597c86a61ee214bbf21416006b7b2d0478",
+      "bytes": 1067
+    },
+    {
+      "repo": "langchain-ai/langchain",
+      "commit": "d9caf083577c43a91c5bf6bd1f7dfc289581184d",
+      "path": "libs/core/langchain_core/messages/utils.py",
+      "url": "https://github.com/langchain-ai/langchain/blob/d9caf083577c43a91c5bf6bd1f7dfc289581184d/libs/core/langchain_core/messages/utils.py",
+      "sha256": "113831a1a017a00aaabec5276ae3607d45681d06d181428dd5990331c0b4858d",
+      "bytes": 95943
+    }
+  ]
+}

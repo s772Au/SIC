@@ -1,0 +1,36 @@
+{
+  "roles": {
+    "worker": {
+      "model": "REPLACE_FIXED_PROVIDER_MODEL",
+      "model_revision": "REPLACE_DECLARED_PROVIDER_REVISION",
+      "api_key_env": "SIC_RESEARCH_PROVIDER_KEY",
+      "route_id": "author-fixed-route",
+      "tokenizer_model": "REPLACE_KNOWN_LITELLM_TOKENIZER",
+      "tokenizer_status": "must-verify-for-provider",
+      "max_input_tokens": 100000,
+      "max_output_tokens": 4096,
+      "context_window": 128000,
+      "sampling": {
+        "temperature": 0,
+        "top_p": 1
+      },
+      "api_base": "https://REPLACE_PROVIDER_HOST/v1"
+    },
+    "editor": {
+      "model": "REPLACE_FIXED_PROVIDER_MODEL",
+      "model_revision": "REPLACE_DECLARED_PROVIDER_REVISION",
+      "api_key_env": "SIC_RESEARCH_PROVIDER_KEY",
+      "route_id": "author-fixed-route",
+      "tokenizer_model": "REPLACE_KNOWN_LITELLM_TOKENIZER",
+      "tokenizer_status": "must-verify-for-provider",
+      "max_input_tokens": 100000,
+      "max_output_tokens": 4096,
+      "context_window": 128000,
+      "sampling": {
+        "temperature": 0,
+        "top_p": 1
+      },
+      "api_base": "https://REPLACE_PROVIDER_HOST/v1"
+    }
+  }
+}

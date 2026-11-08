@@ -1,0 +1,25 @@
+{
+  "schema": "sic-independent-rubric-v2",
+  "noise": {
+    "unsupported_fact": "New information asserted as fact without source support; an explicitly marked new suggestion is not automatically a factual claim.",
+    "source_distortion": "A factual assertion contradicts or alters the retained source meaning, temporal order, actor, certainty, or performed-vs-proposed status.",
+    "format_drift": "Declared edit contract/schema/allowed fields/op scope or native protocol boundary violated. Format validity alone does not imply fidelity."
+  },
+  "annotation_requirements": [
+    "source_sha256",
+    "candidate_sha256",
+    "reviewer",
+    "coverage exhaustive|partial",
+    "claim spans and source evidence with rationale",
+    "format checks separately",
+    "quality criterion evidence separately"
+  ],
+  "task_criteria": {
+    "fact_retrieval": "Correct answer grounded in reference/evidence.",
+    "decision_continuation": "Preserve constraints and failed/untried distinction, choose supported next action.",
+    "cross_level_traceability": "Actually traverse every required hierarchy link and recover original detail; representation alone not success.",
+    "collaboration": "Peer actually executes authorized work and next parent/peer request uses evidence; suggestion alone not success.",
+    "resource_tradeoff": "Report measured time/cost/quality independently; unknown resources are not free."
+  },
+  "unknown_policy": "Missing annotations, missing outputs or judge errors remain unknown/not_evaluated. Fixture output never gains a model quality score."
+}

@@ -1,0 +1,1052 @@
+{
+  "api_version": "2",
+  "endpoint": "/api/v2/operations",
+  "context": {
+    "actor": "host",
+    "chain_id": "omit only for chain.create",
+    "allow_write": false,
+    "allow_model": false
+  },
+  "response": {
+    "ok": true,
+    "operation": "name",
+    "context": {
+      "chain_id": "chain"
+    },
+    "result": {},
+    "evidence": {}
+  },
+  "operations": [
+    {
+      "operation": "chain.create",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Create independent chain; creators must authorize their own creation links",
+      "context_required": [
+        "actor"
+      ],
+      "payload_example": {
+        "creators": []
+      }
+    },
+    {
+      "operation": "chain.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read chain and current working state",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "chain.checkpoint",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Pin immutable published cut as logical checkpoint",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "chain.fork",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Create peer branch sharing checkpoint, no parent relation",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "checkpoint_id": "checkpoint"
+      }
+    },
+    {
+      "operation": "source.ingest",
+      "write": true,
+      "model": false,
+      "editable_scope": "new WB",
+      "description": "Decode native API into immutable text units and protocol sidecar",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "format": "openai-chat",
+        "request": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "task"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operation": "source.read",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Retrieve immutable WB and exact source units",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "source_id": "source"
+      }
+    },
+    {
+      "operation": "source.search",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Search retained source and CB material",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "query": "text"
+      }
+    },
+    {
+      "operation": "edit.prepare",
+      "write": true,
+      "model": false,
+      "editable_scope": "WB units only",
+      "description": "Freeze background and non-overlapping Editor scopes; optional readonly_reads:[{kind,object_id,offset,limit}] prefetches immutable archive pages before the single-round Editor call",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "source_id": "source",
+        "assignments": [
+          {
+            "editor": "editor-1",
+            "unit_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "operation": "edit.submit",
+      "write": true,
+      "model": false,
+      "editable_scope": "assigned WB units only",
+      "description": "Submit one complete Editor response; no repair rounds",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job",
+        "editor": "editor-1",
+        "ops": []
+      }
+    },
+    {
+      "operation": "edit.run",
+      "write": true,
+      "model": true,
+      "editable_scope": "assigned WB units only",
+      "description": "Run one fixed configured Editor model call",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job",
+        "editor": "editor-1"
+      }
+    },
+    {
+      "operation": "edit.program",
+      "write": true,
+      "model": false,
+      "editable_scope": "WB units only",
+      "description": "Select and execute deterministic rules",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "source_id": "source",
+        "rules": [
+          "deduplicate_exact"
+        ]
+      }
+    },
+    {
+      "operation": "edit.validate",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Validate and preview combined ordered edits/PVI",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job"
+      }
+    },
+    {
+      "operation": "cut.publish",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Atomic immutable CB+operations and P/V/I cut",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job",
+        "expected_cut": 0,
+        "idempotency_key": "unique"
+      }
+    },
+    {
+      "operation": "cut.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read coherent cut with discoverable operations and indexes",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "cut.ack",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Acknowledge exact assembled view; retry safe",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "cut_id": "cut",
+        "digest": "sha256"
+      }
+    },
+    {
+      "operation": "harness.event",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Record tool_start/tool_end/wait/worker_continue frontier events",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "type": "wait",
+        "seconds": 1
+      }
+    },
+    {
+      "operation": "harness.schedule",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Decide overlap/wait/bounded interleave without untracked worker advance",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job",
+        "policy": "wait",
+        "interleave_budget": 1
+      }
+    },
+    {
+      "operation": "socket.create",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Expose checkpoint endpoint with host-owned ACL",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "checkpoint_id": "checkpoint",
+        "message_acl": [],
+        "signal_acl": [],
+        "spawn_acl": []
+      }
+    },
+    {
+      "operation": "socket.message",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Deliver durable inbox message with explicit P/V purpose",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "socket_id": "socket",
+        "text": "hint",
+        "lifecycle": "V",
+        "message_id": "unique"
+      }
+    },
+    {
+      "operation": "socket.signal",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Host authorizes run/wait/wake/stop control",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "socket_id": "socket",
+        "signal": "wake"
+      }
+    },
+    {
+      "operation": "board.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read latest board and CAS revision",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "board.update",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "CAS current board; latest view enters next cut I",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "expected_revision": 0,
+        "value": {}
+      }
+    },
+    {
+      "operation": "tools.configure",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Configure three layers: discovery, expansion, host execution",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "tools": []
+      }
+    },
+    {
+      "operation": "tools.resolve",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Resolve visible descriptors and schemas for principal",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "tools.authorize",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Check execution ACL independent of model prompt",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "name": "tool"
+      }
+    },
+    {
+      "operation": "index.maintain",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Rebuild hierarchical source/CB/op index without mutating old CB",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "lifecycle": "I"
+      }
+    },
+    {
+      "operation": "usage.record",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Record disjoint billing categories and observed/raw capability evidence",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "call_id": "call",
+        "role": "worker",
+        "model": "fixed",
+        "categories": []
+      }
+    },
+    {
+      "operation": "usage.report",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Report category totals, unknown prices, physical cache observations",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "provider.preview",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Encode legal provider input from coherent cut; no model call",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "format": "openai-chat"
+      }
+    },
+    {
+      "operation": "provider.continue",
+      "write": true,
+      "model": true,
+      "editable_scope": "none",
+      "description": "Call fixed Worker via in-process LiteLLM and retain response/usage",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "format": "openai-chat",
+        "idempotency_key": "unique"
+      }
+    },
+    {
+      "operation": "config.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read selected host-allowlisted model profiles and editable settings; never credentials",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "config.update",
+      "write": true,
+      "model": false,
+      "editable_scope": "configuration text only",
+      "description": "Select host-allowlisted role profiles, Editor prompt, deterministic rules and schedule budgets",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "editor_prompt": "Edit assigned text units only. Return {ops:[],pvi:{P:[],V:[],I:{}}}.",
+        "program_rules": [
+          "deduplicate_exact"
+        ],
+        "interleave_budget": 1,
+        "schedule_policy": "wait"
+      }
+    },
+    {
+      "operation": "socket.spawn",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Historical peer fork requires separate explicit spawn_acl (grants history read); Message V becomes first WB, P is program-published before first Worker; original head unchanged",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "socket_id": "socket",
+        "text": "explore this question",
+        "lifecycle": "V"
+      }
+    },
+    {
+      "operation": "tools.invoke",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Execute authorized SIC memory lookup; external tools return host_execution_required and never execute arbitrary code",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "name": "sic_operation_directory",
+        "arguments": {}
+      }
+    },
+    {
+      "operation": "security.revoke",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Independent host revocation_actors authorization; immutable tombstone blocks source and derived CB access without rewriting history",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "source_ids": [
+          "source"
+        ],
+        "confirm_revoke": true,
+        "reason": "explicit authorized withdrawal"
+      }
+    },
+    {
+      "operation": "edit.candidate.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read editable candidate revision and immutable original Editor responses",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job"
+      }
+    },
+    {
+      "operation": "edit.candidate.update",
+      "write": true,
+      "model": false,
+      "editable_scope": "candidate content only",
+      "description": "CAS revise candidate; original Editor responses/source remain immutable",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job",
+        "expected_revision": 0,
+        "ops": [],
+        "pvi": {}
+      }
+    },
+    {
+      "operation": "edit.run_all",
+      "write": true,
+      "model": true,
+      "editable_scope": "none",
+      "description": "Execute disjoint assigned Editors concurrently, each exactly one response",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job"
+      }
+    },
+    {
+      "operation": "wb.form",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Form WB from consecutive pending source groups, with immutable membership/event",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "source_ids": [],
+        "reason": "explicit-task-boundary"
+      }
+    },
+    {
+      "operation": "decision.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read four-view decision workspace and revision",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "decision.update",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "CAS apply sourced work/failure/candidate/overlooked/complete events to I",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "expected_revision": 0,
+        "events": [
+          {
+            "kind": "work",
+            "text": "Current task",
+            "evidence": []
+          }
+        ]
+      }
+    },
+    {
+      "operation": "decision.maintain",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Maintain decision views from unconsumed source and host events",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "memory.timeline",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Page ordered chain memberships with predecessor/successor and immutable WB links",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "offset": 0,
+        "limit": 20
+      }
+    },
+    {
+      "operation": "memory.locate",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Resolve both source→CB/WB and CB→source membership on authorized chain",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "source_id": "source"
+      }
+    },
+    {
+      "operation": "memory.page",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Bounded source characters or CB body / ordered-op pages, full reconstruction possible",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "kind": "source",
+        "object_id": "source",
+        "offset": 0,
+        "limit": 2048
+      }
+    },
+    {
+      "operation": "memory.project",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read explicit bounded projection manifest; omitted archive stays navigable",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "role": "worker",
+        "max_chars": 16384,
+        "query": ""
+      }
+    },
+    {
+      "operation": "runtime.configure",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Configure event-driven shared runtime; model work requires explicit standing model grant",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "enabled": false,
+        "editor_mode": "program",
+        "worker_mode": "host",
+        "editor_workers": 2,
+        "seal_chars": 8192,
+        "max_pending_seconds": 1
+      }
+    },
+    {
+      "operation": "runtime.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read durable runtime policy, event queue and progress",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "runtime.run",
+      "write": true,
+      "model": true,
+      "editable_scope": "none",
+      "description": "Run bounded real edit/publish/Worker work cycle, no synthetic success",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "max_steps": 8,
+        "continue_worker": false
+      }
+    },
+    {
+      "operation": "frontier.compare",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Compare same-cut necessary KEEP replacement against candidate extra edits",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "job_id": "job",
+        "expected_cut": 0,
+        "position_budget": 0,
+        "length_budget": 4096
+      }
+    },
+    {
+      "operation": "collaboration.dispatch",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Create authorized historical peer tasks with request/result return links",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "socket_ids": [],
+        "question": "Explore this",
+        "lifecycle": "V",
+        "request_id": "unique"
+      }
+    },
+    {
+      "operation": "collaboration.status",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read branch work/result/consumption state",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "collaboration.run",
+      "write": true,
+      "model": true,
+      "editable_scope": "none",
+      "description": "Run peer Worker+Editor cycles and return sourced result via sender P/V",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "request_id": "unique",
+        "max_steps": 8
+      }
+    },
+    {
+      "operation": "board.claim",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Atomic shared task claim; conflict rejects rather than overwrites",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "task_id": "task",
+        "expected_revision": 0,
+        "description": "Work item"
+      }
+    },
+    {
+      "operation": "chain.list",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "List routes owned by authenticated actor; chain.get includes historical checkpoint directory; chain.checkpoint accepts explicit authorized cut_id",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "resource.record",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Record measured program/storage/explicit paid service quantity and optional versioned price",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "record_id": "measurement",
+        "resource": "program",
+        "quantity": 0.01,
+        "unit": "cpu-second",
+        "measurement_method": "thread_time"
+      }
+    },
+    {
+      "operation": "ledger.export",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Export chain ledger (default), or scope=task for one authorized transaction over recursive collaboration branches plus additional_chain_ids; per-route prices_by_chain preserve bindings, conflicting identities fail, unknown costs remain explicit",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {"scope":"task","additional_chain_ids":[],"prices_by_chain":{}}
+    },
+    {
+      "operation": "runtime.recover",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Explicitly abandon indeterminate Editor, mark Worker unknown, or release failed queue; disables automatic runtime for review, never silently replays a call",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "action": "resume_queue",
+        "confirm": true
+      }
+    },
+    {
+      "operation": "hierarchy.get",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read all representation levels and role adoption",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {}
+    },
+    {
+      "operation": "hierarchy.form",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Form an immutable higher WB from complete consecutive lower CB bodies",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "level": 2,
+        "cb_ids": []
+      }
+    },
+    {
+      "operation": "hierarchy.timeline",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Read independent WB or CB chronology and same-level counterparts",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "level": 1,
+        "kind": "wb",
+        "offset": 0,
+        "limit": 20
+      }
+    },
+    {
+      "operation": "hierarchy.expand",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Navigate CB to WB and ordered lower CB members with complete retained units",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "cb_id": "cb"
+      }
+    },
+    {
+      "operation": "hierarchy.select",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Adopt a published level for subsequent Worker and Editor requests",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "level": 2,
+        "roles": [
+          "worker",
+          "editor"
+        ]
+      }
+    },
+    {
+      "operation": "hierarchy.maintain",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Recursively program-edit growing CB intervals into real higher CBs and adopt them",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "fanout": 8
+      }
+    },
+    {
+      "operation": "hierarchy.context.create",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Create a persistent internal context on this Agent route, optionally sharing existing context representations",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "context_id": "editor-notes",
+        "shared_contexts": [
+          "main"
+        ]
+      }
+    },
+    {
+      "operation": "hierarchy.context.ingest",
+      "write": true,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Retain closed Editor-owned text as a new internal-context WB",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "context_id": "editor-notes",
+        "request": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Persistent Editor reasoning notes"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operation": "memory.replay",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Replay a prefix of published immutable content operations against frozen archived WB; no external effects",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "cb_id": "cb",
+        "step": 0
+      }
+    },
+    {
+      "operation": "hierarchy.legacy",
+      "write": false,
+      "model": false,
+      "editable_scope": "none",
+      "description": "Page retained legacy CB references without inventing unavailable WB formation chronology",
+      "context_required": [
+        "actor",
+        "chain_id"
+      ],
+      "payload_example": {
+        "offset": 0,
+        "limit": 20
+      }
+    }
+  ]
+}

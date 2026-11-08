@@ -1,0 +1,12 @@
+{
+  "memory_type": "sic_core_v01",
+  "memory_params": {
+    "data_root": "benchmarks/data/longmemeval-v2",
+    "editor_mode": "program",
+    "program_rules": ["deduplicate_exact"],
+    "memory_chars": 65536,
+    "fanout": 8,
+    "image_detail": "high",
+    "wb_state_count": 1
+  }
+}

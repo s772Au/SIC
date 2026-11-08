@@ -1,0 +1,83 @@
+{
+  "schema": "sic-local-compressor-model-v1",
+  "model": "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
+  "revision": "5f0c82792b7ea14c6484e015b6a072009496b7f2",
+  "format": "safetensors",
+  "weight_license": "Apache-2.0 as declared by official model card",
+  "code_license": "MIT",
+  "public_token_used": false,
+  "remote_code": false,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 3309,
+      "sha256": "ab01af377c6285e0bd040661569238aba5f66f842dcecaa4c2fc704f40c7402b",
+      "official_lfs_sha256": "ab01af377c6285e0bd040661569238aba5f66f842dcecaa4c2fc704f40c7402b"
+    },
+    {
+      "path": "config.json",
+      "bytes": 875,
+      "sha256": "e6c33ec2f099e659e125efaa8b7bb07a6e65b7d9fc36211c6fa3206e1c399085",
+      "official_lfs_sha256": "e6c33ec2f099e659e125efaa8b7bb07a6e65b7d9fc36211c6fa3206e1c399085"
+    },
+    {
+      "path": "special_tokens_map.json",
+      "bytes": 125,
+      "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3",
+      "official_lfs_sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+      "path": "tokenizer.json",
+      "bytes": 2919362,
+      "sha256": "bf1b59b7b11c95f194f51708d918eea378e09d05f84c0e1656dc5180e8117088",
+      "official_lfs_sha256": "bf1b59b7b11c95f194f51708d918eea378e09d05f84c0e1656dc5180e8117088"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "bytes": 1191,
+      "sha256": "214f78f6c5d034a8b405632d301ee3710eb6f075b3f5faf8241a273a13908746",
+      "official_lfs_sha256": "214f78f6c5d034a8b405632d301ee3710eb6f075b3f5faf8241a273a13908746"
+    },
+    {
+      "path": "vocab.txt",
+      "bytes": 995526,
+      "sha256": "fe0fda7c425b48c516fc8f160d594c8022a0808447475c1a7c6d6479763f310c",
+      "official_lfs_sha256": "fe0fda7c425b48c516fc8f160d594c8022a0808447475c1a7c6d6479763f310c"
+    },
+    {
+      "path": "model.safetensors",
+      "bytes": 709388104,
+      "sha256": "22b9ecde52fec5c97e8c54a293be768727df95a81c6c8dccb03f262a50c58324",
+      "official_lfs_sha256": "22b9ecde52fec5c97e8c54a293be768727df95a81c6c8dccb03f262a50c58324"
+    }
+  ],
+  "parameters": {
+    "use_llmlingua2": true,
+    "device_map": "cpu",
+    "dtype": "float32",
+    "torch_threads": 2,
+    "rate": 0.5,
+    "force_tokens": [
+      "\n",
+      "."
+    ],
+    "force_reserve_digit": true,
+    "drop_consecutive": true,
+    "max_batch_size": 1,
+    "max_force_token": 100,
+    "seed": 42
+  },
+  "local_default": "PROJECT_ROOT/.local/models/llmlingua2-mbert",
+  "auxiliary_tokenizer": {
+    "name": "cl100k_base",
+    "purpose": "upstream origin/compressed counting, separate from mBERT classifier tokenizer; not provider billing",
+    "source": "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken",
+    "files": [
+      {
+        "path": "9b5ad71b2ce5302211f9c61530b329a4922fc6a4",
+        "bytes": 1681126,
+        "sha256": "223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7"
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "sic-media-lme-source-freeze-v1",
+  "status": "frozen",
+  "files": {
+    "sic_core/adapters.py": "4efa57980637060b004ebaabdd58be86219d8c72f49beb16190e3ee7a3d78620",
+    "sic_core/media.py": "7c158cc8beecb86f1aaba052b47fccfd54241364aaccf70c87bbe05150a684d8",
+    "sic_core/service.py": "36145ce5a90b574576d534874900a2c8e34e678f76a0a77ba60be961bf96081d",
+    "sic_core/memory.py": "c4c092bf1e26d939e7368d6bbda3cf84d766411da9f550b404c5fdd96c627355",
+    "sic_core/hierarchy.py": "0022b34b86966ceb95173f039bb4f8b72f2305e5e9f585e1e1f21636c80afa65",
+    "sic_core/requirements.txt": "b3c2ca3f5895924c0d88b2d8e22507fdffd2032a3d47a9219dd31323806df2d3",
+    "tests/test_core_v2_media.py": "50a5e56d63f91c838680cbd15659f78caf5a740c2f3fc4ce21a1f6860997b064",
+    "tests/test_core_v2_lme_media.py": "147a682e28397b5dae39240c63c6b9e1a2f728c92199cad1db1ec55eb90f10fc",
+    "benchmarks/core_lme_carrier.py": "893284309f8a31fa1f39a2bd200cc28c2baa3ee840ddc26384c73ccaf522d0d4",
+    "benchmarks/core_lme_memory.py": "b31e32871849deea7898b68fef74146cd463e6d4029d433c35f397836fbd1fbb",
+    "benchmarks/run_core_lme.py": "59e4fe2e874743a1374755bb649e9f3eb09b3987253b6e9b7b83ec000938230a",
+    "benchmarks/prepare_core_lme.py": "fe84c806ffdf2e00e087e3ea72196b699a1c799bae5b7bd5a94d910c8de30abc",
+    "benchmarks/prepare_lme_processor.py": "1ce7c54fe82d4f9ae2f0c4472fa5be809d12f45f79e5ca9fb9c367be699a77c7",
+    "benchmarks/lme-official-source-lock.json": "90278f744e7b87e9b141d23bfa3d069f7e41933b72df612ba70339796caae71c",
+    "benchmarks/lme-processor-lock.json": "5a65b5822923e7d19de7caf460d80ced95373343fcad3a84a0f49ce4a8adf584",
+    "benchmarks/lme-official-requirements.lock.txt": "a912309371da0afd248fa679416c173bbf2606ed84728329e80021ee69bb05f3",
+    "benchmarks/configs/sic-lme-program.json": "005ba98a5288ff1978361cb3d30f3290e752e2b336a7fba9031f4dd765dc9242",
+    "benchmarks/configs/sic-lme-model.json": "ba4dfea4d579d2ebcfb2d204328eb4b621cbd2bf48737d9ef6a6216739fef8e7",
+    "benchmarks/README-core-lme.md": "c05b715724aad39cbb6b1e3ce6f424c62588ebdf7dc5b1eabd421842eaae0960"
+  },
+  "mechanical_acceptance": {
+    "core_media_passed": 7,
+    "official_memory_passed": 7,
+    "real_trajectory_states": 10,
+    "real_trajectory_editor_sdk_requests": 10,
+    "real_trajectory_worker_sdk_requests": 1,
+    "images_equal_bytes_and_order": true,
+    "actual_official_processor_tensor_tokens": 82,
+    "official_budget": 81,
+    "actual_official_truncated_tokens": 10
+  },
+  "research_evaluation": "not_evaluated",
+  "freeze_note": "Refreshed for authorized final Core communication/return-policy fixes; official data/processor/model hashes unchanged."
+}

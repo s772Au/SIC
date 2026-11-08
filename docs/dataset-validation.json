@@ -1,0 +1,218 @@
+{
+  "date": "2026-11-07",
+  "status": "all-selected-sources-verified-evaluation-pending",
+  "provider_calls": 0,
+  "longmemeval_runtime": {
+    "questions": 451,
+    "question_images": 29,
+    "trajectories": 1870,
+    "trajectory_domains": {
+      "enterprise": 941,
+      "web": 929
+    },
+    "screenshot_references": {
+      "enterprise": 34292,
+      "web": 14317
+    },
+    "missing_screenshots": {},
+    "missing_examples": [],
+    "haystacks": {
+      "small": {
+        "question_count": 451,
+        "all_ids_and_domains_valid": true
+      },
+      "medium": {
+        "question_count": 451,
+        "all_ids_and_domains_valid": true
+      }
+    },
+    "elapsed_seconds": 4.06,
+    "all_runtime_screenshots_present": true
+  },
+  "archive_extraction": [
+    {
+      "archive": "benchmarks\\data\\longmemeval-v2\\trajectory_screenshots\\enterprise_screenshots_base.tar.gz",
+      "destination": "benchmarks\\data\\longmemeval-v2\\screenshots",
+      "files": 35391,
+      "uncompressed_bytes": 3548206703,
+      "elapsed_seconds": 35.19
+    },
+    {
+      "archive": "benchmarks\\data\\longmemeval-v2\\trajectory_screenshots\\web_screenshots.tar.gz",
+      "destination": "benchmarks\\data\\longmemeval-v2\\screenshots",
+      "files": 14317,
+      "uncompressed_bytes": 2657251967,
+      "elapsed_seconds": 20.57
+    }
+  ],
+  "babilong_full": [
+    {
+      "task": "qa1",
+      "source": "benchmarks\\data\\babilong\\data\\qa1\\10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38512513,
+      "input_chars_max": 40000466,
+      "elapsed_seconds": 23.25
+    },
+    {
+      "task": "qa2",
+      "source": "benchmarks\\data\\babilong\\data\\qa2\\10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38796074,
+      "input_chars_max": 39971241,
+      "elapsed_seconds": 22.71
+    },
+    {
+      "task": "qa3",
+      "source": "benchmarks\\data\\babilong\\data\\qa3\\10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38812909,
+      "input_chars_max": 40079533,
+      "elapsed_seconds": 26.76
+    },
+    {
+      "task": "qa4",
+      "source": "benchmarks\\data\\babilong\\data\\qa4\\10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38581935,
+      "input_chars_max": 39948175,
+      "elapsed_seconds": 22.84
+    },
+    {
+      "task": "qa5",
+      "source": "benchmarks\\data\\babilong\\data\\qa5\\10M.json",
+      "records": 100,
+      "fields_valid": true,
+      "input_chars_min": 38563856,
+      "input_chars_max": 39971932,
+      "elapsed_seconds": 27.96
+    }
+  ],
+  "known_document_checksum_difference": {
+    "file": "longmemeval-v2/README.md",
+    "expected_sha256": "bd0890407b11ea5e7f521f47f031823f58f77ac8c9e0b5837bb4cae9f6bc9837",
+    "observed_sha256": "c5de92eadfd8238802b476e446b05a766c312ab0f07518dbda434f914aa4df37"
+  },
+  "longmemeval_official_validation": {
+    "official_repository_commit": "2cc8c540bdb87fe6761629b585e727e1c4704520",
+    "script_sha256": {
+      "public_data.py": "d2b868bfb0b6f8b66489c9445389eb6d0f26975f940a9c2365be154e63649c89",
+      "validate_data.py": "b5c7367a4ff26f5e57d2e2dd580aa179b10ad788680f753720d05645b5a1e332"
+    },
+    "results": {
+      "small": {
+        "questions": 451,
+        "trajectories": 1870,
+        "haystack_questions": 451,
+        "tier": "small",
+        "check_screenshots": true
+      },
+      "medium": {
+        "questions": 451,
+        "trajectories": 1870,
+        "haystack_questions": 451,
+        "tier": "medium",
+        "check_screenshots": true
+      }
+    },
+    "model_calls": 0
+  },
+  "sourceVerificationDate": "2026-11-07",
+  "source_verification": [
+    {
+      "dataset": "corpusqa-4m",
+      "path": "USER_HOME\\Downloads\\4m_4domains.jsonl",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "corpusqa-10m",
+      "path": "USER_HOME\\Downloads\\10m_4domains.jsonl",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "beam-10m-0",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\beam10m\\data\\10M-00000-of-00002.parquet",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "beam-10m-1",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\beam10m\\data\\10M-00001-of-00002.parquet",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "babilong-qa3-10m-first20-derived",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\qa3-10m-first20.jsonl",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "babilong-qa1-10m",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa1\\10M.json",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "babilong-qa2-10m",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa2\\10M.json",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "babilong-qa3-10m",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa3\\10M.json",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "babilong-qa4-10m",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa4\\10M.json",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "babilong-qa5-10m",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\babilong\\data\\qa5\\10M.json",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "longmemeval-v2-trajectories",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\longmemeval-v2\\trajectories.jsonl",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "longmemeval-v2-enterprise-images",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\longmemeval-v2\\trajectory_screenshots\\enterprise_screenshots_base.tar.gz",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    },
+    {
+      "dataset": "longmemeval-v2-web-images",
+      "path": "PROJECT_ROOT\\benchmarks\\data\\longmemeval-v2\\trajectory_screenshots\\web_screenshots.tar.gz",
+      "exists": true,
+      "sizeOk": true,
+      "hashOk": true
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "dependencies": [".[graph]"],
+  "http": {
+    "app": "sic_workflow.studio_http:app",
+    "cors": {
+      "allow_origins": ["https://smith.langchain.com"],
+      "allow_methods": ["*"],
+      "allow_headers": ["*"],
+      "allow_credentials": true,
+      "expose_headers": ["x-pagination-total", "x-pagination-next", "content-location"]
+    }
+  },
+  "graphs": {
+    "sic_core": "./sic_workflow/v2_graph.py:graph",
+    "sic_candidate": "./sic_workflow/workbench_graph.py:candidate_graph",
+    "sic_hierarchy": "./sic_workflow/hierarchy_graph.py:graph",
+    "sic_memory": "./sic_workflow/workbench_graph.py:memory_graph",
+    "sic_decision": "./sic_workflow/domain_graphs.py:decision_graph",
+    "sic_routes": "./sic_workflow/domain_graphs.py:routes_graph",
+    "sic_runtime": "./sic_workflow/domain_graphs.py:runtime_graph",
+    "sic_configuration": "./sic_workflow/domain_graphs.py:configuration_graph",
+    "sic_editor": "./sic_workflow/domain_graphs.py:editor_graph",
+    "sic_source": "./sic_workflow/domain_graphs.py:source_graph",
+    "sic_accounting": "./sic_workflow/accounting_graph.py:graph",
+    "sic_legacy_control": "./sic_workflow/graph.py:graph"
+  }
+}

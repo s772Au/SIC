@@ -1,0 +1,4231 @@
+{
+  "schema": "sic-functional-source-acceptance-v2",
+  "status": "author-cost-and-shared-prefix-target-revision; prior-implementation-acceptance-separately-pinned",
+  "source_priority": "当前作者补正/冻结两稿决定机制；救回稿只补机制来源；当前代码/API和旧实验不决定需求。",
+  "legacy_baseline": "旧R01–R65失配、不可证明本基线完备；旧场景记录仅能按其真实范围另行引用。",
+  "sources": [
+    {
+      "id": "D",
+      "type": "frozen-author-draft",
+      "path": "paper/draft/sic_draft_working.md",
+      "sha256": "2d37b2d7a3cdebdf469f3853c439966987df768ede18c8a4aed387377088517c"
+    },
+    {
+      "id": "P",
+      "type": "frozen-manuscript",
+      "path": "paper/review/sic_manuscript_review_zh.md",
+      "sha256": "d979efdecc5788a83bb052403888f04bcf0b88782a4ee0276d51a1faae56cdba"
+    },
+    {
+      "id": "O",
+      "type": "private-recovered-mechanism-only",
+      "title": "SIC定版v3.1救回稿，机制正文；所有旧实验、数字、参数与经验结论排除",
+      "sha256": "4e4ac1a5e1878ec031522b92f78436ac8830385bcd5d901f1369f02084d09127"
+    },
+    {
+      "id": "A01",
+      "type": "private-author-supplement",
+      "title": "作者第一次补正：语义理想、编辑prompt/响应工具与Worker教学；不复刻旧实验",
+      "sha256": "9eabe9c2410e222b84faf4713bf7f8a87c6cf104535ee5ef6e22174fbe971607"
+    },
+    {
+      "id": "U-UI",
+      "type": "explicit-user-engineering-requirement",
+      "section": "本会话：官方Langflow与LangGraph全链路可见可编辑，保护已发布对象/档案/权限；两个GUI分别实际验收"
+    },
+    {
+      "id": "U-HARNESS",
+      "type": "explicit-user-engineering-requirement",
+      "section": "本会话：实际DSH主Agent与peer真实工具、同Core绑定、历史/会话/收据恢复和后续采用"
+    },
+    {
+      "id": "U-RUNTIME",
+      "type": "explicit-user-engineering-requirement",
+      "section": "本会话：真实常驻、owned进程/私有凭据、失败恢复、权限、完整计量及可复现实验/测试包"
+    },
+    {
+      "id": "U-COST-PREFIX",
+      "type": "explicit-author-cost-design-correction",
+      "section": "作者最新补正：同WB/CB共同成本；分离CP/WP当前对照；同一Worker SIC教学与CB公共前缀；后置宿主可信I编辑模式；操作式CB交付及真实权限；方案B待实现验证。"
+    }
+  ],
+  "groups": [
+    {
+      "title": "I 工作路线、角色和正文承载",
+      "features": [
+        "F01",
+        "F02",
+        "F03",
+        "F04",
+        "F05",
+        "F06"
+      ]
+    },
+    {
+      "title": "II 双链、同阶对应和递归表示",
+      "features": [
+        "F07",
+        "F08",
+        "F09",
+        "F10",
+        "F11",
+        "F12",
+        "F13",
+        "F14",
+        "F15",
+        "F16",
+        "F64",
+        "F70",
+        "F71"
+      ]
+    },
+    {
+      "title": "III 内容编辑、候选与回放",
+      "features": [
+        "F17",
+        "F18",
+        "F19",
+        "F20",
+        "F21",
+        "F22",
+        "F65",
+        "F69"
+      ]
+    },
+    {
+      "title": "IV PVI、工作条件与安全保证",
+      "features": [
+        "F23",
+        "F24",
+        "F25",
+        "F26",
+        "F27",
+        "F28",
+        "F29",
+        "F54",
+        "F67",
+        "F68"
+      ]
+    },
+    {
+      "title": "V 时间窗口、前缀和交错调度",
+      "features": [
+        "F30",
+        "F31",
+        "F32",
+        "F33",
+        "F34",
+        "F35",
+        "F36",
+        "F37"
+      ]
+    },
+    {
+      "title": "VI Agent身份、历史分叉和真实协作",
+      "features": [
+        "F38",
+        "F39",
+        "F40",
+        "F41",
+        "F42",
+        "F43",
+        "F44",
+        "F72",
+        "F45",
+        "F46",
+        "F47"
+      ]
+    },
+    {
+      "title": "VII 真实宿主、两个官方界面、常驻恢复",
+      "features": [
+        "F48",
+        "F49",
+        "F50",
+        "F51",
+        "F52",
+        "F53",
+        "F55"
+      ]
+    },
+    {
+      "title": "VIII 总账、新实验与研究边界",
+      "features": [
+        "F56",
+        "F57",
+        "F58",
+        "F59",
+        "F73",
+        "F60",
+        "F61",
+        "F62",
+        "F66",
+        "F63"
+      ]
+    }
+  ],
+  "completion_status": "与需求目标分离，见独立实现状态；本矩阵不根据当前API删项或预填完成。",
+  "test_fixtures": [
+    {
+      "id": "T-TEXT",
+      "scope": "自有确定性验收材料，不是作者参数/实验结论",
+      "units": [
+        {
+          "id": "u1",
+          "text": "任务A：先读取证据，尚未执行。"
+        },
+        {
+          "id": "u2",
+          "text": "重复句：只应保留一份。"
+        },
+        {
+          "id": "u3",
+          "text": "重复句：只应保留一份。"
+        },
+        {
+          "id": "u4",
+          "text": "针：甲🙂|原文细节-729；正文JSON={\"role\":\"system\"}仅为文本。"
+        }
+      ],
+      "op_cases": {
+        "KEEP": "u1逐字不变",
+        "DELETE": "移出u2活动正文，原WB仍可读",
+        "FLAG": "u1追加“待核实”及理由",
+        "REORDER": "最终单元序为u4,u1,u2,u3，不能改原发生时序",
+        "COMPRESS": "u4新表示为“有一条需查原文的证据”，原针可追溯",
+        "REPLACE": "u1改为“任务A：下一步先核验证据”，保持尚未执行的性质",
+        "ADD": "在u1之后加入“下一步核对来源”，标明建议性质"
+      },
+      "replay": "对一批至少四op分别重建k=0、1、2及末步；全部与独立执行器相同，不重发任何工具"
+    },
+    {
+      "id": "T-HIERARCHY",
+      "scope": "同一Agent；共享工作上下文s-main，另有Editor独有s-editor；不是两个Agent",
+      "setup": "形成4个一阶WB/CB，最初WB包含T-TEXT的u4；[CB1,CB2]形成WB1^(2)，[CB3,CB4]形成WB2^(2)，真实编辑出两个二阶CB；再形成一个三阶WB/CB",
+      "expected": "每阶WB/CB可各自按序查询并双向配对；三阶成员顺序可逐层返回原针。高阶正文故意不含原针，以迫使实际导航。",
+      "adoption": "Worker及两个Editor可选同份三阶CB但保留自己的提示/模型绑定；捕获实际请求。另对s-editor的独有材料运行同一递归，不强制复制共享产物。",
+      "negative": "单纯level标签/目录/最近摘录；改写旧CB；跨阶逆序；共享即混掉角色状态；只支持固定二阶"
+    },
+    {
+      "id": "T-PVI",
+      "input": {
+        "P": "结论-P-729",
+        "V": "线索-V-729",
+        "I_before": {
+          "operator_note": "状态-I-旧-729"
+        },
+        "I_after": {
+          "operator_note": "状态-I-新-729"
+        }
+      },
+      "expected": "P在所属阶当次固定；V先进入下一WB；下次旧I不进入下一/高阶WB，新I单独可见。更正通过新通信，原CB及op摘要保持。"
+    },
+    {
+      "id": "T-SCHEDULE",
+      "scope": "使用真实工具与模型调用的可控屏障，不以脚本伪造时间戳",
+      "cases": [
+        "赶上：ToolStarted后允许Editor完成，再释放工具；Worker采用就绪CB",
+        "串行：先让工具完成，Editor保持在途；必须无Worker续发，释放Editor后推进",
+        "交错：工具完成且Editor未就绪，逐WB预算1允许一次推进；重送同许可不重复扣减，耗尽后不得继续推进",
+        "提前编辑：已有进展形成后先派发Editor，再启动真实工具；两区间有正交集，同样是合法重叠"
+      ],
+      "expected": "区间来自真实事件，Editor输入含当时已有进展；protocol proposal、start、end分开；晚到结果不伪称Editor已见；不把实际tool_start作为所有Editor派发的前置；已在工具开始前完成的编辑单列，不伪称执行重叠"
+    },
+    {
+      "id": "T-PEER",
+      "setup": "准备一个早期正确checkpoint及一个后来走错head；主路线继续，选择早期点派两个peer",
+      "tool": "peer必须实际执行自有fixture文件读取/写入或等价可验证工具，返回产物摘要；仅返回预制成功JSON不合格",
+      "adoption": "peer形成WB/CB并回传带出处结果；主下一实际请求含该结果。取消/失败复送与重启检查真实工具次数。",
+      "identity": "内部升阶不spawn；peer是平级；另从空白且有两个creator的Agent单独记录"
+    },
+    {
+      "id": "T-COST",
+      "scope": "完全虚构TEST币种、互斥标准类别；不是实际provider价格",
+      "calls": [
+        {
+          "role": "worker",
+          "normal_input": 60,
+          "cache_read": 40,
+          "output": 10
+        },
+        {
+          "role": "higher_editor",
+          "normal_input": 50,
+          "cache_read": 0,
+          "output": 5
+        }
+      ],
+      "prices": {
+        "normal_input": "2",
+        "cache_read": "0.1",
+        "output": "3"
+      },
+      "resources": [
+        {
+          "resource": "program",
+          "quantity": "1",
+          "unit": "cpu-second",
+          "measurement_method": "controlled fixture counter",
+          "unit_price": "5"
+        },
+        {
+          "resource": "storage",
+          "quantity": "2",
+          "unit": "byte-second",
+          "measurement_method": "controlled fixture counter",
+          "unit_price": "3"
+        }
+      ],
+      "expected": {
+        "worker_cost": "154",
+        "higher_editor_cost": "115",
+        "resources_cost": "11",
+        "total": "280",
+        "currency": "TEST"
+      },
+      "negative": "删去任一必要usage/价/测量应保持unknown/不完整；改变币种不得暗加；有高阶/peer实际调用必须全入账",
+      "controlled_case": {
+        "id": "T-COST-CONTROL",
+        "scope": "虚构TEST代数fixture，与总账280例独立；不是旧实验参数",
+        "background_counts": [
+          10,
+          20,
+          30
+        ],
+        "p_u": "2",
+        "p_h": "0.1",
+        "p_o": "3",
+        "O_S": "5",
+        "O_B": "8",
+        "S_W": "40",
+        "D": "7",
+        "expected": {
+          "F": "30",
+          "H": "10",
+          "delta_cost": "19"
+        },
+        "negative": "任一控制条件不成立不强套此式，返回两臂实际总账并记录不适用原因"
+      }
+    },
+    {
+      "id": "T-RUNTIME-GUI",
+      "setup": "私有环境、正常认证、独立owned服务；实际DSH CLI/Loader/插件；两个官方GUI分别操作",
+      "expected": "原生输入→正文/协议→程序/Editor→候选op/PVI→固定CB→两链/跨阶→实际模型续做→peer工具/通信→总账可见可操作；保护字段只读；重启/续轮与同Core交叉读取保留证据",
+      "negative": "有node/API名、Swagger、mock客户端、仅图截图或一个代表路径不足以覆盖全部行为"
+    },
+    {
+      "id": "T-COST-SHARED-PREFIX",
+      "scope": "新B方案验收目标，不声明实现/通过",
+      "cases": [
+        "同对象集中/增量共同项抵消及额外WB重读/输出/目标/首次接入差额",
+        "A F冷/H命中、全冷及B理想共享的独立手算",
+        "冻结plan+同一Worker SIC教学/CB renderer/schema，I后置且mode/job/time不在prefix",
+        "新WB scope正确、上CB与跨job单元拒绝target、操作式新CB append",
+        "宿主激活工具正例、未激活/伪造pvi.I/capability/撤权负例",
+        "model/cache namespace/schema/envelope/context/level/预算/媒体分叉及完整fallback",
+        "公共教学新增费与额外轮次不双算；未知物理cache保持unknown"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "F01",
+      "title": "同一Agent的Worker、Editor与主动程序分工",
+      "inputs": "任务、角色配置和新工作材料",
+      "operation": "Worker续做；程序直接执行确定规则；Editor负责语义判断和生成",
+      "outputs": "同路线工作结果、编辑记录和明确角色调用",
+      "normal_steps": [
+        "提交带精确重复与需重述材料的任务",
+        "运行规则及Editor",
+        "让Worker使用结果继续任务"
+      ],
+      "pass_conditions": [
+        "确定规则有程序执行证据且无需模型代做",
+        "语义编辑真实经过Editor",
+        "增加Editor不自动增加Agent数"
+      ],
+      "negative_cases": [
+        "把每个模型实例算成独立Agent",
+        "规则通过便断言语义正确"
+      ],
+      "required_evidence": [
+        "角色配置",
+        "规则执行记录",
+        "Editor和Worker实际请求/响应与链身份"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F02",
+      "title": "按角色及阶次固定模型与完整输入预算",
+      "inputs": "Worker、Editor及高阶编辑模型/tokenizer/容量配置",
+      "operation": "分别绑定角色与任务快照，计算完整调用输入并执行",
+      "outputs": "可追溯的模型身份、配置版本与准入结果",
+      "normal_steps": [
+        "给Worker和Editor配置不同的允许profile",
+        "冻结任务后更新默认配置",
+        "分别运行原任务和新任务"
+      ],
+      "pass_conditions": [
+        "原任务保留冻结绑定",
+        "新任务采用新版本",
+        "正文/提示/op/索引/工具/元数据均计入输入预算"
+      ],
+      "negative_cases": [
+        "无声明切换模型或截断材料后称完整",
+        "把同系列兼容写成已证实"
+      ],
+      "required_evidence": [
+        "配置版本",
+        "实际返回模型身份",
+        "完整请求计数与tokenizer依据"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F03",
+      "title": "新材料驱动的持续编辑",
+      "inputs": "连续用户、Worker、工具和协作事件",
+      "operation": "自动按规则触发程序/Editor整理，在合适边界采用",
+      "outputs": "无需Worker反复下令的连续WB→CB与后续工作",
+      "normal_steps": [
+        "启动有界自动运行",
+        "输入至少三批材料并穿插工具",
+        "观察每批整理与Worker续做",
+        "连续输入多个低于阈值的小片段，随后明确完成或出现合适边界，验证它们能组成WB并继续而非永久饥饿"
+      ],
+      "pass_conditions": [
+        "编辑由材料/等待/边界驱动真实发生",
+        "无空转无限模型循环",
+        "退出或预算耗尽明确停止",
+        "过短片段可累计处理；明确完成/等待等边界有可执行封块策略"
+      ],
+      "negative_cases": [
+        "仅手工点一次API算持续职责",
+        "空轮不断收费"
+      ],
+      "required_evidence": [
+        "事件到任务的关联",
+        "运行政策",
+        "三批输入与实际采用请求"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F04",
+      "title": "多个Editor实际分工与合并",
+      "inputs": "同一WB、分工范围和共同背景版本",
+      "operation": "并发编辑不同范围，再按顺序校验并合并",
+      "outputs": "同一Agent的一份完整候选及固定产物",
+      "normal_steps": [
+        "分配两范围并用屏障令两个Editor同时在途",
+        "完成两份响应",
+        "合并发布"
+      ],
+      "pass_conditions": [
+        "两次调用确有并行区间",
+        "未分配单元KEEP",
+        "冲突/不全不半发布"
+      ],
+      "negative_cases": [
+        "顺序执行冒充并行",
+        "两个Editor被当两Agent",
+        "晚响应覆盖新版本"
+      ],
+      "required_evidence": [
+        "分工/背景快照",
+        "调用区间",
+        "冲突测试",
+        "合并后正文/op"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F05",
+      "title": "文本与协议分离并回组",
+      "inputs": "harness/provider原生请求及其角色/工具/控制信息",
+      "operation": "内部解析正文与独立协议元数据，编辑正文后合法encode",
+      "outputs": "实际可供下一模型调用的原生请求",
+      "normal_steps": [
+        "输入包含代码/表格/JSON正文和工具调用的请求",
+        "编辑正文",
+        "经真实支持适配器送下一轮"
+      ],
+      "pass_conditions": [
+        "正文编辑有效",
+        "角色、调用ID、控制字段按宿主约束合法",
+        "适配在SIC内部，proxy可选"
+      ],
+      "negative_cases": [
+        "Editor修改完整请求控制JSON",
+        "把正文中的JSON键误当控制",
+        "仅preview即声称整格式续做支持"
+      ],
+      "required_evidence": [
+        "原请求",
+        "正文/sidecar对照",
+        "encode后请求",
+        "后续实际响应与声明格式清单"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.1 工作正文与承载协议"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F06",
+      "title": "原始材料与WB块内来源",
+      "inputs": "多来源片段及其原生位置",
+      "operation": "保存原始档案并装配WB的有序单元与定位锚",
+      "outputs": "可按单元精确返回原材料的WB",
+      "normal_steps": [
+        "将三个来源片段组成一个WB",
+        "编辑其中一单元",
+        "从op锚返回该原文位置"
+      ],
+      "pass_conditions": [
+        "原材料可核对",
+        "片段顺序明确",
+        "source数不冒充WB/CB链长度"
+      ],
+      "negative_cases": [
+        "普通编辑覆盖原档",
+        "把source↔WB称为双链索引"
+      ],
+      "required_evidence": [
+        "原档摘要",
+        "WB单元/来源边界",
+        "定位读取返回值"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.1 工作正文与承载协议"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F07",
+      "title": "WB链自身形成时序",
+      "inputs": "同一路线同阶的连续工作流",
+      "operation": "按自然边界形成并保留WB序列，允许清楚表示未有CB的WB",
+      "outputs": "独立可查的WB时序/前后继和状态",
+      "normal_steps": [
+        "先形成WB1/WB2/WB3，令中间编辑延迟",
+        "分别查询WB时序与CB时序"
+      ],
+      "pass_conditions": [
+        "WB三块及其边界/顺序可独立读出",
+        "不能靠source或CB时间戳推断",
+        "未发布对应明确"
+      ],
+      "negative_cases": [
+        "只存pending groups及source时间",
+        "用CB列表充当WB链"
+      ],
+      "required_evidence": [
+        "WB目录/边界材料",
+        "形成事件",
+        "延迟期间的独立查询"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F08",
+      "title": "CB链顺序延伸与永久固定",
+      "inputs": "依次形成的WB与编辑候选",
+      "operation": "依依赖次序发布同阶CB并保留前后继",
+      "outputs": "只追加的稳定CB链及可追溯op",
+      "normal_steps": [
+        "发布前三块并保存全部字节摘要",
+        "再发布纠正消息和状态更新",
+        "重读旧块"
+      ],
+      "pass_conditions": [
+        "前后顺序不倒置",
+        "旧CB及固定op字节不变",
+        "纠正进入新P/V/I"
+      ],
+      "negative_cases": [
+        "晚到候选插改旧CB",
+        "刷新I时重写旧块",
+        "仅hash相同便合并逻辑路线"
+      ],
+      "required_evidence": [
+        "发布记录",
+        "前后对象摘要",
+        "必要请求版本"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F09",
+      "title": "同阶WB_i与CB_i双向对应",
+      "inputs": "某阶WB及其成功编辑产物",
+      "operation": "保留块级对应，并把有序op定位到WB内部",
+      "outputs": "双向可用的同阶映射及细锚",
+      "normal_steps": [
+        "选一个含多source的WB完成编辑",
+        "从WB查CB，再从CB返回WB",
+        "沿op读被DELETE的细节"
+      ],
+      "pass_conditions": [
+        "同阶块身份/边界/对应一致",
+        "WB与CB各自时序都存在",
+        "删除出活动正文不破坏追溯"
+      ],
+      "negative_cases": [
+        "把source装配关系代替同阶映射",
+        "指到别阶或别路线无权限对象"
+      ],
+      "required_evidence": [
+        "两个时序查询",
+        "双向映射",
+        "op单元锚与实际原文"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        },
+        {
+          "source": "D",
+          "section": "§5.2 双维索引、细粒度锚与追溯教学"
+        },
+        {
+          "source": "P",
+          "section": "§6.2 多阶记忆与双维导航"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F10",
+      "title": "二阶WB有序引用下阶CB",
+      "inputs": "已固定的一阶CB有序区间及相关持续上下文",
+      "operation": "形成真实二阶WB并记录下阶成员/顺序/角色来源",
+      "outputs": "具有自身块身份和时序的二阶WB",
+      "normal_steps": [
+        "发布至少四个一阶CB",
+        "把按序选定区间形成两个二阶WB",
+        "查询本阶链和成员关系"
+      ],
+      "pass_conditions": [
+        "二阶WB不是目录别名",
+        "下阶CB身份/顺序保留",
+        "上下文来源及I只读边界清楚"
+      ],
+      "negative_cases": [
+        "只截取最近字符并贴level=2",
+        "成员乱序未声明",
+        "把即时视图自动塞入高阶编辑载荷"
+      ],
+      "required_evidence": [
+        "二阶WB实际输入",
+        "两阶目录",
+        "跨阶有序成员记录"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F11",
+      "title": "高阶真实编辑与固定产物",
+      "inputs": "二阶WB及高阶编辑配置",
+      "operation": "执行真实编辑生成新的二阶CB，固定本阶op及对应",
+      "outputs": "新二阶CB、同阶WB↔CB与下阶引用链",
+      "normal_steps": [
+        "令高阶Editor对二阶WB产生指定操作",
+        "发布二阶CB",
+        "检查所有一阶CB/op摘要"
+      ],
+      "pass_conditions": [
+        "存在真实编辑输入/输出和新产物",
+        "本阶两链/映射成立",
+        "下阶对象不变",
+        "不要求产物一定更短"
+      ],
+      "negative_cases": [
+        "有目录/检索结果却没有高阶编辑",
+        "直接改原一阶CB算升阶"
+      ],
+      "required_evidence": [
+        "高阶调用/程序记录",
+        "二阶WB/CB/op",
+        "下阶不变证明"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F12",
+      "title": "一般N阶递归而非写死二阶",
+      "inputs": "已生成高阶链与阶次/资源政策",
+      "operation": "在更高阶重复WB形成、编辑、固定和映射",
+      "outputs": "至少三阶可运行并支持一般允许阶次",
+      "normal_steps": [
+        "由二阶CB继续形成三阶WB并发布",
+        "改变允许阶次重复生成更高阶",
+        "逐阶列出WB/CB及对应"
+      ],
+      "pass_conditions": [
+        "算法使用一般阶次关系",
+        "各阶真实产物存在",
+        "资源上限显式，不预设作者安全阶数"
+      ],
+      "negative_cases": [
+        "仅元数据树或固定二阶专用分支",
+        "超限静默丢低阶记录"
+      ],
+      "required_evidence": [
+        "多阶调用链",
+        "每阶目录/对应",
+        "配置与超限拒绝"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F13",
+      "title": "Worker真正采用高阶表示",
+      "inputs": "已有高阶CB与有限Worker输入预算",
+      "operation": "选择合法高阶表示组装下一Worker输入并续做",
+      "outputs": "实际模型请求采用高阶内容且保留追溯入口",
+      "normal_steps": [
+        "构造低阶全文超预算、高阶表示可容纳的历史",
+        "选择高阶视图",
+        "实际运行Worker下一步"
+      ],
+      "pass_conditions": [
+        "请求中有真实高阶CB/层级信息",
+        "未同时重复灌入全部低阶全文",
+        "模型在声明预算内继续"
+      ],
+      "negative_cases": [
+        "只有preview",
+        "仍用低阶短摘录假称高阶",
+        "无提示截断"
+      ],
+      "required_evidence": [
+        "视图选择",
+        "完整实际Worker请求",
+        "预算与响应"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§5.2 双维索引、细粒度锚与追溯教学"
+        },
+        {
+          "source": "P",
+          "section": "§6.2 多阶记忆与双维导航"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F14",
+      "title": "Editor自身上下文递归管理",
+      "inputs": "长Editor背景、新WB和Editor预算",
+      "operation": "为Editor上下文形成并使用合法高阶表示，再处理新WB",
+      "outputs": "有界且可继续的实际Editor调用",
+      "normal_steps": [
+        "累积Editor背景至低阶全文超限",
+        "形成更高阶WB/CB",
+        "捕获后续Editor输入并完成新编辑"
+      ],
+      "pass_conditions": [
+        "Editor确实使用高阶产物而非仅max_chars",
+        "新WB范围不丢",
+        "角色与同一Agent身份明确"
+      ],
+      "negative_cases": [
+        "每次仅失败或截掉旧背景便称递归",
+        "多一阶自动创建peer Agent"
+      ],
+      "required_evidence": [
+        "Editor高阶输入/产物",
+        "角色预算",
+        "新WB编辑结果"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F15",
+      "title": "跨阶逐层展开直到原WB",
+      "inputs": "高阶CB中的某个被概括细节",
+      "operation": "依本阶对应、跨阶成员与细锚逐层展开并读取",
+      "outputs": "回到最初WB及精确原材料的完整路径",
+      "normal_steps": [
+        "在最初WB埋唯一细节，令高阶正文省略",
+        "从三阶CB开始逐层导航",
+        "读取并核对原细节"
+      ],
+      "pass_conditions": [
+        "路径包含每阶真实WB/CB",
+        "返回字节与原WB一致",
+        "不是扫描外部答案表"
+      ],
+      "negative_cases": [
+        "高阶有链接但下阶不可达",
+        "来源指错阶",
+        "把无损路径说成概括正文无损"
+      ],
+      "required_evidence": [
+        "逐次导航/读取调用",
+        "成员与锚",
+        "原文摘要和最终取用"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§5.2 双维索引、细粒度锚与追溯教学"
+        },
+        {
+          "source": "P",
+          "section": "§6.2 多阶记忆与双维导航"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F16",
+      "title": "高阶表示下继续时间推进与分叉",
+      "inputs": "正在使用高阶表示的路线和历史checkpoint",
+      "operation": "继续形成新块，或从历史整体状态派出平级路线",
+      "outputs": "持续扩展的各阶关系和独立peer路线",
+      "normal_steps": [
+        "在三阶视图下再产生新一阶工作并整理",
+        "从较早checkpoint分叉后分别续做"
+      ],
+      "pass_conditions": [
+        "新材料没有掉出两链",
+        "历史层级可复原",
+        "分叉不污染原路线或虚构父子关系"
+      ],
+      "negative_cases": [
+        "升阶等同Agent spawn",
+        "分叉继承checkpoint之后的未来材料"
+      ],
+      "required_evidence": [
+        "历史快照",
+        "分叉两侧实际输入",
+        "各阶新增/共享成员"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F17",
+      "title": "默认KEEP与有序组合执行",
+      "inputs": "WB单元、显式有序op及未提及单元",
+      "operation": "按序执行并机械保留未涉及内容",
+      "outputs": "可逐步重建的候选/CB正文和固定账本",
+      "normal_steps": [
+        "只编辑一单元并对它顺序REPLACE/FLAG/REORDER",
+        "其余单元不提交op",
+        "逐步重建并发布"
+      ],
+      "pass_conditions": [
+        "默认KEEP逐字保留",
+        "顺序影响与账本一致",
+        "隐式保留可发现且可无损编码"
+      ],
+      "negative_cases": [
+        "按target去重丢中间操作",
+        "DELETE后仍FLAG已不存在目标"
+      ],
+      "required_evidence": [
+        "原WB",
+        "显式/机械操作顺序",
+        "每步/最终重建摘要"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F18",
+      "title": "完整内容操作族",
+      "inputs": "WB及KEEP/DELETE/FLAG/REORDER/COMPRESS/REPLACE/ADD提案",
+      "operation": "分别执行保留、移出、标记、重排和局部生成",
+      "outputs": "七类操作的实际正文效果及定位",
+      "normal_steps": [
+        "在同一测试集逐个执行七类操作",
+        "检查ADD锚/REORDER位置",
+        "组合后校验并发布"
+      ],
+      "pass_conditions": [
+        "每类都有具体内容/顺序效果",
+        "生成只在需要处发生",
+        "非法单元/锚拒绝"
+      ],
+      "negative_cases": [
+        "只有枚举或空回包",
+        "生成内容替换协议控制",
+        "普通DELETE清除原档"
+      ],
+      "required_evidence": [
+        "七类输入/输出",
+        "生成量",
+        "锚/范围拒绝证据"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F19",
+      "title": "单轮Editor完整交付",
+      "inputs": "已备齐的编辑材料、范围、只读背景和响应契约",
+      "operation": "每位Editor用一次完整模型响应交付操作批次",
+      "outputs": "保留原始响应、可校验候选及usage",
+      "normal_steps": [
+        "冻结任务后执行一次Editor",
+        "提供完整响应、截断响应和格式错误响应三例"
+      ],
+      "pass_conditions": [
+        "完整响应采用",
+        "截断/错误不发布",
+        "没有隐瞒额外修复调用",
+        "原响应保持"
+      ],
+      "negative_cases": [
+        "自动多轮修复仍报单轮",
+        "缺输入假装读完",
+        "格式合格当语义保证"
+      ],
+      "required_evidence": [
+        "冻结输入",
+        "原生响应/finish状态",
+        "调用计数与拒绝状态"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F20",
+      "title": "候选版本可修订且不改原交付",
+      "inputs": "已交付候选及操作者合法修改",
+      "operation": "按明确版本修订op/PVI、追加/移除/PVI-only，重新校验",
+      "outputs": "新的候选版本、原响应与修订来源链",
+      "normal_steps": [
+        "以空KEEP交付开始只改PVI",
+        "追加再移除op",
+        "用旧版本提交",
+        "校验后再改一处"
+      ],
+      "pass_conditions": [
+        "空ops可编辑PVI",
+        "CAS拒绝旧版本",
+        "修改令旧校验失效",
+        "原响应不变"
+      ],
+      "negative_cases": [
+        "必须有已有op才能编辑",
+        "覆盖模型原响应",
+        "静默last-write-wins"
+      ],
+      "required_evidence": [
+        "原响应摘要",
+        "版本链",
+        "正/旧版本结果",
+        "失效校验"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "U-UI",
+          "section": "官方交互验收要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F21",
+      "title": "一致固定发布与Worker采用",
+      "inputs": "有效候选版本、当前工作边界和PVI",
+      "operation": "一次一致切换CB/op/对应与PVI，再给Worker同版本输入",
+      "outputs": "可确认发布点及实际后续请求",
+      "normal_steps": [
+        "发布某一已校验版本并模拟丢确认重送",
+        "捕获并发读及下一Worker请求"
+      ],
+      "pass_conditions": [
+        "只固定一次",
+        "读不到半CB/半状态",
+        "采用的版本与确认一致"
+      ],
+      "negative_cases": [
+        "过期候选或旧cut发布",
+        "只写CB没写op",
+        "重送重复插入"
+      ],
+      "required_evidence": [
+        "发布原子快照",
+        "幂等收据",
+        "并发读取与实际请求"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F22",
+      "title": "固定op模型可发现与细粒度追溯",
+      "inputs": "固定CB/op及WB锚",
+      "operation": "向Worker和Editor提供操作目录与可分页读取路径",
+      "outputs": "模型实际取得必要操作及原片段",
+      "normal_steps": [
+        "在旧WB细节被压缩/删除后继续任务",
+        "令模型调用目录/读取工具",
+        "把返回细节放入下一调用"
+      ],
+      "pass_conditions": [
+        "模型知道何时与怎样查",
+        "读到正确块内位置",
+        "持久op非仅后台日志"
+      ],
+      "negative_cases": [
+        "工具存在却未注入/未执行",
+        "前几条截取冒称读完"
+      ],
+      "required_evidence": [
+        "模型工具请求/实际返回",
+        "分页拼接与摘要",
+        "下一轮输入"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§5.2 双维索引、细粒度锚与追溯教学"
+        },
+        {
+          "source": "P",
+          "section": "§6.2 多阶记忆与双维导航"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F23",
+      "title": "持久P进入本次CB",
+      "inputs": "本次需稳定保留的结论/消息及编辑op",
+      "operation": "在发布时加入本次CB并固定",
+      "outputs": "长期稳定内容与来源",
+      "normal_steps": [
+        "提交P并发布",
+        "后续两次刷新I/发布CB",
+        "检查旧P与op"
+      ],
+      "pass_conditions": [
+        "P属于当次固定产物",
+        "后续刷新不改不消失"
+      ],
+      "negative_cases": [
+        "P误入可替换I",
+        "刷新状态重写已发布P"
+      ],
+      "required_evidence": [
+        "各cut对象/摘要",
+        "后续实际呈现"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PVI",
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F24",
+      "title": "易失V进入下一WB",
+      "inputs": "需后续消化的线索/消息",
+      "operation": "本cut投递到下一WB，供Worker使用并接受下轮编辑",
+      "outputs": "有原档来源的下一WB与可被整理的内容",
+      "normal_steps": [
+        "发布V",
+        "捕获下一Worker输入和下一WB",
+        "再压缩/舍弃这条V"
+      ],
+      "pass_conditions": [
+        "V先可用、后可被编辑",
+        "不等于读一次销毁",
+        "有清楚对应来源"
+      ],
+      "negative_cases": [
+        "统一塞I或永久CB",
+        "未经过后续编辑就丢失"
+      ],
+      "required_evidence": [
+        "投递、下一WB、实际Worker输入与再编辑结果"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PVI",
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F25",
+      "title": "即时I更替且不混入WB",
+      "inputs": "旧I、新CB及最新I",
+      "operation": "撤旧即时投影、接新CB、挂新I，并隔离只读背景",
+      "outputs": "稳定CB与单份最新I，必要的独立历史",
+      "normal_steps": [
+        "连续两cut更换I唯一标记",
+        "查看下一WB及高阶WB载荷",
+        "必要时向Editor提供只读I"
+      ],
+      "pass_conditions": [
+        "旧I不自动累入CB/WB",
+        "新I可见",
+        "只读可见不授予编辑源身份"
+      ],
+      "negative_cases": [
+        "复制整份旧I到高阶WB",
+        "把独立审计留存当当前前缀"
+      ],
+      "required_evidence": [
+        "两次组装请求",
+        "WB输入",
+        "只读背景标记与I历史"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PVI",
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F26",
+      "title": "四视角决策工作台持续维护",
+      "inputs": "工作行动、失败原因、已知候选线索和新发现",
+      "operation": "程序/Editor更新Working on/Failed Before/Not Tried Yet/Overlooked及出处",
+      "outputs": "可用的当前I目录和历史依据",
+      "normal_steps": [
+        "实际尝试一个方向并失败",
+        "留下另一已知候选",
+        "引入此前未考虑方向",
+        "让下一Worker据目录选择续做"
+      ],
+      "pass_conditions": [
+        "失败有why与证据",
+        "候选有insight",
+        "查漏提示可见",
+        "当前目录可纠正重组"
+      ],
+      "negative_cases": [
+        "空四键当完成",
+        "把建议记成已执行",
+        "把四视角说成可枚举全集"
+      ],
+      "required_evidence": [
+        "事件/原文",
+        "目录版本",
+        "Worker实际采用与历史追溯"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§5.1 持续更新工作条件"
+        },
+        {
+          "source": "P",
+          "section": "§6.1 持续维护当前工作条件"
+        },
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PVI",
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F27",
+      "title": "约束、锚点和阶段信息维护",
+      "inputs": "宿主保护规则、工作约束、锚点及阶段变化",
+      "operation": "在权限允许的工作视图中维护相应内容与位置",
+      "outputs": "持续可见的约束/导航和有来源的更新",
+      "normal_steps": [
+        "跨多个WB推进任务并改变阶段",
+        "检查重要约束与原文锚",
+        "让模型用锚取得细节"
+      ],
+      "pass_conditions": [
+        "约束来源/效力明确",
+        "锚能读到内容",
+        "更新不修改宿主保护字段"
+      ],
+      "negative_cases": [
+        "约束文本自授系统权限",
+        "只有标题锚无法定位细节"
+      ],
+      "required_evidence": [
+        "实际请求布局",
+        "约束来源",
+        "锚读取轨迹"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        },
+        {
+          "source": "D",
+          "section": "§5.1 持续更新工作条件"
+        },
+        {
+          "source": "P",
+          "section": "§6.1 持续维护当前工作条件"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PVI",
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F28",
+      "title": "Lazy tool发现、扩展与回收",
+      "inputs": "宿主工具定义/权限及工作阶段",
+      "operation": "维护即时能力描述，按规则发现/展开/收回并实际执行授权工具",
+      "outputs": "当前有效工具集与执行结果",
+      "normal_steps": [
+        "先不暴露某工具，再按需展开并调用，随后收回",
+        "尝试越权调用",
+        "比较实际请求schema变化"
+      ],
+      "pass_conditions": [
+        "可见和可执行权限分开校验",
+        "回收真生效",
+        "顶层schema缓存影响入账"
+      ],
+      "negative_cases": [
+        "只改说明却能力不变",
+        "源文本授权",
+        "把I工具更新一概记免费"
+      ],
+      "required_evidence": [
+        "定义/ACL版本",
+        "实际dispatch与结果",
+        "请求前缀/计量"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        },
+        {
+          "source": "D",
+          "section": "§2.1、§2.3、§6 协议授权、独立安全路径与协作权限"
+        },
+        {
+          "source": "P",
+          "section": "§3.1、§3.3、§7 授权和撤销保证"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PVI",
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F29",
+      "title": "语义理想与规则验证分开",
+      "inputs": "任务目标、编辑prompt、响应工具、Worker教学与程序规则",
+      "operation": "配置并实际应用共同编辑目标，再独立评价续做",
+      "outputs": "机械合规证据与单独任务质量结果",
+      "normal_steps": [
+        "用机械合规但遗失关键事实的候选和保真候选续做同任务",
+        "独立判分"
+      ],
+      "pass_conditions": [
+        "机械校验不自动证明语义正确",
+        "目标含任务效用和后续可编辑性",
+        "没有固定压缩率替代质量"
+      ],
+      "negative_cases": [
+        "以schema通过或Mock HTTP成功宣称质量提升"
+      ],
+      "required_evidence": [
+        "冻结教学/规则",
+        "两候选",
+        "独立任务rubric与结果"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§7 探索与后续论证"
+        },
+        {
+          "source": "P",
+          "section": "§6.3、§8 编辑质量与后续新实验"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ],
+      "completion_dimensions": [
+        "preparation",
+        "mechanical_acceptance",
+        "research_evaluation"
+      ]
+    },
+    {
+      "id": "F30",
+      "title": "自然WB边界与等待声明",
+      "inputs": "Worker输出边界、真实工具进度和可预见等待声明",
+      "operation": "选择候选边界并估计Editor能否赶上，按实际事件回退",
+      "outputs": "有来源的边界选择和运行决定",
+      "normal_steps": [
+        "分别提交长工具、提前结束工具、取消等待三例",
+        "比较预测与实际完成"
+      ],
+      "pass_conditions": [
+        "声明与真实事件分开",
+        "预测失准回到等待/交错",
+        "候选边界不凭预测提前发布"
+      ],
+      "negative_cases": [
+        "把预测当完成",
+        "sleep声明等于工具已开始"
+      ],
+      "required_evidence": [
+        "边界候选",
+        "声明/事件时刻",
+        "最终决定与发布时刻"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-SCHEDULE"
+      ]
+    },
+    {
+      "id": "F31",
+      "title": "工具运行期即开始编辑",
+      "inputs": "已形成进展正文、真实已启动工具及未闭合关联",
+      "operation": "工具继续运行时编辑已有WB正文，程序保管调用/结果关系",
+      "outputs": "真实重叠区间和合法的后续输入",
+      "normal_steps": [
+        "Worker输出实际进展文本和toolcall",
+        "真实工具耗时可控",
+        "Editor另有可控延迟",
+        "记录整个区间",
+        "另运行Editor早于tool_start派发但两区间实际重叠的合法场景"
+      ],
+      "pass_conditions": [
+        "Editor所用材料在派发前已经形成",
+        "Editor与真实工具执行区间有可核对的正交集；派发可早于tool_start",
+        "更早完成的搭载情形单列实际时序，不伪称工具期重叠",
+        "续轮native调用/结果合法"
+      ],
+      "negative_cases": [
+        "tool proposal冒充开始",
+        "只在工具闭合后才开始编辑",
+        "空正文无编辑却声称重叠",
+        "硬等tool_start才允许Editor派发，误禁已经形成材料的提前编辑"
+      ],
+      "required_evidence": [
+        "工具真实执行日志/产物",
+        "Editor区间",
+        "冻结WB输入",
+        "续轮原生请求"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        },
+        {
+          "source": "U-HARNESS",
+          "section": "真实DSH与主/peer工具要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F32",
+      "title": "赶上时无额外等待推进",
+      "inputs": "Editor比真实工具更早完成的场景",
+      "operation": "等待原工具自然结束后采用已经就绪的CB",
+      "outputs": "没有额外编辑等待的Worker续做",
+      "normal_steps": [
+        "设Editor短延迟、工具长延迟",
+        "测就绪/工具结束/Worker续轮"
+      ],
+      "pass_conditions": [
+        "CB就绪在工具结束之前",
+        "没有第二次无必要Editor",
+        "采用正确版本"
+      ],
+      "negative_cases": [
+        "凭状态名报免费",
+        "提前打断工具或输出非法结果组"
+      ],
+      "required_evidence": [
+        "三端时序",
+        "采用cut",
+        "实际模型调用计数"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-SCHEDULE"
+      ]
+    },
+    {
+      "id": "F33",
+      "title": "工具先结束时串行等待",
+      "inputs": "尚未完成的编辑和已结束工具，选择wait政策",
+      "operation": "保持候选并等有效CB后继续Worker",
+      "outputs": "明确记录的编辑等待与一致采用",
+      "normal_steps": [
+        "设工具短、Editor长",
+        "观察工具结束后到编辑就绪前无Worker续发",
+        "再正常推进"
+      ],
+      "pass_conditions": [
+        "真实等待存在且可计量",
+        "无绕过版本的额外调用",
+        "取消/失败可检查"
+      ],
+      "negative_cases": [
+        "立刻用旧上下文却标wait",
+        "隐藏等待为模型时长"
+      ],
+      "required_evidence": [
+        "工具/Editor/Worker时间戳",
+        "调度决定",
+        "调用日志"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-SCHEDULE"
+      ]
+    },
+    {
+      "id": "F34",
+      "title": "有代价交错与逐WB预算",
+      "inputs": "未就绪编辑、可继续Worker及各WB额外破坏预算",
+      "operation": "允许有限额外推进并在后续边界采用，逐WB真实扣减",
+      "outputs": "预算可审计的推进与重建费用",
+      "normal_steps": [
+        "令编辑落后，允许至少一次交错",
+        "重送同推进许可",
+        "把某WB预算耗尽"
+      ],
+      "pass_conditions": [
+        "只实际推进才扣",
+        "同许可不重复消费",
+        "耗尽后等待或拒绝",
+        "费用非零项保留"
+      ],
+      "negative_cases": [
+        "全局计数代替逐WB",
+        "重试重复扣",
+        "无限交错或无许可推进"
+      ],
+      "required_evidence": [
+        "每WB账本",
+        "许可/消费收据",
+        "实际请求及重建计量"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-SCHEDULE"
+      ]
+    },
+    {
+      "id": "F35",
+      "title": "同次必要替换与附加编辑对照",
+      "inputs": "同cut、同前沿的必要替换和附加编辑布局",
+      "operation": "组装成对请求，核对前沿前字节、位置/长度预算及控制差异",
+      "outputs": "局部窗口是否满足的可重算证据",
+      "normal_steps": [
+        "比较必要替换/同次附加两请求",
+        "另改更早保护前缀和顶层tools作反例",
+        "依VIII共享稳定前缀目标，从同一冻结scope/plan生成Worker与Editor请求；共同规则、CB renderer与公共API工具schema序列相等，职责/范围/激活差异仅出现在后置宿主I或其后的角色材料。逐项改变query、context、level、预算、system提示、schema顺序及媒体策略，报告实际首差与不适用原因；不得牺牲原tool/media协议或编辑范围来制造相同。逻辑比较结果与物理缓存usage分列，当前分离实现的旧成对比较不覆盖此新增目标。"
+      ],
+      "pass_conditions": [
+        "共同前缀和长度差可核",
+        "越前沿或控制变化不报局部免费",
+        "不推断总成本或实际命中",
+        "同一冻结plan及renderer生成相同公共序列；后置可信I区分模式；不破坏原tool/media、scope和权限；逻辑前缀一致不证明物理cache。"
+      ],
+      "negative_cases": [
+        "拿相邻历史请求凑成一对",
+        "只看生命周期而忽略API序列化"
+      ],
+      "required_evidence": [
+        "成对原生请求",
+        "共同前缀位置",
+        "布局变化和预算"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.4 稳定前缀、覆写前沿与自然边界"
+        },
+        {
+          "source": "P",
+          "section": "§3.4 覆写机会与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "U-COST-PREFIX",
+          "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-SCHEDULE",
+        "T-COST-SHARED-PREFIX"
+      ],
+      "new_shared_prefix_target": {
+        "status": "new-target-not-covered-by-prior-acceptance",
+        "prefix": "same Worker SIC teaching + same rendered CB chain + ordered public tool schema",
+        "host_I": "reference-CB boundary, authenticated mode, new WB editable scope, output protocol and activated tools",
+        "loop": "new WB -> seven ordered ops/PVI -> validated candidate -> append immutable CB -> refresh I",
+        "authorization": "host mode/role/session/job/toolID capability and current ACL; editable pvi.I cannot grant/switch mode",
+        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss"
+      }
+    },
+    {
+      "id": "F36",
+      "title": "真实缓存证据与逻辑checkpoint分开",
+      "inputs": "逻辑历史点、provider usage/缓存条件",
+      "operation": "分别记录可恢复性、实际命中/写入和未知状态",
+      "outputs": "不混淆的复用状态与费用",
+      "normal_steps": [
+        "恢复同checkpoint但不给物理缓存命中",
+        "另给真实usage类别",
+        "检查报告"
+      ],
+      "pass_conditions": [
+        "逻辑恢复不直接变成cache hit",
+        "TTL/粒度/未知有记录",
+        "不伪造免费复用"
+      ],
+      "negative_cases": [
+        "仅有hash前缀或checkpoint ID就填命中token"
+      ],
+      "required_evidence": [
+        "原usage",
+        "缓存政策版本",
+        "逻辑恢复轨迹"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.4 稳定前缀、覆写前沿与自然边界"
+        },
+        {
+          "source": "P",
+          "section": "§3.4 覆写机会与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-SCHEDULE"
+      ]
+    },
+    {
+      "id": "F37",
+      "title": "块长、输出形式和阶次可配置比较",
+      "inputs": "同任务的块边界/大小、编辑形式、层级政策",
+      "operation": "按冻结配置运行并记录实际材料/输出/重读量",
+      "outputs": "可比较但不预设最优阈值的结果",
+      "normal_steps": [
+        "改变块长与允许层级运行两配置",
+        "分别统计CB/op/索引与计费输出"
+      ],
+      "pass_conditions": [
+        "不强制CB更短",
+        "rho_content与rho_billed分别算",
+        "高阶开销不漏"
+      ],
+      "negative_cases": [
+        "套旧实验推荐阈值",
+        "把op输出量当CB全文长度"
+      ],
+      "required_evidence": [
+        "配置manifest",
+        "每块/阶次长度",
+        "原usage和tokenizer"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-SCHEDULE"
+      ]
+    },
+    {
+      "id": "F38",
+      "title": "Agent身份与内容身份分开",
+      "inputs": "共享前缀的两条逻辑路线及多Editor/多阶表示",
+      "operation": "保持明确Agent/路线身份，允许内容共享而不合并逻辑工作",
+      "outputs": "正确的Agent目录与层级/角色关系",
+      "normal_steps": [
+        "从同checkpoint建立两路线",
+        "同路线增加Editor与高阶",
+        "比较目录"
+      ],
+      "pass_conditions": [
+        "共享hash仍两路线",
+        "同路线多Editor/阶次不自动spawn",
+        "没有把所有关系塞成parent树"
+      ],
+      "negative_cases": [
+        "按内容相同去重Agent",
+        "摘要嵌套树冒充Agent谱系"
+      ],
+      "required_evidence": [
+        "路线/角色/层级目录",
+        "共享对象与独立工作记录"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F39",
+      "title": "历史checkpoint整体恢复",
+      "inputs": "一个已形成CB的明确历史点",
+      "operation": "恢复该时点Worker/Editor、PVI、工具描述/配置及层级可见状态，并按当前宿主授权和撤销重新核验可用权限",
+      "outputs": "排除未来材料的可继续工作状态",
+      "normal_steps": [
+        "在后来路线走错后选择早期cut",
+        "恢复并发起下一轮",
+        "逐阶追溯其材料",
+        "在历史曾许可而当前已撤销工具/Signal/来源读取后再次恢复并尝试访问"
+      ],
+      "pass_conditions": [
+        "起点确为早期",
+        "无checkpoint后未来污染",
+        "必要权限/版本有依据",
+        "历史描述、schema和配置不覆盖当前宿主授权、撤销及安全限制"
+      ],
+      "negative_cases": [
+        "只复制最新状态再贴旧ID",
+        "只恢复Worker不恢复编辑状态",
+        "从旧checkpoint恢复已经撤销的工具、Signal或历史读取许可"
+      ],
+      "required_evidence": [
+        "历史快照",
+        "实际Worker/Editor输入",
+        "各阶映射与配置"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F40",
+      "title": "平级分叉与原路线继续",
+      "inputs": "既有checkpoint和不同问题",
+      "operation": "整体从历史起点产生peer路线并独立工作/编辑",
+      "outputs": "两条持续路线与共享起点",
+      "normal_steps": [
+        "原路线持续执行",
+        "从历史点fork",
+        "两侧各实际推进并发布"
+      ],
+      "pass_conditions": [
+        "原路线未被停/覆盖",
+        "共同前缀固定",
+        "兄弟关系非父子"
+      ],
+      "negative_cases": [
+        "空flow复制或Studio checkpoint当fork",
+        "把发起者当父Agent"
+      ],
+      "required_evidence": [
+        "两侧事件/调用/CB",
+        "fork来源",
+        "原路线不中断"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F41",
+      "title": "从空白新建与多创建者",
+      "inputs": "一个/多个创建者及无既有链的创建请求",
+      "operation": "建立新逻辑路线并单独记录创建关系",
+      "outputs": "不伪装历史fork的新Agent",
+      "normal_steps": [
+        "由两个Agent新建空白路线",
+        "再从历史fork作对照"
+      ],
+      "pass_conditions": [
+        "新建有创建者集合",
+        "fork有来源checkpoint且非新建父子",
+        "关系可独立查"
+      ],
+      "negative_cases": [
+        "硬编码唯一parent",
+        "把同阶升阶作为新建Agent"
+      ],
+      "required_evidence": [
+        "创建/分叉两类请求与目录关系"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F42",
+      "title": "Socket历史接收点与独立权限",
+      "inputs": "已覆写checkpoint和发送/历史读取/控制权限",
+      "operation": "创建可寻址接收点，分别校验投递与派生读取",
+      "outputs": "可用且权限明确的历史交流地址",
+      "normal_steps": [
+        "授予仅Message者投递",
+        "尝试以同权限读取历史或spawn",
+        "由合法者从该点派生"
+      ],
+      "pass_conditions": [
+        "投递可成",
+        "历史读取/spawn越权拒绝",
+        "接收点明确对应历史状态"
+      ],
+      "negative_cases": [
+        "消息ACL自动等于spawnACL",
+        "任意当前链对象冒充checkpoint"
+      ],
+      "required_evidence": [
+        "地址目录",
+        "ACL",
+        "正负请求与恢复起点"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "D",
+          "section": "§2.1、§2.3、§6 协议授权、独立安全路径与协作权限"
+        },
+        {
+          "source": "P",
+          "section": "§3.1、§3.3、§7 授权和撤销保证"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F43",
+      "title": "Signal实际控制与唤醒",
+      "inputs": "授权Signal与正在工作/等待路线",
+      "operation": "控制运行、等待、唤醒、停止并使实际执行遵循",
+      "outputs": "状态和后续工作行为一致",
+      "normal_steps": [
+        "暂停正在后台工作的peer",
+        "等在途调用安全结束",
+        "确认不新发工作",
+        "唤醒继续"
+      ],
+      "pass_conditions": [
+        "权限独立",
+        "在途迟到结果不越权覆盖",
+        "状态影响真实调度"
+      ],
+      "negative_cases": [
+        "只改run_state字符串",
+        "源文本发Signal越权",
+        "暂停后仍自动派单"
+      ],
+      "required_evidence": [
+        "宿主控制事件",
+        "调用时序",
+        "停/续做状态"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "D",
+          "section": "§2.1、§2.3、§6 协议授权、独立安全路径与协作权限"
+        },
+        {
+          "source": "P",
+          "section": "§3.1、§3.3、§7 授权和撤销保证"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F44",
+      "title": "Message信箱在覆写收取",
+      "inputs": "发件者、收件Agent/信箱、消息ID及P/V用途",
+      "operation": "保存投递，在适当cut按生命周期接入并确认",
+      "outputs": "不丢不重复的消息采用与出处",
+      "normal_steps": [
+        "同消息重送两次",
+        "覆写前查看待收",
+        "覆写后检查P或下一WB V",
+        "再覆写一次"
+      ],
+      "pass_conditions": [
+        "只收一次",
+        "P/V路由正确",
+        "来源/时点保留",
+        "未确认失败不误删"
+      ],
+      "negative_cases": [
+        "收到立即写旧CB",
+        "统一I",
+        "只标delivered未进入实际上下文"
+      ],
+      "required_evidence": [
+        "投递/确认收据",
+        "cut及下一WB",
+        "实际Worker输入"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F45",
+      "title": "选择一批历史peer实际解题回传",
+      "inputs": "多条合适历史路线、问题和返回地址",
+      "operation": "派出peer Worker+Editor续做，允许真实工具，产出CB并回传",
+      "outputs": "有依据的分工结果及发起者采用",
+      "normal_steps": [
+        "选择两条早期checkpoint发送问题",
+        "每peer执行真实工具并编辑发布",
+        "原路线继续",
+        "下一cut收结果并续做"
+      ],
+      "pass_conditions": [
+        "非空peer工作与真实工具效果可验证",
+        "各自产物归属正确",
+        "回传进入发起者实际下一输入"
+      ],
+      "negative_cases": [
+        "空fork/固定回包算协作",
+        "只有callback无工具执行",
+        "结果无人采用"
+      ],
+      "required_evidence": [
+        "peer模型请求",
+        "工具真实日志/产物",
+        "peer CB",
+        "回传收据和请求者下一输入"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "U-HARNESS",
+          "section": "真实DSH与主/peer工具要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F46",
+      "title": "协作失败、取消与有限重试",
+      "inputs": "失败/超时/取消peer及稳定请求身份",
+      "operation": "保持终态和不确定事实，显式确认后才开启可能重复的新尝试",
+      "outputs": "可恢复而不静默重复的协作",
+      "normal_steps": [
+        "令peer工具失败再重送原请求",
+        "取消另一在途peer",
+        "收到迟到结果",
+        "显式重试"
+      ],
+      "pass_conditions": [
+        "原请求不自动重发",
+        "取消/失败终态不被迟到覆盖",
+        "新attempt可区分且需明确授权"
+      ],
+      "negative_cases": [
+        "恢复时盲目重做副作用工具",
+        "失败复送当新模型调用"
+      ],
+      "required_evidence": [
+        "attempt/终态/取消日志",
+        "工具次数",
+        "授权重试与迟到记录"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "U-RUNTIME",
+          "section": "常驻、恢复、安全与实验工程要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F47",
+      "title": "共享公示牌、任务认领与每cut最新视图",
+      "inputs": "共享任务书、认领者、状态和并发更新",
+      "operation": "冲突校验后更新共享board，每次覆写拉最新I",
+      "outputs": "各路线一致可见的团队任务进度",
+      "normal_steps": [
+        "两路线并发认领同任务",
+        "成功者更新进度",
+        "两侧下一cut拉取"
+      ],
+      "pass_conditions": [
+        "认领冲突不静默覆盖",
+        "共享关系在fork后仍正确",
+        "旧I不累入CB"
+      ],
+      "negative_cases": [
+        "各路线持有永不同步的副本",
+        "任务文字自授权限"
+      ],
+      "required_evidence": [
+        "board版本/冲突",
+        "认领身份",
+        "两侧实际cut视图"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F48",
+      "title": "DSH真实主Agent原生往返",
+      "inputs": "独立DSH CLI/Loader/插件、固定provider及动态session",
+      "operation": "经实际DSH到同Core，执行原生工具并继续会话",
+      "outputs": "真实DSH最终响应及chain/source/cut关联",
+      "normal_steps": [
+        "从独立DSH_HOME加载插件与profile",
+        "新建headless会话",
+        "真实工具往返至少两轮"
+      ],
+      "pass_conditions": [
+        "CLI正常退出",
+        "session动态隔离",
+        "模型/工具/body经同Core",
+        "真实返回进入DSH历史"
+      ],
+      "negative_cases": [
+        "普通HTTP脚本冒充DSH",
+        "静态header混会话",
+        "去外部provider或改用户原配置"
+      ],
+      "required_evidence": [
+        "DSH命令/Loader日志",
+        "原聊天记录",
+        "bridge绑定",
+        "真实工具与Core调用关联"
+      ],
+      "sources": [
+        {
+          "source": "U-HARNESS",
+          "section": "真实DSH与主/peer工具要求"
+        },
+        {
+          "source": "D",
+          "section": "§2.1 工作正文与承载协议"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F49",
+      "title": "DSH peer真实工具与结果采用",
+      "inputs": "DSH主请求和被选择的历史peer",
+      "operation": "peer通过获准的宿主工具执行通路（broker或等价executor）执行实际工具并回传，由主继续",
+      "outputs": "DSH主/peer两侧真实工作证据",
+      "normal_steps": [
+        "主Agent发协作问题",
+        "peer用真实工具读取/写入自有fixture产物",
+        "回传",
+        "主下一轮使用"
+      ],
+      "pass_conditions": [
+        "peer工具确有实际效果",
+        "不是仅登记call",
+        "权限/工具关联正确",
+        "回传作用于主模型输入"
+      ],
+      "negative_cases": [
+        "只提供fake工具result",
+        "peer没有工具能力却报完成",
+        "工具权限从消息继承"
+      ],
+      "required_evidence": [
+        "主/peer原生请求",
+        "宿主工具执行日志与产物摘要",
+        "回传与主下一轮"
+      ],
+      "sources": [
+        {
+          "source": "U-HARNESS",
+          "section": "真实DSH与主/peer工具要求"
+        },
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F50",
+      "title": "会话历史、收据与重启续做",
+      "inputs": "多session历史、已确认工具/发布收据及不确定在途操作",
+      "operation": "持久保存并在重启后恢复匹配，不自动重发未知副作用",
+      "outputs": "同session续轮及不变的已确认事实",
+      "normal_steps": [
+        "完成两会话并记录绑定/CB/调用",
+        "安全重启ownedCore",
+        "重送同收据",
+        "同session再续轮"
+      ],
+      "pass_conditions": [
+        "旧绑定/固定对象/调用不增",
+        "重复收据不重做",
+        "新轮新cut到两个runtime",
+        "不确定操作需显式处理"
+      ],
+      "negative_cases": [
+        "重启就新建链或丢历史",
+        "规范化普通native可选字段导致假冲突",
+        "未知调用当0或成功"
+      ],
+      "required_evidence": [
+        "前后快照/摘要",
+        "原聊天历史",
+        "receipt命中",
+        "新增轮请求与结果"
+      ],
+      "sources": [
+        {
+          "source": "U-HARNESS",
+          "section": "真实DSH与主/peer工具要求"
+        },
+        {
+          "source": "U-RUNTIME",
+          "section": "常驻、恢复、安全与实验工程要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F51",
+      "title": "Langflow官方全链可见可编辑",
+      "inputs": "官方Langflow、授权工作材料/配置及所有阶次关系",
+      "operation": "用真实组件观察两链/对应/跨阶与模型调用，编辑合法候选并执行",
+      "outputs": "官方画布中可操作的完整链路和持久结果",
+      "normal_steps": [
+        "GUI输入原生材料并看正文/协议",
+        "编辑op/PVI候选",
+        "发布",
+        "生成高阶并选择使用",
+        "沿两链和跨阶返回",
+        "实际协作/board/计量"
+      ],
+      "pass_conditions": [
+        "每项动作绑定后端且影响实际状态/请求",
+        "原档/固定CB/op/保护控制只读",
+        "缺失与权限明确"
+      ],
+      "negative_cases": [
+        "有节点/API枚举即通过",
+        "自制网页冒充Langflow",
+        "借全链编辑开放固定对象"
+      ],
+      "required_evidence": [
+        "GUI截图/操作记录",
+        "相应持久状态与实际请求",
+        "正负权限与高阶导航"
+      ],
+      "sources": [
+        {
+          "source": "U-UI",
+          "section": "官方交互验收要求"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F52",
+      "title": "Studio官方全链独立验收",
+      "inputs": "官方Studio和持久thread/typed表单",
+      "operation": "实际GUI编辑/暂停/恢复并观察所有阶次和协作，总账与Core一致",
+      "outputs": "与Langflow分开证明的Studio工作路径",
+      "normal_steps": [
+        "浏览器真正加载Studio",
+        "查看两链/各阶",
+        "从空KEEP只改PVI及追加/移除",
+        "恢复发布",
+        "查高阶与来源",
+        "看真实peer工具和账目"
+      ],
+      "pass_conditions": [
+        "实际GUI保存/执行/查看均有证据",
+        "持久thread非Agent fork",
+        "GUI问题不以Swagger/API替代"
+      ],
+      "negative_cases": [
+        "仅schema/SDK通过",
+        "画布复制当链fork",
+        "原请求控制JSON可改"
+      ],
+      "required_evidence": [
+        "独立Studio截图/交互",
+        "thread历史",
+        "Core和模型实际状态对照"
+      ],
+      "sources": [
+        {
+          "source": "U-UI",
+          "section": "官方交互验收要求"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F53",
+      "title": "常驻同Core绑定与一键状态",
+      "inputs": "本项目私有配置、独立端口/DB和owned启动信息",
+      "operation": "可重现启动、健康/归属检查，并让两个runtime连接同一Core",
+      "outputs": "稳定可访问入口与私有认证",
+      "normal_steps": [
+        "按公开可复现脚本启动owned服务",
+        "LF发布→LG读取/发布→LF读回",
+        "检查Core同链对象",
+        "再次启动状态命令"
+      ],
+      "pass_conditions": [
+        "同一事实来源",
+        "Hidden后台",
+        "不停止用户旧服务/不改系统启动或代理",
+        "凭据不进flow"
+      ],
+      "negative_cases": [
+        "临时命令是唯一启动方式",
+        "仅cap banner证明同Core",
+        "未知PID盲杀"
+      ],
+      "required_evidence": [
+        "启动/状态记录",
+        "PID归属",
+        "跨runtime新nonce发布与一致读取",
+        "认证位置"
+      ],
+      "sources": [
+        {
+          "source": "U-RUNTIME",
+          "section": "常驻、恢复、安全与实验工程要求"
+        },
+        {
+          "source": "U-UI",
+          "section": "官方交互验收要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F54",
+      "title": "合法编辑授权与敏感撤销",
+      "inputs": "操作者身份、材料权限、模型权限及宿主撤销请求",
+      "operation": "分开校验读/写/模型/Signal/工具/历史派生；专门安全路径阻断撤销依赖",
+      "outputs": "无越权泄露的原档/候选/派生层访问",
+      "normal_steps": [
+        "尝试冒充actor、以Message授工具、改固定CB、访问撤销来源及其高阶派生",
+        "再用合法主体执行允许操作"
+      ],
+      "pass_conditions": [
+        "越权无副作用",
+        "普通DELETE不等于安全撤销",
+        "高阶/缓存/工具/导出不漏撤销内容",
+        "发布对象不经普通编辑重写"
+      ],
+      "negative_cases": [
+        "只在UI隐藏而HTTP可改",
+        "控制字段从文本取得授权",
+        "高阶摘要泄漏受撤销秘密"
+      ],
+      "required_evidence": [
+        "身份/ACL正负记录",
+        "派生依赖与撤销检查",
+        "导出扫描"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.1、§2.3、§6 协议授权、独立安全路径与协作权限"
+        },
+        {
+          "source": "P",
+          "section": "§3.1、§3.3、§7 授权和撤销保证"
+        },
+        {
+          "source": "U-RUNTIME",
+          "section": "常驻、恢复、安全与实验工程要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F55",
+      "title": "可检查的故障恢复和并发发布",
+      "inputs": "进程中断、超时、重复/迟到响应和并发候选",
+      "operation": "保留真实状态与收据，显式恢复并校验版本/边界",
+      "outputs": "不丢已确认历史、不重复未知副作用的运行",
+      "normal_steps": [
+        "分别在模型派发、工具执行、发布确认丢失处中断",
+        "重启并检查",
+        "并发修订/发布同版本"
+      ],
+      "pass_conditions": [
+        "不把未知标成功",
+        "不静默重发",
+        "旧候选/迟到响应不覆盖",
+        "已确认发布幂等"
+      ],
+      "negative_cases": [
+        "仅正常重启即报所有故障通过",
+        "自动retry有副作用命令"
+      ],
+      "required_evidence": [
+        "故障注入时点",
+        "恢复前后状态",
+        "实际调用/工具次数",
+        "CAS/receipt结果"
+      ],
+      "sources": [
+        {
+          "source": "U-RUNTIME",
+          "section": "常驻、恢复、安全与实验工程要求"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-RUNTIME-GUI",
+        "T-PEER"
+      ]
+    },
+    {
+      "id": "F56",
+      "title": "完整计费类别与全角色/全阶次总账",
+      "inputs": "provider raw usage、各角色/阶次/peer调用、版本化单价及两臂共同项/新增项映射",
+      "operation": "归一互不重叠类别并逐项匹配WB一次读取、CB目标生成、Worker首次接入、Editor新增轮次与Worker前缀变化",
+      "outputs": "可从原记录独立重算的分币种总账和净差分解。",
+      "normal_steps": [
+        "构造缓存读/写、普通输入、推理/输出和缺usage混合调用",
+        "含高阶Editor与peer",
+        "独立重算",
+        "用同WB集合/同CB目标对照核对共同项只抵消一次",
+        "注入额外WB重读、额外推理输出、不同CB目标与缺价，逐项恢复差额",
+        "分列A/B方案、共享scope、实际模型/价版本与物理缓存证据状态"
+      ],
+      "pass_conditions": [
+        "不重复计费、不漏高阶/peer",
+        "缺项unknown非0",
+        "钱十进制、多币种不暗加",
+        "WB共同输入、CB共同目标、Worker首次接入和额外轮次有互斥归属，净差分解与两臂完整总账一致",
+        "CB不同或类别不匹配不得仍置差额为零"
+      ],
+      "negative_cases": [
+        "只算Worker或正文token",
+        "固定模型价格冒充实际价",
+        "无usage填0",
+        "把全部Editor输入当共同WB抵消",
+        "把新增推理/op/封装输出藏入固定CB目标",
+        "同一次前缀增长在R_E和ΔC_mix中重复计费"
+      ],
+      "required_evidence": [
+        "原usage",
+        "调用角色/阶次/模型身份",
+        "价格版本",
+        "归一规则与独立重算",
+        "逐调用/计费类别的共同项和净差映射",
+        "目标/范围差异及unknown"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "U-COST-PREFIX",
+          "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F57",
+      "title": "程序、存储、适配和工具成本",
+      "inputs": "解析/回组、编辑规则、索引/层级、调度、适配与存储/工具测量",
+      "operation": "记录实际资源数量、单位、范围及价格/未知",
+      "outputs": "与LLM支出分开的完整费用项目。",
+      "normal_steps": [
+        "运行包含升阶、追溯和peer真实工具的任务",
+        "测CPU/存储/另收费服务",
+        "缺价运行一例",
+        "A/B比较中记录共同规则/工具注册表的输入变化及装配/权限检查资源，分别归入模型输入与程序资源，不能混算"
+      ],
+      "pass_conditions": [
+        "明确测量范围/方法",
+        "不因无法测量便删除项目",
+        "fixture虚构价格明示"
+      ],
+      "negative_cases": [
+        "只记token成本",
+        "不同单位直接相加",
+        "将未知程序成本当免费"
+      ],
+      "required_evidence": [
+        "资源测量原记录",
+        "方法/单位",
+        "费用/unknown明细"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "U-COST-PREFIX",
+          "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F58",
+      "title": "时间与重叠分别计量",
+      "inputs": "真实模型、工具、串行等待、交错及任务起止时间",
+      "operation": "计算累计时长、区间并集、实际重叠与任务墙钟",
+      "outputs": "可重算且不重复相加的时间报告。",
+      "normal_steps": [
+        "运行三种调度情形及并行Editor/peer",
+        "从原时间戳独立计算",
+        "以相同调用内容对照自然等待与串行调度，确认重叠只改变时间口径，不把模型输入/输出费用归零"
+      ],
+      "pass_conditions": [
+        "累计模型时间不等于墙钟",
+        "Editor/实际工具交集真实",
+        "等待/交错单列"
+      ],
+      "negative_cases": [
+        "proposal时刻当tool_start",
+        "模型响应时间混为工具执行",
+        "重叠多次加总"
+      ],
+      "required_evidence": [
+        "原时间戳/关联ID",
+        "区间计算",
+        "墙钟范围"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        },
+        {
+          "source": "U-COST-PREFIX",
+          "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F59",
+      "title": "成本条件与真实账目分开",
+      "inputs": "同任务/源WB/压缩终点/等效CB目标、A/B前缀方案、F/H/M参数和两臂实际总账",
+      "operation": "匹配共同项，分别检验新增轮次、Worker前缀节省、局部窗口与共享前缀",
+      "outputs": "可独立重算且声明条件的ΔC/ΔT/ΔQ。",
+      "normal_steps": [
+        "保留T-COST-CONTROL的c=[10,20,30]独立验证F=30、H=10及其既定费率/控制项下ΔC=19，不将该算例当研究结果",
+        "再用无cache-read的实际fixture账",
+        "加入前缀/工具变化反例",
+        "构造同任务/同WB/同CB目标的集中/增量配对，核三项公共费用抵消及R_E−S_W",
+        "给额外WB重读、额外推理、新CB目标、首次接入类别变化和共同共同SIC提示增加各一例，保证差额恢复",
+        "A方案首次冷建/随后命中取M=F，完全无命中取M=F+H",
+        "B方案同一冻结计划下比较W/E公共前缀，I模式不同而公共序列/工具表相同；仅在实际共享证据成立时取M=0",
+        "改model/cache namespace、CP/WP/system、工具schema、context/level/预算或媒体scope，逐项触发不适用/前缀分叉，不冒充共享",
+        "正常激活工具成功、未激活工具拒绝，模型pvi.I伪造mode/capability拒绝，撤权后旧capability拒绝"
+      ],
+      "pass_conditions": [
+        "F/H是读取量而非默认命中",
+        "c_i含op/索引及实际编码，最后CB未进入下一编辑不虚计背景。一般背景费用按p_h,E(F+H)+(p_u,E−p_h,E)M+C_write重算",
+        "A不复用当前Worker前缀，B的条件优势仅为获证实的冷建差额。净差包含新增CB背景、其他额外轮次、Worker工作前缀节省、三项未匹配差额、额外前沿破坏、ΔC_mix和其他明确项目，与两臂实际总账相等。前缀节省分量与Worker全部费用差分列，恢复其余输出/调用变化，不把p_h长度式套到未命中调用。B公共计划/renderer相同，可信I激活与普通I分隔，宿主权限真实生效，原native tool/media及Editor边界完整。逻辑前缀一致不证明物理命中",
+        "局部免费不称总价0、质量收益或已实测持平",
+        "C_cache-write/C_write为写入类别相对式中已计输入价的净调整；含基础输入的完整write价不重复叠加，实际按provider互斥类别重算并以手算负例核对。"
+      ],
+      "negative_cases": [
+        "强套旧固定rho/价格/命中",
+        "忽略基线自有缓存",
+        "价值抵扣账单",
+        "当前CP/WP分离却把F全当Worker已缓存",
+        "B公共共同SIC提示增长不计",
+        "各角色按不同query/预算重算前缀",
+        "I后置但API tools前置分叉仍称共享",
+        "把模型I里的mode文字当执行授权",
+        "为共享静默丢媒体"
+      ],
+      "required_evidence": [
+        "参数/条件",
+        "同交付目标和计费类别匹配表",
+        "成对原生请求及token前缀首差",
+        "冻结scope/plan及renderer摘要",
+        "实际tool schema/envelope",
+        "宿主mode/capability与授权负例",
+        "原usage、缓存写入和两臂总账",
+        "F/H/M及所有净差项独立重算",
+        "独立质量证据或not_evaluated。B实现/机械一致性/物理缓存/经济结果分别记录，当前旧场景不自动算B通过"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "D",
+          "section": "§7 探索与后续论证"
+        },
+        {
+          "source": "P",
+          "section": "§6.3、§8 编辑质量与后续新实验"
+        },
+        {
+          "source": "U-COST-PREFIX",
+          "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
+      ],
+      "completion_dimensions": [
+        "preparation",
+        "mechanical_acceptance",
+        "research_evaluation"
+      ],
+      "new_shared_prefix_target": {
+        "status": "new-target-not-covered-by-prior-acceptance",
+        "prefix": "same Worker SIC teaching + same rendered CB chain + ordered public tool schema",
+        "host_I": "reference-CB boundary, authenticated mode, new WB editable scope, output protocol and activated tools",
+        "loop": "new WB -> seven ordered ops/PVI -> validated candidate -> append immutable CB -> refresh I",
+        "authorization": "host mode/role/session/job/toolID capability and current ACL; editable pvi.I cannot grant/switch mode",
+        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss"
+      }
+    },
+    {
+      "id": "F60",
+      "title": "新实现两工作流可执行实验",
+      "inputs": "同任务、工具环境、固定模型/提示/规则/费率和基线定义",
+      "operation": "运行基线一次集中整理与SIC增量，保留实际各自轨迹",
+      "outputs": "有冻结配置、原始记录和可验证manifest的两臂运行。",
+      "normal_steps": [
+        "冻结配置/数据/代码",
+        "从独立状态跑两臂",
+        "保存所有源、各阶产物、调用、工具和资源",
+        "独立验证",
+        "声明集中/增量的压缩终点、WB集合、CB交付目标及共同项匹配口径",
+        "分离A当前布局、B新共享方案与实际不适用scope，B另冻结公共计划/renderer/注册表及宿主模式权限",
+        "同对象机械重放只归成本隔离，真实独立生成的CB差异与质量另算，不强制同答案后冒称生成质量一致"
+      ],
+      "pass_conditions": [
+        "不能用预填最终JSON替代运行",
+        "失败保存部分工件",
+        "实际差异可归因",
+        "fixture仅机制验证",
+        "A/B与集中/增量两种比较维度分别标记，模型/前缀/工具或目标变化不能暗混成单变量效应",
+        "研究状态不由旧通过报告或逻辑相同升级成实际缓存/费用优势"
+      ],
+      "negative_cases": [
+        "复用旧丢失实验数字",
+        "两臂配置暗换",
+        "付费模型无显式授权"
+      ],
+      "required_evidence": [
+        "代码/配置/数据SHA",
+        "两臂原始轨迹",
+        "manifest",
+        "失败/完成状态"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§7 探索与后续论证"
+        },
+        {
+          "source": "P",
+          "section": "§6.3、§8 编辑质量与后续新实验"
+        },
+        {
+          "source": "D",
+          "section": "§3.1–3.4 共同成本、前缀方案与净差总账"
+        },
+        {
+          "source": "P",
+          "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "U-COST-PREFIX",
+          "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
+      ],
+      "new_shared_prefix_target": {
+        "status": "new-target-not-covered-by-prior-acceptance",
+        "prefix": "same Worker SIC teaching + same rendered CB chain + ordered public tool schema",
+        "host_I": "reference-CB boundary, authenticated mode, new WB editable scope, output protocol and activated tools",
+        "loop": "new WB -> seven ordered ops/PVI -> validated candidate -> append immutable CB -> refresh I",
+        "authorization": "host mode/role/session/job/toolID capability and current ACL; editable pvi.I cannot grant/switch mode",
+        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss"
+      }
+    },
+    {
+      "id": "F61",
+      "title": "独立质量评分与作者新实验",
+      "inputs": "实验输出、独立任务rubric和参考/证据",
+      "operation": "由独立scorer评价续做、追溯、高阶可用性、协作及资源取舍",
+      "outputs": "与机械验证分开的质量结果及不可评状态",
+      "normal_steps": [
+        "分别评分事实找回、决策续做、跨阶追溯、真实协作任务",
+        "对fixture和不完整模型输出作负例"
+      ],
+      "pass_conditions": [
+        "任务质量有独立标准",
+        "Mock为not_evaluated",
+        "缺评/unknown不当0或成功",
+        "不预设安全阶数"
+      ],
+      "negative_cases": [
+        "由HTTP200或长度下降打质量分",
+        "调用同一个fixture自证语义收益"
+      ],
+      "required_evidence": [
+        "冻结rubric/参考",
+        "独立评分代码/版本",
+        "逐项证据与不确定结果"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§7 探索与后续论证"
+        },
+        {
+          "source": "P",
+          "section": "§6.3、§8 编辑质量与后续新实验"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY"
+      ],
+      "completion_dimensions": [
+        "preparation",
+        "mechanical_acceptance",
+        "research_evaluation"
+      ]
+    },
+    {
+      "id": "F62",
+      "title": "实验数据包、来源及隐私可复验",
+      "inputs": "作者选定数据/测试包、许可和公开/私有路径配置",
+      "operation": "核实际文件/样本/哈希/许可与评分入口，构建可移植包",
+      "outputs": "真实准备状态及不泄密的重放材料",
+      "normal_steps": [
+        "验证选定数据及两个测试包",
+        "在干净目录无私有路径展开",
+        "独立校验manifest与恢复步骤"
+      ],
+      "pass_conditions": [
+        "没有把少量synthetic当完整数据",
+        "公共路径可移植",
+        "token/本机目录/runtime IDs不进公开包"
+      ],
+      "negative_cases": [
+        "下载命令存在就称数据已齐",
+        "绝对Downloads路径回落",
+        "源码snapshot带密钥"
+      ],
+      "required_evidence": [
+        "来源锁/文件SHA/样本量",
+        "许可证",
+        "干净展开记录",
+        "隐私扫描"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§7 探索与后续论证"
+        },
+        {
+          "source": "P",
+          "section": "§6.3、§8 编辑质量与后续新实验"
+        },
+        {
+          "source": "U-RUNTIME",
+          "section": "常驻、恢复、安全与实验工程要求"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F63",
+      "title": "探索设想不冒充已定协议",
+      "inputs": "作者语义空间被动启发和模型内部实现设想",
+      "operation": "保留研究问题与明确证据需求，不强造已定运行协议",
+      "outputs": "与必须实现主机制分开的研究扩展",
+      "normal_steps": [
+        "检查设计/界面/报告的功能声明",
+        "若做探索实验单独标注触发与评价方法"
+      ],
+      "pass_conditions": [
+        "不把语义邻近交流默认当已实现/必须固定阈值",
+        "不据设想削减显式Socket或N阶机制"
+      ],
+      "negative_cases": [
+        "未运行embedding/传播便称语义空间完成",
+        "把模型内部训练设想当新代码已有能力"
+      ],
+      "required_evidence": [
+        "声明清单",
+        "探索配置/实验另册",
+        "主机制验收不受其替代"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§7 语义空间及模型内部实现设想"
+        },
+        {
+          "source": "P",
+          "section": "§8 讨论与后续论证"
+        }
+      ],
+      "requirement_kind": "research-boundary-not-a-fixed-runtime-protocol",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F64",
+      "title": "共享同阶链和高阶产物而非强制双份",
+      "inputs": "同一Agent中Worker及多个Editor可共享的稳定材料与高阶CB",
+      "operation": "共同引用已有产物，同时保留各自提示、源解释、模型绑定和活动选择",
+      "outputs": "可共享又可分工的内部上下文关系",
+      "normal_steps": [
+        "生成一份高阶CB",
+        "让Worker与两个Editor都选择它",
+        "分别给各角色不同提示/预算并实际调用"
+      ],
+      "pass_conditions": [
+        "不为角色强制复制两套互不共享原料的链",
+        "三角色确实引用同份合法产物",
+        "活动选择和绑定分别明确"
+      ],
+      "negative_cases": [
+        "上下文ID被解释成必须孤立数据",
+        "共享便混掉角色权限或源解释"
+      ],
+      "required_evidence": [
+        "共享成员身份",
+        "三个实际请求",
+        "角色配置与选择记录"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F65",
+      "title": "普通编辑的任意中间状态回放",
+      "inputs": "原WB、固定有序操作及授权状态",
+      "operation": "按指定op前缀重放到中间表示，并可继续重放到发布结果",
+      "outputs": "可核对每一步的历史表示和原文",
+      "normal_steps": [
+        "在WB上执行至少四个不同操作",
+        "读取第0/1/2/末步表示",
+        "与独立顺序执行器逐字比对",
+        "重读固定CB"
+      ],
+      "pass_conditions": [
+        "中间状态可取得不只是最终摘要",
+        "最终与固定产物一致",
+        "回放不改变CB或倒转真实工具效果"
+      ],
+      "negative_cases": [
+        "只保留op标题不能执行",
+        "回放重新发工具",
+        "跨撤销边界恢复敏感内容"
+      ],
+      "required_evidence": [
+        "原WB与op",
+        "各步结果/摘要",
+        "固定CB不变及工具次数"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§5.2 双维索引、细粒度锚与追溯教学"
+        },
+        {
+          "source": "P",
+          "section": "§6.2 多阶记忆与双维导航"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F66",
+      "title": "块长与编辑噪音三类独立测量",
+      "inputs": "同源不同块长/阶次及有依据/无依据新增、失真、格式漂移样本",
+      "operation": "独立区分并测量三类编辑噪音、事实保真和续做",
+      "outputs": "有明确类别/分母和不确定状态的质量报告",
+      "normal_steps": [
+        "冻结含事实/建议的原材料",
+        "注入无依据事实、来源相反表达、格式错误和合法新建议四例",
+        "跨块长/阶次执行评价"
+      ],
+      "pass_conditions": [
+        "三类能分别检出或标未知",
+        "合法带性质的建议不当幻觉",
+        "格式合规不代替语义保真"
+      ],
+      "negative_cases": [
+        "用压缩率充当质量",
+        "套旧噪音数字/最优块长",
+        "裁判失败直接记成功"
+      ],
+      "required_evidence": [
+        "原材料/候选",
+        "标注rubric及独立结果",
+        "块长/阶次/噪音统计"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§7 探索与后续论证"
+        },
+        {
+          "source": "P",
+          "section": "§6.3、§8 编辑质量与后续新实验"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY"
+      ],
+      "completion_dimensions": [
+        "preparation",
+        "mechanical_acceptance",
+        "research_evaluation"
+      ]
+    },
+    {
+      "id": "F67",
+      "title": "敏感材料专门路径的实际保证",
+      "inputs": "被标为敏感的材料、派生关系及声明的撤销/脱敏/不可逆清理政策",
+      "operation": "通过独立授权路径施加所声明保证，阻断旧op/快照/分支/各阶回溯旁路",
+      "outputs": "与实际措施一致且不混同普通DELETE的安全结果",
+      "normal_steps": [
+        "令敏感片段进入原WB、op、各阶表示和历史分支",
+        "执行专门政策",
+        "从所有读取/回放/导出入口尝试恢复"
+      ],
+      "pass_conditions": [
+        "访问撤回只声称阻断授权读取",
+        "若声称物理或密码学不可逆，额外核其实际存储/密钥保证",
+        "普通编辑不改已发布对象"
+      ],
+      "negative_cases": [
+        "只藏UI却声称擦除",
+        "旧op或高阶正文泄漏",
+        "把普通DELETE当不可逆删除"
+      ],
+      "required_evidence": [
+        "政策和授权",
+        "派生依赖",
+        "各入口负例",
+        "与保证相符的存储/密钥处置证据"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.1、§2.3、§6 协议授权、独立安全路径与协作权限"
+        },
+        {
+          "source": "P",
+          "section": "§3.1、§3.3、§7 授权和撤销保证"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F68",
+      "title": "后续PVI更正实际影响工作",
+      "inputs": "已固定的错误结论及后续有来源纠正",
+      "operation": "在新P/V/I表达纠正，并让Worker/Editor沿新解释继续",
+      "outputs": "旧依据仍在而当前使用有明确更正",
+      "normal_steps": [
+        "发布含旧结论的CB并保存摘要",
+        "通过新P或V/I纠正",
+        "让下一Worker任务与Editor输入使用新解释"
+      ],
+      "pass_conditions": [
+        "旧CB/op/对应不变",
+        "实际后续请求包含更正及来源",
+        "能分辨旧事实记录与当前有效解释"
+      ],
+      "negative_cases": [
+        "为恢复纯净改旧CB",
+        "仅发消息未被采用",
+        "新解释抹掉证据链"
+      ],
+      "required_evidence": [
+        "旧对象前后摘要",
+        "新通信/视图",
+        "实际后续输入与任务判断"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        },
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PVI",
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F69",
+      "title": "后到材料不冒充Editor已见范围",
+      "inputs": "编辑中WB范围与之后到达的工具结果/用户材料",
+      "operation": "保留冻结范围与后到材料来源，按声明边界安全纳入本次或后续块",
+      "outputs": "材料不丢且op能精确说明谁处理了什么",
+      "normal_steps": [
+        "Editor看到已有进展后保持在途",
+        "让真实工具结果晚到",
+        "完成编辑并继续",
+        "回看最终WB/CB与下一块"
+      ],
+      "pass_conditions": [
+        "后到材料保留",
+        "不会被伪称为Editor已审",
+        "同阶对应可回溯实际边界",
+        "协议完整"
+      ],
+      "negative_cases": [
+        "晚到结果覆盖冻结源",
+        "无声丢新材料",
+        "为等关联闭合而从不利用工具期编辑"
+      ],
+      "required_evidence": [
+        "任务范围快照",
+        "到达事件",
+        "WB边界/对应",
+        "实际encode和下一调用"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.3 七类操作与持久操作通信"
+        },
+        {
+          "source": "P",
+          "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§1、§2.4 持续触发、边界/等待/交错与编辑噪音"
+        },
+        {
+          "source": "P",
+          "section": "§3.2、§3.4 分块与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§2.2 WB链、CB链与增量循环"
+        },
+        {
+          "source": "P",
+          "section": "§3.2 双链与逐块覆写"
+        },
+        {
+          "source": "O",
+          "section": "§2.1、§6.2 机制正文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-TEXT"
+      ]
+    },
+    {
+      "id": "F70",
+      "title": "活动表示切换的边界和缓存代价",
+      "inputs": "各阶固定表示、角色活动选择和切换请求",
+      "operation": "在明确边界切换实际采用表示，保留原档并记录前缀/重建影响",
+      "outputs": "一致的角色活动视图及真实切换开销",
+      "normal_steps": [
+        "Worker选低阶、Editor选共享高阶",
+        "在后续边界让Worker切至高阶",
+        "捕获前后实际请求及读取路径"
+      ],
+      "pass_conditions": [
+        "角色选择分别可见",
+        "固定对象不变",
+        "被概括下阶P仍可追溯",
+        "切换不自动记免费"
+      ],
+      "negative_cases": [
+        "后台改view不留边界",
+        "把高阶选择等同丢弃下阶",
+        "所有请求强制展开全部P"
+      ],
+      "required_evidence": [
+        "选择/切换记录",
+        "两侧请求",
+        "前缀差异和费用",
+        "下阶读取"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§2.4 稳定前缀、覆写前沿与自然边界"
+        },
+        {
+          "source": "P",
+          "section": "§3.4 覆写机会与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F71",
+      "title": "Editor独有持续材料同样递归",
+      "inputs": "Editor独有工作材料及共享CB背景",
+      "operation": "按相同双链机制整理独有材料，再形成/采用更高阶CB",
+      "outputs": "有内部上下文归属且可追溯的Editor递归表示",
+      "normal_steps": [
+        "为一个Editor产生持续独有材料",
+        "形成两级以上WB/CB",
+        "与共享链一起供它后续编辑使用"
+      ],
+      "pass_conditions": [
+        "独有材料有本阶双链/跨阶成员",
+        "不强制混入Worker原WB",
+        "共享与独有可共同使用",
+        "不产生新Agent"
+      ],
+      "negative_cases": [
+        "只给Worker升阶",
+        "Editor独有材料只截断",
+        "把提示控制字段当可编辑源"
+      ],
+      "required_evidence": [
+        "Editor内部上下文/层级目录",
+        "真实输入",
+        "原材料追溯与角色身份"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§2.5 递归编辑：从一阶到N阶CB"
+        },
+        {
+          "source": "P",
+          "section": "§3.5 递归编辑与N阶CB"
+        },
+        {
+          "source": "O",
+          "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§1 一个Agent中的工作、编辑与程序"
+        },
+        {
+          "source": "P",
+          "section": "§3.1 一个Agent及其内部工作上下文"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-HIERARCHY"
+      ]
+    },
+    {
+      "id": "F72",
+      "title": "任务和阶段对齐的信息放置",
+      "inputs": "针对既有任务/阶段的后到消息、明确关联与允许重建区域",
+      "operation": "按语义关联组织新P/V/I及任务栏，而非无序堆尾；不改旧固定块",
+      "outputs": "可定位到相关任务/阶段且代价明确的新信息",
+      "normal_steps": [
+        "交错推进任务A/B",
+        "在B工作时收到针对A的迟到线索",
+        "在合法覆写机会将线索关联到A的当前任务视图/新解释",
+        "继续相关任务"
+      ],
+      "pass_conditions": [
+        "线索保留原到达时点与关联阶段",
+        "相关工作能定位采用",
+        "旧CB/op不动",
+        "扩大重建范围另计费"
+      ],
+      "negative_cases": [
+        "为了放回A原位置改旧CB",
+        "把语义排列当现实事件发生顺序",
+        "所有消息只堆无关联尾部"
+      ],
+      "required_evidence": [
+        "任务关联和生命周期",
+        "实际请求布局",
+        "工作采用",
+        "旧块摘要及前沿代价"
+      ],
+      "sources": [
+        {
+          "source": "D",
+          "section": "§6 额外价值：从已有经验分叉并交流"
+        },
+        {
+          "source": "P",
+          "section": "§7 额外协作：让已有经验继续工作"
+        },
+        {
+          "source": "D",
+          "section": "§4 P、V、I：内容怎样延续"
+        },
+        {
+          "source": "P",
+          "section": "§5 P/V/I与各阶工作视图"
+        },
+        {
+          "source": "D",
+          "section": "§2.4 稳定前缀、覆写前沿与自然边界"
+        },
+        {
+          "source": "P",
+          "section": "§3.4 覆写机会与三类推进"
+        },
+        {
+          "source": "D",
+          "section": "§5.1 持续更新工作条件"
+        },
+        {
+          "source": "P",
+          "section": "§6.1 持续维护当前工作条件"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-PEER",
+        "T-PVI"
+      ]
+    },
+    {
+      "id": "F73",
+      "title": "压缩/编辑提示与引擎调研和新对照包",
+      "inputs": "各家harness公开压缩prompt、公开LLM/非LLM压缩编辑引擎及SIC任务目标",
+      "operation": "核原始来源/许可/版本，提取适配点，编写SIC编辑prompt/响应工具/Worker教学/规则包，再冻结新对照实验",
+      "outputs": "可追溯资料清单、可运行版本包与独立比较方案/结果",
+      "normal_steps": [
+        "收集代表harness的公开压缩prompt及公开LLM引擎、非LLM规则方案，逐项记录原链接/版本/SHA/许可与不可得项",
+        "形成SIC编辑prompt、响应schema、Worker导航教学和确定程序规则的适配包",
+        "在同组新任务上比较公开方案/适配变体，冻结模型、材料边界、规则与价格并独立评分"
+      ],
+      "pass_conditions": [
+        "不是仅列论文标题或写一个通用prompt",
+        "适配包说明默认KEEP、op/PVI、两链/跨阶导航与权限边界",
+        "对照变化/适用范围清楚，非LLM方案的零模型调用和程序费用如实记录",
+        "资料/测试包实际可用且版本冻结",
+        "缺来源/适配包不能记准备完成；未执行机械对照不能记机械通过；真实质量未评价时研究维度记not_evaluated，不预填结果"
+      ],
+      "negative_cases": [
+        "沿用原稿E1/E2旧结果",
+        "未取公开原文便称已调研",
+        "不同prompt/引擎暗换任务模型后作单变量结论",
+        "机械格式通过冒充语义理想"
+      ],
+      "required_evidence": [
+        "原始公开来源/许可/版本锁",
+        "提取与适配说明",
+        "prompt/schema/教学/规则包SHA",
+        "新两臂/变体原始轨迹与独立成本报告；真实质量报告或明确not_evaluated及原因（研究维度）"
+      ],
+      "sources": [
+        {
+          "source": "O",
+          "section": "§3.1 机制正文：调研harness压缩prompt、公开LLM/非LLM引擎并比较"
+        },
+        {
+          "source": "A01",
+          "section": "第一次补正§3.1：SIC编辑prompt、响应工具与Worker教学定义语义理想"
+        },
+        {
+          "source": "D",
+          "section": "§2.4、§5.1、§7 编辑目标、工作条件与新实验"
+        },
+        {
+          "source": "P",
+          "section": "§3.4、§6.3、§8 编辑质量与后续论证"
+        },
+        {
+          "source": "D",
+          "section": "§7 探索与后续论证"
+        },
+        {
+          "source": "P",
+          "section": "§6.3、§8 编辑质量与后续新实验"
+        }
+      ],
+      "requirement_kind": "required-functional-target",
+      "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
+      "acceptance_fixture_ids": [
+        "T-COST",
+        "T-TEXT",
+        "T-HIERARCHY"
+      ],
+      "completion_dimensions": [
+        "preparation",
+        "mechanical_acceptance",
+        "research_evaluation"
+      ]
+    }
+  ],
+  "cost_definitions": {
+    "scope": "同任务/WB集合/终点/等效CB目标的条件对照；A当前分离，B共享教学前缀是新实现目标；无已实测缓存/费用优势",
+    "conditions": [
+      "同模型/tokenizer/价版本，集中基线与增量同源WB集合、同终点和等效CB目标",
+      "WB首次读取、目标生成及Worker首次接入按同计费类别匹配，目标/推理/封装或缓存不同则恢复差额",
+      "F/H是CB背景读取次数而非命中结论，含正文/op/索引/编码",
+      "A分离CP/WP及renderer无已验证跨角色共享；首次冷建随后命中只是明确控制情形",
+      "B同一Worker SIC教学+CB链+同序同构公共schema由同一冻结plan/renderer生成，职责/CB分界/新WB范围/输出协议在后置可信I",
+      "B的真实宿主mode/capability与普通pvi.I分隔；旧CB、其他job及未激活工具不可target",
+      "B需同model/provider/cache namespace/完整token与位置，level/context/预算/媒体不符明确回A",
+      "共同教学/注册表净增长另计；逻辑相同不升级物理cache，未知usage/价格不填零"
+    ],
+    "definitions": {
+      "c_i": "CB_i正文、持久op和实际呈现索引在指定Editor计数器下的背景输入量",
+      "F": "Σ_(i=1)^(N−1)c_i，各CB首次进入后续Editor的量；最后CB不计",
+      "H": "Σ_(i=1)^(N−2)(N−i−1)c_i，后续重复量；命中需另证",
+      "S_W": "基线Worker全部费用减SIC Worker全部费用，含首次接入、重读、后缀重建及输出，可为负",
+      "D": "逐项保留其他提示、缓存类别、程序、存储和维护差额，不作隐藏支出的容器",
+      "rho_content": "CB可见正文/WB正文，声明计数器与模型",
+      "rho_billed": "Editor计费输出/声明源长度，声明计数器与模型",
+      "M": "F+H中实际未命中背景量；A首次冷/后续命中取F，全冷取F+H，B获证理想共享取0",
+      "S_W_prefix": "Worker工作材料前缀节省分量，均命中时Σ_j p_h,W(ell_base,j−ell_SIC,j)；与原S_W全部Worker费用差分列",
+      "R_E": "额外Editor轮次中除CB背景以外的旧WB重读、提示/封装、额外推理/新输出与调用费",
+      "Delta_C_mix": "共同Worker SIC教学/公共表在已配对调用上的净增输入费；非CP/WP全文拼接；额外轮次读取整份提示已在R_E",
+      "D_front": "超出同次必要覆写范围的额外前沿破坏；同scope/前缀/位置/长度条件下局部附加编辑为0",
+      "C_cache_write": "C_cache-write/C_write为写入类别相对式中已计输入价的净调整；含基础输入的完整write价不重复叠加，实际按provider互斥类别重算并以手算负例核对。"
+    },
+    "equations": [
+      "C_E_CB-bg=p_h,E(F+H)+(p_u,E−p_h,E)M+C_cache-write",
+      "A_conditional M=F: p_u,E F+p_h,E H (+actual writes)",
+      "B_ideal_conditional M=0: p_h,E(F+H) (+actual writes)",
+      "Delta_C=C_E_CB-bg+R_E−S_W_prefix+Delta_C_WB_once+Delta_C_CB_target+Delta_C_Worker_CB_first+D_front+Delta_C_mix+Delta_C_other",
+      "F+H≈c_avg*N*(N−1)/2",
+      "C_LLM=Σ_jΣ_c p_jc*t_jc; mutually exclusive categories",
+      "C_total=C_LLM+C_program+C_storage"
+    ],
+    "output_price_condition": "p_o为单一编辑输出价的控制表示；实际不同输出类别分别计价",
+    "fallback": "条件变化回实际总账，基线自身缓存不省略；质量缺评保持not_evaluated，价值不抵扣现金费用"
+  },
+  "completion_dimensions": {
+    "preparation": "来源、配置、提示/规则、评价器和适配包已实际准备且冻结",
+    "mechanical_acceptance": "自有fixture/确定性规则对工作流、计量、评价器及失败语义的实际验证",
+    "research_evaluation": "真实任务质量与效果的新独立证据；未执行保持not_evaluated，不能由fixture通过推得"
+  }
+}
