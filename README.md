@@ -4,6 +4,12 @@
 
 This is the public **v0.1 prerelease**. The release is updated in place; pin a source commit and artifact SHA256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)). Paper DOI: **10.5281/zenodo.24051713**.
 
+## Video demo
+
+[YouTube](https://youtu.be/s0I9LJ9-By8) · [Bilibili](https://www.bilibili.com/video/BV1TTWn6aERh/)
+
+The video illustrates the mechanism; the acceptance reports below define the verified implementation scope.
+
 ## Current results
 
 | Area | Included and verified scope |

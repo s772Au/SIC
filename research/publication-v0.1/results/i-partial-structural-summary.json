@@ -1,0 +1,30 @@
+{
+  "private_report_sha256": "19f6d650377eb24fab36ae74d754e98de60b7e3852f4286d210b9a97648357a0",
+  "audit_completed": true,
+  "public_facts": {
+    "run_succeeded": false,
+    "scope": "One exploratory real installed DSH→SIC shared-I→local user-authorized 8341 gateway case; partial structural wire evidence, not end-to-end acceptance, quality generalization, cache savings or physical KV proof.",
+    "stage_exit_codes": [
+      0,
+      1
+    ],
+    "same_native_session": true,
+    "provider_sdk_calls_completed": 8,
+    "http_headers_captured": false,
+    "task_answer_quality_scored_by_this_audit": false,
+    "worker_calls": 4,
+    "editor_calls": 4,
+    "requested_and_gateway_returned_model": "sonnet-5.5; underlying model revision unverified",
+    "cb_count": 3,
+    "pending_count": 1,
+    "published_editor_jobs": 3,
+    "failed_editor_jobs": 1,
+    "actual_native_read_calls": 4,
+    "native_results_and_around_dispatch_ledger_correlated": true,
+    "native_worker_projection_records": 4,
+    "all_eight_sdk_response_IDs_uniquely_linked_to_core_request_response_ledger": true,
+    "core_to_sdk_messages_and_tools_exactly_preserved": true
+  },
+  "quality": "not_evaluated",
+  "physical_cache_benefit": "unknown"
+}

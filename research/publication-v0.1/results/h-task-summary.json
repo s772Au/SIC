@@ -1,0 +1,42 @@
+{
+  "engine": "sic",
+  "case_count": 3,
+  "mechanical_passed": 2,
+  "quality_scored": 2,
+  "exact_matches": 2,
+  "provider_calls_added": 0,
+  "run_label": "h",
+  "private_report_sha256": "d8b084e3e9ecd070035d9a5264a8164a307eb17f0099f77d738e8b81e17b5aa1",
+  "publication_transform": "field-selected summary; raw source report and sessions excluded",
+  "cases": [
+    {
+      "case_id": "retention",
+      "mechanical_passed": true,
+      "quality": {
+        "format_valid": true,
+        "exact_match": true,
+        "status": "exploratory-scored",
+        "score": 1,
+        "denominator": 1
+      }
+    },
+    {
+      "case_id": "late-correction",
+      "mechanical_passed": true,
+      "quality": {
+        "format_valid": true,
+        "exact_match": true,
+        "status": "exploratory-scored",
+        "score": 1,
+        "denominator": 1
+      }
+    },
+    {
+      "case_id": "multi-hop",
+      "mechanical_passed": false,
+      "quality": {
+        "status": "not_evaluated"
+      }
+    }
+  ]
+}

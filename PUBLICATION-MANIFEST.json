@@ -45,8 +45,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 5574,
-      "sha256": "b60ac71c0bd448450670ca80e237cc9455b22380affb9d518e295d417e347f36"
+      "bytes": 5805,
+      "sha256": "a7ecacd250a0eb80a7742976aa4f4b43d99c818bb6bfc9678be387e52b6976ac"
     },
     {
       "path": "RELEASE-v0.1.md",
@@ -1227,6 +1227,31 @@
       "path": "research/dsh-live-smoke/tasks.json",
       "bytes": 4594,
       "sha256": "7d9fa24dfbd33e12fc68178c9c602bd74cc63c466940f8012be79f364da46908"
+    },
+    {
+      "path": "research/publication-v0.1/README.md",
+      "bytes": 3516,
+      "sha256": "4f899d584253dd6ba397c03e4688151c0485b39b357db3181c2e684f77084a14"
+    },
+    {
+      "path": "research/publication-v0.1/results/core-regression-summary.json",
+      "bytes": 3035,
+      "sha256": "e3761618e49a7432eb022c0ab66196a5499db09b13b6fc5c8f9a290a7a8b5e9c"
+    },
+    {
+      "path": "research/publication-v0.1/results/g-task-summary.json",
+      "bytes": 1122,
+      "sha256": "f45b204ef4ca11427b85a7fd8a5fc0e9af1d3c8c8500da7f02f47052b59e8984"
+    },
+    {
+      "path": "research/publication-v0.1/results/h-task-summary.json",
+      "bytes": 1005,
+      "sha256": "eeff974fae0819749e0a6e9dd43d4f161fbff81a142f174fca5561d2f91e94f9"
+    },
+    {
+      "path": "research/publication-v0.1/results/i-partial-structural-summary.json",
+      "bytes": 1229,
+      "sha256": "34d75ac6f7170865f42c508ae3c77e456f1e7d47042592978c29fa0be93d2482"
     },
     {
       "path": "scripts/audit_pi_bridge_roundtrip.mjs",
