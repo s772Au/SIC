@@ -1,0 +1,15 @@
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: sic-core-rust
+    model: sic-worker
+- insert:
+    - id: sic-core-rust-dsh
+      name: ./index.mjs
+      config:
+        provider: sic-core-rust
+        baseURL: http://127.0.0.1:18890/v1
+        apiKeyEnv: SIC_CORE_TOKEN
+        model: sic-worker
+        maxTokens: 4096
+        fixtureReadTool: false

@@ -1,0 +1,4 @@
+Package version: crc-catalog 2.5.0
+Upstream repository: https://github.com/akhilles/crc-catalog
+Exact source commit from the crate's .cargo_vcs_info.json: ed4ad631f22b05055c21a3a4127eb7cf6d75bb62
+License files copied verbatim from that commit: LICENSES/MIT.txt and LICENSES/Apache-2.0.txt

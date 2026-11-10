@@ -6,3 +6,4 @@
 *.zip binary
 benchmarks/vendor/babilong_metrics.py -text
 benchmarks/vendor/BABILONG-LICENSE -text
+rust-core/third-party-licenses/** -text

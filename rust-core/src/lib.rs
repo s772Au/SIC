@@ -1,0 +1,32 @@
+//! SIC's Rust core. Features are exposed only as they are implemented and tested.
+
+pub mod archive;
+pub mod board;
+pub mod core;
+pub mod decision;
+pub mod dsh;
+pub mod dsh_bridge;
+pub mod editing;
+pub mod error;
+pub mod ipc;
+pub mod ipc_store;
+pub mod legacy;
+pub mod legacy_activation;
+pub mod legacy_config;
+pub mod legacy_import;
+pub mod legacy_upgrade;
+pub mod model_policy;
+pub mod peer_process;
+pub mod peer_runner_client;
+pub mod peer_supervisor;
+pub mod peer_tasks;
+pub mod peer_watch;
+pub mod prefix;
+pub mod protocol;
+pub mod provider;
+pub mod scheduler;
+pub mod server;
+pub mod storage;
+pub mod tool_dispatch;
+pub mod tool_store;
+pub mod toolset;

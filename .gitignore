@@ -1,4 +1,10 @@
 /target/
+/rust-core/target/
+/rust-core/.local/
+/rust-core/release/
+/rust-core/data/
+/rust-core/*.db*
+/rust-core/*.sqlite*
 /*.db
 /*.db-shm
 /*.db-wal
