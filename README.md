@@ -2,13 +2,15 @@
 
 **Streaming incremental context editing for continuing agent work.** Worker models, semantic Editor models and deterministic programs maintain one Agent's working context. Compression is one available edit.
 
-This repository contains the Python **v0.1 prerelease** and the separate **Rust v0.1.1 lean preview**. Pin a source commit and artifact SHA256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)). Paper DOI: **10.5281/zenodo.24051713**.
+This repository contains the Python **v0.1 prerelease** and the separate **Rust v0.1.2 lean preview**. Pin a source commit and artifact SHA256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)). Paper DOI: **10.5281/zenodo.24051713**.
 
-Source code and experimental-materials archive: [Zenodo v0.1](https://doi.org/10.5281/zenodo.24052123). That archive is a fixed snapshot of v0.1 and does not contain the later Rust v0.1.1 implementation.
+Source code and experimental-materials archive: [Zenodo v0.1](https://doi.org/10.5281/zenodo.24052123). That archive is a fixed snapshot of v0.1 and does not contain the later Rust v0.1.2 implementation.
 
-## Rust v0.1.1 lean preview
+## Rust v0.1.2 lean preview
 
-The independent [`rust-core/`](rust-core/) implements a single Editor with a waiting Worker, a common logical prefix with role-specific I activation, dynamic tool expansion and reclamation, a decision tree, and Socket-based peer communication. Its SQLite store is separate from the Python store. See the [Rust quick start](rust-core/快速开始.md), [acceptance scope](rust-core/LEAN-ACCEPTANCE.md), and [v0.1.1 release](https://github.com/s772Au/SIC/releases/tag/v0.1.1).
+The independent [`rust-core/`](rust-core/) implements a single Editor with a waiting Worker, a common logical prefix with role-specific I activation, dynamic tool expansion and reclamation, a decision tree, and Socket-based peer communication. Its SQLite store is separate from the Python store. See the [Rust quick start](rust-core/快速开始.md), [acceptance scope](rust-core/LEAN-ACCEPTANCE.md), and [v0.1.2 release](https://github.com/s772Au/SIC/releases/tag/v0.1.2).
+
+v0.1.2 is a development release, not full F01–F73 acceptance: the current audit is 23 implemented / 49 partial / 1 other (F63), with 43 live status rows and 92 cited files. The complete Rust suite passes 417/417 after a Windows test-name portability fix. F53 (same-Core Langflow/LangGraph runtime binding and one-click status) is accepted; F51/F52 official GUI editing and peer/tool/accounting evidence remain partial.
 
 Real DSH and the fixed OpenDesign model completed bounded read-only synthetic tool roundtrips for a main Agent and a single peer. An opt-in serial peer watcher also completed a DSH built-in `read` roundtrip with a local mock model. These results do not establish production readiness, arbitrary external-tool safety, comprehensive migration of Python history or a physical provider cache hit. The Windows ARM64 release bundle includes both Rust source and executable binaries; other platforms can build from source but are not covered by that binary acceptance.
 
