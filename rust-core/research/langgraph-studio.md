@@ -89,6 +89,23 @@ mouse-driven form save/reload; the read-only portion is genuine GUI.
   `langflow-read-studio-candidate.png`.
 - This is a real cross-runtime read of the Studio-published candidate.
 
+## Cross-runtime write back
+
+- A new source/job was created on the Studio-published chain
+  `chain_4e68...`: job `job_5c51e52b45cc41119955bd31488297fc`.
+- The isolated **Langflow canvas** edited the candidate P/V/I in the official
+  SIC candidate node; the Core read back revision 1 with
+  `P = "Round 184 LF cross P"`.
+- The same Langflow canvas then ran `发布此版本` with expected revision 1 /
+  expected cut 1; Rust Core moved the chain to `cut_seq=2` and the job to
+  `published`.
+- This is a real Langflow write on a Studio-published chain, complementing the
+  earlier Studio write read by Langflow.
+
+The exact latest CB identity was not asserted from the cross-write because the
+subsequent `cut.get` view still displayed the prior CB; this is a remaining
+inspection gap, not a claim of a clean nonce round trip.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;
