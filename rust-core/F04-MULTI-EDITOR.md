@@ -107,7 +107,7 @@ Core 的三处单 Editor 收口：
   不完整发布与显式拒绝多 Editor 模型派发。
 - 已完成（2026-11-12）：per-editor claim，`edit.run` 的 `editor` 参数（多 Editor 必填）、
   按 editor 过滤可编辑单元、job/editor/分工只进可信 I、两个 Editor 可同时调用 Provider，
-  全部到齐才 ready；`runtime.abandon` 支持多 Editor 显式取消；`tests/multi_editor_dispatch.rs`
+  全部到齐才 ready；`runtime.abandon` 支持多 Editor 显式取消；`tests/multi_editor_concurrency.rs`
   用 barrier 证明并发、公共前缀 digest 相同、各自 I 带 editor/分工，并核对合并与 KEEP。
 - 已完成（2026-11-12 第二轮）：`edit.candidate.update` 支持按 editor 修订（CAS、其余响应
   不变、跨 scope 拒绝、重放记录带 editor）；每 Agent 同时在途 Editor 上限 4，超出返回

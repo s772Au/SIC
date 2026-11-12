@@ -49,7 +49,7 @@
 - 预算：`edit.run` 先检查无私有背景的基础请求是否能放进 `max_input_tokens`/`context_window`；能放下时，从所选私有层级起按层级升序尝试已形成的表示，选用最低且能放下的层级并标 `fallback`，全部放不下返回 413 `editor_context_over_budget`，不截断、不调用 Provider。自动“形成”高阶表示仍由宿主通过 `hierarchy.form` + 发布驱动，Core 只负责预算内选择与拒绝。
 
 - 已完成：`hierarchy.context.create` 的 `editor` 归属与 `editor:<id>` 命名；共享 role view 拒绝私有上下文；`hierarchy.select` 只接受 owner 的 `editor:<id>`；私有材料 ingest、双层 WB/CB 形成与发布；`edit.run` 将所选私有 CB 作为 `editor_private_background`（scope=private、read_only）放入可信 I，共享前缀 digest 与兄弟 Editor 相同，Worker/其他 Editor 不可见。
-- 测试：`tests/editor_private_context.rs`（归属/命名/选择拒绝/两级私有 CB），`tests/multi_editor_dispatch.rs`（e1 私有背景只出现在 e1 请求、e2 不可见、共享前缀 digest 不变）。
+- 测试：`tests/editor_private_context.rs`（归属/命名/选择拒绝/两级私有 CB），`tests/multi_editor_concurrency.rs`（e1 私有背景只出现在 e1 请求、e2 不可见、共享前缀 digest 不变）。
 - 未完成：预算驱动/自动升阶、私有二阶以上选择的完整矩阵、私有与共享 background 的组合、真实模型证据。
 - 取消：`tests/editor_concurrency_abandon.rs` 证明 abandon 一个 Editor 后整单终止、晚响应不采纳、私有 role view/owner 保持；宿主重试流程仍待验收。
 
