@@ -52,6 +52,38 @@ fn chat_roundtrip_and_edit_leave_controls_and_tool_links_in_sidecar() {
 }
 
 #[test]
+fn chat_reasoning_is_preserved_as_opaque_assistant_metadata() {
+    let raw = json!({"messages":[
+        {"role":"user","content":"fixture question"},
+        {"role":"assistant","content":null,"reasoning_content":"opaque fixture reasoning",
+         "tool_calls":[{"id":"call-1","type":"function","function":{"name":"read","arguments":"{}"}}]},
+        {"role":"tool","tool_call_id":"call-1","content":"fixture result"}
+    ]});
+    let decoded = decode("openai-chat", &raw).unwrap();
+    assert!(
+        decoded
+            .units
+            .iter()
+            .all(|unit| unit.text != "opaque fixture reasoning")
+    );
+    assert_eq!(encode(&decoded).unwrap(), raw);
+    let changed = encode(&edited(decoded, "fixture result", "edited result")).unwrap();
+    assert_eq!(
+        changed["messages"][1]["reasoning_content"],
+        "opaque fixture reasoning"
+    );
+    assert_eq!(changed["messages"][2]["content"], "edited result");
+    assert!(
+        decode(
+            "openai-chat",
+            &json!({"messages":[{"role":"user","content":"x","reasoning_content":"not assistant"}]})
+        )
+        .is_err()
+    );
+    assert!(decode("openai-chat", &json!({"messages":[{"role":"assistant","content":"x","reasoning_content":{"unexpected":true}}]})).is_err());
+}
+
+#[test]
 fn responses_roundtrip_and_edit_function_output_without_changing_call_metadata() {
     let raw = json!({
         "model":"owned-model",

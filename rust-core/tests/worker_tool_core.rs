@@ -54,10 +54,361 @@ async fn paged_catalog_model(State(mock): State<Mock>, Json(body): Json<Value>) 
         json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":finish_reason,"message":message}]}),
     )
 }
+
+async fn duplicate_indexes_model(State(mock): State<Mock>, Json(body): Json<Value>) -> Json<Value> {
+    let mut requests = mock.requests.lock().await;
+    requests.push(body);
+    let (finish, message) = if requests.len() == 1 {
+        (
+            "tool_calls",
+            json!({"role":"assistant","content":null,"reasoning_content":"opaque synthetic provider reasoning","tool_calls":[
+                {"index":0,"id":"search-multi","type":"function","function":{"name":"sic_tool_search","arguments":"{\"query\":\"calculator\"}"}},
+                {"index":0,"id":"expand-multi","type":"function","function":{"name":"sic_tool_expand","arguments":"{\"name\":\"calculator\"}"}}
+            ]}),
+        )
+    } else {
+        (
+            "stop",
+            json!({"role":"assistant","content":"parallel tools completed"}),
+        )
+    };
+    Json(
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":5,"completion_tokens":2},
+        "choices":[{"finish_reason":finish,"message":message}]}),
+    )
+}
+
+async fn continuous_tool_model(State(mock): State<Mock>, Json(body): Json<Value>) -> Json<Value> {
+    let mut requests = mock.requests.lock().await;
+    requests.push(body);
+    let n = requests.len();
+    // Asking again for an already-expanded schema is not an execution and
+    // must not keep an unused tool alive indefinitely.
+    let (name, args) = if n == 1 || n == 8 {
+        ("sic_tool_expand", json!({"name":"calculator"}))
+    } else {
+        ("sic_tool_search", json!({"query":"calculator"}))
+    };
+    Json(
+        json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":"tool_calls",
+        "message":{"role":"assistant","content":null,"tool_calls":[{"id":format!("idle-test-{n}"),
+        "type":"function","function":{"name":name,"arguments":args.to_string()}}]}}]}),
+    )
+}
+
+async fn malformed_multiple_choice_model(
+    State(mock): State<Mock>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    mock.requests.lock().await.push(body);
+    Json(
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":9,"completion_tokens":4},"choices":[
+            {"index":0,"message":{"role":"assistant","content":"Synthetic incomplete candidate."}},
+            {"index":1,"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[
+                {"id":"ambiguous-call","type":"function","function":{"name":"sic_tool_call",
+                    "arguments":json!({"name":"calculator","arguments":{}}).to_string()}}
+            ]}}
+        ]}),
+    )
+}
+
+#[tokio::test]
+async fn ambiguous_provider_choices_are_audited_without_dispatching_a_tool() {
+    let mock = Mock::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route(
+                    "/v1/chat/completions",
+                    post(malformed_multiple_choice_model),
+                )
+                .with_state(mock.clone()),
+        )
+        .into_future(),
+    );
+    let p = profile(format!("http://{addr}/v1"));
+    let store = Store::memory().await.unwrap();
+    let core = Core::with_model_config_and_resolver(
+        store.clone(),
+        json!({"roles":{"worker":p,"editor":p}}),
+        Arc::new(|_| Ok("mock-key".into())),
+    )
+    .unwrap();
+    let mut ctx = OperationContext {
+        actor: "alice".into(),
+        chain_id: None,
+        allow_write: true,
+        allow_model: true,
+        allow_revoke: false,
+    };
+    ctx.chain_id = Some(
+        core.operate("chain.create", &ctx, &json!({}))
+            .await
+            .unwrap()["result"]["chain_id"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+    );
+    let grant = json!({"principal":"alice","tool_name":"calculator"});
+    core.operate("tools.configure", &ctx, &json!({"acl":{"discover":[grant],"expand":[grant],"execute":[grant]},
+        "tools":[{"host_fixed":false,"descriptor":{"name":"calculator","description":"fixture calculator",
+            "schema":{"type":"object","properties":{}}}}]})).await.unwrap();
+    core.operate(
+        "source.ingest",
+        &ctx,
+        &json!({"request":{"messages":[{"role":"user","content":"fixture"}]}}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        core.operate("worker.run", &ctx, &json!({}))
+            .await
+            .unwrap_err()
+            .code,
+        "worker_invalid_choice_count"
+    );
+    assert_eq!(mock.requests.lock().await.len(), 1);
+    let tasks = core.operate("tools.tasks", &ctx, &json!({})).await.unwrap();
+    assert_eq!(tasks["result"]["tasks"], json!([]));
+    let ledger = core
+        .operate("accounting.get", &ctx, &json!({}))
+        .await
+        .unwrap();
+    assert_eq!(ledger["result"]["known_prompt_tokens"], 9);
+    assert_eq!(ledger["result"]["known_completion_tokens"], 4);
+    let attempt = ledger["result"]["attempts"][0]["record_id"]
+        .as_str()
+        .unwrap();
+    let mut tx = store.begin().await.unwrap();
+    let audit = sic_core_rust::storage::get_object(&mut tx, attempt, Some("worker_attempt"))
+        .await
+        .unwrap();
+    assert_eq!(
+        audit["raw_response"]["choices"].as_array().unwrap().len(),
+        2
+    );
+    assert!(audit["source_id"].is_null());
+    tx.commit().await.unwrap();
+    server.abort();
+}
+
+#[tokio::test]
+async fn unused_tool_is_evicted_after_fifteen_tool_call_responses() {
+    let mock = Mock::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/v1/chat/completions", post(continuous_tool_model))
+                .with_state(mock.clone()),
+        )
+        .into_future(),
+    );
+    let p = profile(format!("http://{addr}/v1"));
+    let core = Core::with_model_config_and_resolver(
+        Store::memory().await.unwrap(),
+        json!({"roles":{"worker":p,"editor":p}}),
+        Arc::new(|_| Ok("mock-key".into())),
+    )
+    .unwrap();
+    let mut ctx = OperationContext {
+        actor: "alice".into(),
+        chain_id: None,
+        allow_write: true,
+        allow_model: true,
+        allow_revoke: false,
+    };
+    ctx.chain_id = Some(
+        core.operate("chain.create", &ctx, &json!({}))
+            .await
+            .unwrap()["result"]["chain_id"]
+            .as_str()
+            .unwrap()
+            .into(),
+    );
+    let grant = json!({"principal":"alice","tool_name":"calculator"});
+    core.operate("tools.configure", &ctx, &json!({"acl":{"discover":[grant],"expand":[grant],"execute":[grant]},
+        "tools":[{"host_fixed":false,"descriptor":{"name":"calculator","description":"fixture calculator",
+            "schema":{"type":"object","properties":{}}}}]})).await.unwrap();
+    core.operate(
+        "source.ingest",
+        &ctx,
+        &json!({"request":{"messages":[{"role":"user","content":"find calculator"}]}}),
+    )
+    .await
+    .unwrap();
+
+    let expanded = core.operate("worker.run", &ctx, &json!({})).await.unwrap();
+    assert_eq!(expanded["result"]["tool_results"][0]["result"]["ok"], true);
+    for _ in 0..14 {
+        core.operate("worker.run", &ctx, &json!({})).await.unwrap();
+    }
+    let status = core
+        .operate("tools.status", &ctx, &json!({}))
+        .await
+        .unwrap();
+    assert_eq!(status["result"]["catalog"][0]["expanded"], true);
+    core.operate("worker.run", &ctx, &json!({})).await.unwrap();
+    let status = core
+        .operate("tools.status", &ctx, &json!({}))
+        .await
+        .unwrap();
+    assert_eq!(status["result"]["catalog"][0]["expanded"], false);
+    core.operate("worker.run", &ctx, &json!({})).await.unwrap();
+    let requests = mock.requests.lock().await;
+    let has_calculator = |request: &Value| {
+        request["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|message| {
+                message["content"]
+                    .as_str()
+                    .and_then(|content| serde_json::from_str::<Value>(content).ok())
+                    .and_then(|view| {
+                        view.pointer("/sic_editable_I_views/dynamic_tool_directory")
+                            .cloned()
+                    })
+                    .and_then(|directory| directory.as_array().cloned())
+                    .is_some_and(|directory| {
+                        directory.iter().any(|tool| tool["name"] == "calculator")
+                    })
+            })
+    };
+    assert!(has_calculator(&requests[1]));
+    assert!(!has_calculator(&requests[16]));
+    server.abort();
+}
 fn profile(endpoint: String) -> Value {
     json!({"model":"openai/deepseek-v4.1-flash-eco","api_base":endpoint,"api_key_env":"MOCK",
     "tokenizer_model":"host-o200k","context_window":1_000_000,"max_input_tokens":1_000_000,
     "max_output_tokens":393_216,"default_output_tokens":4096,"timeout_seconds":5})
+}
+
+#[tokio::test]
+async fn complete_parallel_calls_with_repeated_indexes_are_dispatched_and_audited() {
+    let mock = Mock::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/v1/chat/completions", post(duplicate_indexes_model))
+                .with_state(mock.clone()),
+        )
+        .into_future(),
+    );
+    let p = profile(format!("http://{addr}/v1"));
+    let store = Store::memory().await.unwrap();
+    let core = Core::with_model_config_and_resolver(
+        store.clone(),
+        json!({"roles":{"worker":p,"editor":p}}),
+        Arc::new(|_| Ok("mock-key".into())),
+    )
+    .unwrap();
+    let mut ctx = OperationContext {
+        actor: "alice".into(),
+        chain_id: None,
+        allow_write: true,
+        allow_model: true,
+        allow_revoke: false,
+    };
+    ctx.chain_id = Some(
+        core.operate("chain.create", &ctx, &json!({}))
+            .await
+            .unwrap()["result"]["chain_id"]
+            .as_str()
+            .unwrap()
+            .into(),
+    );
+    let grant = json!({"principal":"alice","tool_name":"calculator"});
+    core.operate("tools.configure", &ctx, &json!({"acl":{"discover":[grant],"expand":[grant],"execute":[grant]},
+        "tools":[{"host_fixed":false,"descriptor":{"name":"calculator","description":"fixture calculator",
+            "schema":{"type":"object","properties":{}}}}]})).await.unwrap();
+    core.operate(
+        "source.ingest",
+        &ctx,
+        &json!({"request":{"messages":[{"role":"user","content":"find calculator"}]}}),
+    )
+    .await
+    .unwrap();
+    let first = core.operate("worker.run", &ctx, &json!({})).await.unwrap();
+    assert_eq!(first["result"]["tool_calls"][0]["index"], 0);
+    assert_eq!(first["result"]["tool_calls"][1]["index"], 1);
+    assert_eq!(
+        first["result"]["tool_results"][0]["tool_call_id"],
+        "search-multi"
+    );
+    assert_eq!(
+        first["result"]["tool_results"][1]["tool_call_id"],
+        "expand-multi"
+    );
+    assert_eq!(first["result"]["tool_results"][1]["result"]["ok"], true);
+    let mut tx = store.begin().await.unwrap();
+    let raw = sic_core_rust::storage::get_object(
+        &mut tx,
+        first["result"]["attempt_id"].as_str().unwrap(),
+        Some("worker_attempt"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        raw["raw_response"]["choices"][0]["message"]["tool_calls"][1]["index"],
+        0
+    );
+    tx.commit().await.unwrap();
+    let next = core.operate("worker.run", &ctx, &json!({})).await.unwrap();
+    assert_eq!(next["result"]["content"], "parallel tools completed");
+    let requests = mock.requests.lock().await;
+    let messages = requests[1]["messages"].as_array().unwrap();
+    assert!(messages.iter().any(|m| m["role"] == "assistant"
+        && m["reasoning_content"] == "opaque synthetic provider reasoning"
+        && m["tool_calls"][1]["id"] == "expand-multi"));
+    assert!(
+        messages
+            .iter()
+            .any(|m| m["role"] == "tool" && m["tool_call_id"] == "search-multi")
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| m["role"] == "tool" && m["tool_call_id"] == "expand-multi")
+    );
+    let group = core
+        .operate(
+            "source.read",
+            &ctx,
+            &json!({"source_id":first["result"]["source_id"],"group":true}),
+        )
+        .await
+        .unwrap();
+    assert!(
+        group["result"]["source"]["open_calls"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "{group}"
+    );
+    let schedule = core
+        .operate(
+            "runtime.schedule",
+            &ctx,
+            &json!({"context_id":"main","min_sources_per_wb":1,
+                "max_sources_per_wb":8,"max_units_per_wb":64,
+                "level_batch_sizes":{},"max_level":1,"flush":true,
+                "max_actions":64,"max_model_calls":0,
+                "editor_mode":"program_fixture","program_rules":[]}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(schedule["result"]["completed"], true, "{schedule}");
+    server.abort();
 }
 
 #[tokio::test]

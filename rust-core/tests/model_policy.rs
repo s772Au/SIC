@@ -64,6 +64,38 @@ fn validates_explicit_profiles_and_allows_worker_editor_model_difference() {
 }
 
 #[test]
+fn reasoning_effort_is_validated_before_a_profile_is_used() {
+    for effort in model_policy::REASONING_EFFORTS {
+        let mut cfg = config();
+        cfg["profiles"]["worker"]["reasoning_effort"] = json!(effort);
+        cfg["profiles"]["editor-default"]["reasoning_effort"] = json!(effort);
+        assert!(validate_config(&cfg).is_ok());
+    }
+    for invalid in [json!("invalid"), json!(null), json!(12)] {
+        let mut cfg = config();
+        cfg["profiles"]["worker"]["reasoning_effort"] = invalid;
+        assert!(validate_config(&cfg).is_err());
+    }
+}
+
+#[test]
+fn cache_namespace_is_optional_bounded_host_metadata() {
+    let mut cfg = python_direct_role_config(false);
+    cfg["roles"]["worker"]["cache_namespace"] = json!("team-cache-fixture");
+    assert!(validate_config(&cfg).is_ok());
+    for invalid in [
+        json!(""),
+        json!(" "),
+        json!("bad\nname"),
+        json!("x".repeat(257)),
+        json!(12),
+    ] {
+        cfg["roles"]["worker"]["cache_namespace"] = invalid;
+        assert!(validate_config(&cfg).is_err());
+    }
+}
+
+#[test]
 fn example_opendesign_profile_preserves_the_user_supplied_model_limits() {
     let cfg: Value =
         serde_json::from_str(include_str!("../config/opendesign.example.json")).unwrap();

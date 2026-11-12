@@ -16,6 +16,7 @@ use sic_core_rust::{
 use std::{
     env,
     fs::OpenOptions,
+    io::Write,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
@@ -123,6 +124,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut allow_revoke = false;
             let mut model_config: Option<String> = None;
             let mut dsh_alias: Option<String> = None;
+            let mut dsh_max_worker_calls = 8u32;
+            let mut dsh_limit_configured = false;
+            let mut dsh_invalid_choice_retries = 0u8;
             let mut index = 6;
             while index < args.len() {
                 match args[index].as_str() {
@@ -136,20 +140,61 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         index += 1;
                         dsh_alias=Some(args.get(index).ok_or("missing DSH public model alias")?.clone());
                     }
+                    // Documented ceiling per DSH user turn. Precedence:
+                    // --dsh-max-worker-calls > model-config dsh_bridge.max_worker_calls_per_turn > 8.
+                    "--dsh-max-worker-calls" => {
+                        index += 1;
+                        dsh_max_worker_calls = args.get(index).ok_or("missing DSH Worker call limit")?
+                            .parse::<u32>().map_err(|_| "DSH Worker call limit must be an integer in 1..=64")?;
+                        if !(1..=64).contains(&dsh_max_worker_calls) {
+                            return Err("DSH Worker call limit must be an integer in 1..=64".into());
+                        }
+                        dsh_limit_configured = true;
+                    }
+                    "--dsh-invalid-choice-retries" => {
+                        index += 1;
+                        dsh_invalid_choice_retries = args.get(index).ok_or("missing DSH invalid-choice retry limit")?
+                            .parse::<u8>().map_err(|_| "DSH invalid-choice retries must be an integer in 0..=2")?;
+                        if dsh_invalid_choice_retries > 2 {
+                            return Err("DSH invalid-choice retries must be an integer in 0..=2".into());
+                        }
+                        dsh_limit_configured = true;
+                    }
                     _ => return Err("unknown serve option".into()),
                 }
                 index += 1;
             }
+            if dsh_limit_configured && dsh_alias.is_none() {
+                return Err("DSH Worker call limit requires --dsh-alias".into());
+            }
             let auth = HostAuth::new(token, args[4].clone(), true, allow_model, allow_revoke)?;
-            let store = Store::open(Path::new(&args[2])).await?;
+            // Probe without writes before creating a lock beside the database;
+            // an unrelated or legacy database must not acquire a lock file.
+            Store::verify_existing(Path::new(&args[2])).await?;
             // The OS releases this lock on exit or crash. It prevents a second
-            // service process from treating live bridge receipts as abandoned.
+            // service process from opening a live database for writes or
+            // treating its bridge receipts as abandoned.
             let lock=lock_database(&args[2])?;
+            let store = Store::open(Path::new(&args[2])).await?;
             let listener = tokio::net::TcpListener::bind(address).await?;
             let configuration:Option<serde_json::Value>=model_config.map(|path|
                 std::fs::read(path).map_err(|_|"cannot read model configuration")
                     .and_then(|bytes|serde_json::from_slice(&bytes).map_err(|_|"invalid model configuration JSON"))).transpose()?;
             let worker=configuration.as_ref().map(model_policy::resolve_worker_profile).transpose()?;
+            // Config-key form of the same knob: {"dsh_bridge":{"max_worker_calls_per_turn":N}}.
+            // The CLI flag wins; a malformed value is an error, never a silent fallback.
+            if !dsh_limit_configured {
+                if let Some(configured)=configuration.as_ref()
+                    .and_then(|config| config.get("dsh_bridge"))
+                    .and_then(|bridge| bridge.get("max_worker_calls_per_turn")) {
+                    let limit=configured.as_u64()
+                        .ok_or("dsh_bridge.max_worker_calls_per_turn must be an integer in 1..=64")?;
+                    if !(1..=64).contains(&limit) {
+                        return Err("dsh_bridge.max_worker_calls_per_turn must be an integer in 1..=64".into());
+                    }
+                    dsh_max_worker_calls=limit as u32;
+                }
+            }
             let core = match configuration {
                 Some(config) => Core::with_model_config(store, config)?,
                 None => Core::new(store),
@@ -157,22 +202,33 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let app=if let Some(alias)=dsh_alias {
                 if !allow_model {return Err("DSH bridge requires the host model grant".into());}
                 let worker=worker.ok_or("DSH bridge requires a model configuration")?;
+                // Worker HTTP-5xx retry: the profile stays the opt-in switch,
+                // these two values shape the bounded bridge retry.
+                let (worker_retry_attempts, worker_retry_backoff_ms) =
+                    model_policy::worker_retry_policy(&worker)?;
                 let bridge=DshBridge::new(core.store.clone(),Arc::new(CoreRuntime::new(core.clone())),DshBridgeConfig {
                     model_alias:alias,
                     fixed_max_tokens:worker["default_output_tokens"].as_u64().or_else(||worker["max_output_tokens"].as_u64()),
                     fixed_reasoning_effort:worker["reasoning_effort"].as_str().map(str::to_owned),
                     // The discoverable catalog may exceed 128; ToolSet applies
                     // the 128 limit only to simultaneously expanded tools.
-                    max_worker_calls_per_turn:8,max_host_tasks_per_response:8,max_harness_tools:4096,
-                }).await.map_err(|error|format!("DSH bridge setup failed: {}",error.message))?;
+                    max_worker_calls_per_turn:dsh_max_worker_calls,max_host_tasks_per_response:8,max_harness_tools:4096,
+                }).await.map_err(|error|format!("DSH bridge setup failed: {}",error.message))?
+                  .with_invalid_worker_choice_retries(dsh_invalid_choice_retries)
+                  .map_err(|error|format!("DSH bridge setup failed: {}",error.message))?
+                  .with_worker_http_retry_policy(worker_retry_attempts, worker_retry_backoff_ms)
+                  .map_err(|error|format!("DSH bridge setup failed: {}",error.message))?;
                 server::router_with_dsh(core,auth,Arc::new(bridge))
             } else {server::router(core,auth)};
             println!("SIC Rust core listening on {}", listener.local_addr()?);
+            // A launcher may read this banner from a pipe to discover a port
+            // chosen atomically by the OS. Never leave it buffered indefinitely.
+            std::io::stdout().flush()?;
             axum::serve(listener, app)
                 .with_graceful_shutdown(async { let _ = tokio::signal::ctrl_c().await; }).await?;
             drop(lock);
         }
-        _ => return Err("usage: sic-core-rust init DB | snapshot-python SOURCE DEST | import-stopped-text SOURCE DEST | upgrade-active-python SOURCE DEST | legacy-audit DB CHAIN ACTOR | legacy-activate-board DB CHAIN ACTOR EXPECTED_REVISION KEY | legacy-start DB CHAIN ACTOR KEY | legacy-config-audit DB CHAIN ACTOR | legacy-config-restore DB CHAIN ACTOR KEY RUN_STATE CUT_SEQ CONTROL_EPOCH INPUT_EPOCH CONFIG_SHA256 | serve DB LOOPBACK:PORT ACTOR TOKEN_ENV [--allow-model --model-config FILE --dsh-alias NAME] [--allow-revoke]".into()),
+        _ => return Err("usage: sic-core-rust init DB | snapshot-python SOURCE DEST | import-stopped-text SOURCE DEST | upgrade-active-python SOURCE DEST | legacy-audit DB CHAIN ACTOR | legacy-activate-board DB CHAIN ACTOR EXPECTED_REVISION KEY | legacy-start DB CHAIN ACTOR KEY | legacy-config-audit DB CHAIN ACTOR | legacy-config-restore DB CHAIN ACTOR KEY RUN_STATE CUT_SEQ CONTROL_EPOCH INPUT_EPOCH CONFIG_SHA256 | serve DB LOOPBACK:PORT ACTOR TOKEN_ENV [--allow-model --model-config FILE --dsh-alias NAME --dsh-max-worker-calls 1..64 --dsh-invalid-choice-retries 0..2] [--allow-revoke]".into()),
     }
     Ok(())
 }

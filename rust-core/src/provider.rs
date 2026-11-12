@@ -13,7 +13,7 @@ use std::{net::IpAddr, time::Duration};
 const MAX_TIMEOUT_SECONDS: u64 = 600;
 const DEFAULT_TIMEOUT_SECONDS: u64 = 60;
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
-const REASONING_EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+pub const INVALID_CHOICE_COUNT: &str = "provider response must contain exactly one choice";
 
 /// A complete input count measured by the host before this call is dispatched.
 /// `counter_id` identifies the declared host-side counter and is never described
@@ -32,7 +32,9 @@ pub struct ChatCompletionResult {
     pub finish_reason: String,
     pub usage: Option<Value>,
     pub raw_response: Value,
-    /// Provider-native call objects, preserved without rewriting IDs or arguments.
+    /// Complete call objects with IDs and arguments preserved. Any optional
+    /// streaming-style indexes are normalized to complete-array positions;
+    /// the unmodified provider response remains in `raw_response`/`raw_body`.
     pub tool_calls: Option<Value>,
     /// Original bounded response bytes, retained in memory for caller auditing.
     pub raw_body: Vec<u8>,
@@ -128,6 +130,21 @@ pub fn validate_openai_profile(profile: &Value) -> Result<(), String> {
             return Err("timeout_seconds exceeds the finite provider limit".into());
         }
     }
+    if fields
+        .get("retry_editor_http_5xx")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        return Err("retry_editor_http_5xx must be a boolean".into());
+    }
+    if fields
+        .get("retry_worker_http_5xx")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        return Err("retry_worker_http_5xx must be a boolean".into());
+    }
+    // Shape the opt-in retry before any request is sent. The same helper feeds
+    // the DSH bridge, so validation and execution cannot disagree.
+    crate::model_policy::worker_retry_policy(profile)?;
     if let Some(expected) = fields.get("expected_returned_models") {
         let names = expected
             .as_array()
@@ -184,6 +201,35 @@ where
     F: FnOnce(&str) -> Result<String, String>,
     O: FnOnce(&[u8]),
 {
+    chat_completion_observed_status(
+        profile,
+        request,
+        call_role,
+        frozen_input,
+        resolve_secret,
+        observe,
+        |_| {},
+    )
+    .await
+}
+
+/// Additionally observe an actual HTTP response status, if one arrives.
+/// Timeouts and transport failures do not invoke this callback. This is an
+/// observation only: the caller remains responsible for any retry policy.
+pub async fn chat_completion_observed_status<F, O, S>(
+    profile: &Value,
+    request: &Value,
+    call_role: CallRole,
+    frozen_input: &FrozenInputCount,
+    resolve_secret: F,
+    observe: O,
+    observe_status: S,
+) -> Result<ChatCompletionResult, String>
+where
+    F: FnOnce(&str) -> Result<String, String>,
+    O: FnOnce(&[u8]),
+    S: FnOnce(StatusCode),
+{
     validate_openai_profile(profile)?;
     if frozen_input.counter_id.trim().is_empty() {
         return Err("host input counter identifier is required".into());
@@ -226,8 +272,8 @@ where
         return Err("reasoning_effort must be a string".into());
     }
     if let Some(effort) = reasoning_effort {
-        if !REASONING_EFFORTS.contains(&effort) {
-            return Err("reasoning_effort must be one of low, medium, high, xhigh, max".into());
+        if !crate::model_policy::REASONING_EFFORTS.contains(&effort) {
+            return Err("unsupported reasoning_effort".into());
         }
     }
 
@@ -319,6 +365,7 @@ where
         })?;
 
     let status = response.status();
+    observe_status(status);
     if status.is_redirection() {
         return Err("provider redirect rejected; redirects are disabled".into());
     }
@@ -368,7 +415,7 @@ where
         .and_then(Value::as_array)
         .ok_or_else(|| "provider response omitted choices".to_string())?;
     if choices.len() != 1 {
-        return Err("provider response must contain exactly one choice".into());
+        return Err(INVALID_CHOICE_COUNT.into());
     }
     let choice = &choices[0];
     let finish_reason = choice
@@ -385,8 +432,14 @@ where
     if message.get("role").and_then(Value::as_str) != Some("assistant") {
         return Err("provider response role must be assistant".into());
     }
+    if message
+        .get("reasoning_content")
+        .is_some_and(|value| !value.is_null() && !value.is_string())
+    {
+        return Err("provider reasoning_content must be text or null".into());
+    }
     let response_tool_calls = message.get("tool_calls");
-    match finish_reason {
+    let tool_calls = match finish_reason {
         "stop" => {
             if response_tool_calls.is_some() {
                 return Err("assistant tool calls require tool_calls completion status".into());
@@ -397,6 +450,7 @@ where
             if call_role == CallRole::Editor {
                 return Err("Editor delivery must use sic_edit_blocks".into());
             }
+            None
         }
         "tool_calls" => {
             let calls = response_tool_calls
@@ -405,18 +459,36 @@ where
                 .ok_or_else(|| {
                     "tool_calls completion status requires complete tool calls".to_string()
                 })?;
-            let called = validate_tool_calls(&Value::Array(calls.clone()), &tool_names)?;
+            // In a complete non-streaming response, array order and unique
+            // call IDs define the calls. Some Chat-compatible providers add
+            // a streaming `index` field and repeat zero for every call.
+            // Normalize only that optional metadata; never rewrite IDs,
+            // names, arguments or the archived raw response.
+            let mut normalized = calls.clone();
+            for (position, call) in normalized.iter_mut().enumerate() {
+                let object = call
+                    .as_object_mut()
+                    .ok_or_else(|| "tool call must be an object".to_string())?;
+                if let Some(index) = object.get_mut("index") {
+                    if index.as_u64().is_none() {
+                        return Err("native tool call index must be a nonnegative integer".into());
+                    }
+                    *index = json!(position);
+                }
+            }
+            let normalized = Value::Array(normalized);
+            let called = validate_tool_calls(&normalized, &tool_names)?;
             if call_role == CallRole::Editor
                 && !called.iter().any(|(_, name)| name == "sic_edit_blocks")
             {
                 return Err("Editor delivery must include sic_edit_blocks".into());
             }
+            Some(normalized)
         }
         _ => return Err("provider returned an unsupported or incomplete completion status".into()),
-    }
+    };
 
     let usage = raw_response.get("usage").cloned();
-    let tool_calls = response_tool_calls.cloned();
     Ok(ChatCompletionResult {
         requested_model,
         returned_model,
@@ -516,11 +588,19 @@ fn validate_messages(messages: &Value, tool_names: &[String]) -> Result<(), Stri
                 }
             }
             "assistant" => {
-                if object
-                    .keys()
-                    .any(|key| key != "role" && key != "content" && key != "tool_calls")
-                {
+                if object.keys().any(|key| {
+                    key != "role"
+                        && key != "content"
+                        && key != "tool_calls"
+                        && key != "reasoning_content"
+                }) {
                     return Err("unsupported assistant message field".into());
+                }
+                if object
+                    .get("reasoning_content")
+                    .is_some_and(|value| !value.is_null() && !value.is_string())
+                {
+                    return Err("assistant reasoning_content must be text or null".into());
                 }
                 let content_valid = object
                     .get("content")

@@ -6,7 +6,7 @@
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::{DefaultBodyLimit, State, rejection::BytesRejection},
+    extract::{DefaultBodyLimit, Path, State, rejection::BytesRejection},
     http::{HeaderMap, HeaderValue, Request, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -71,6 +71,7 @@ pub fn router(core: Core, auth: HostAuth) -> Router {
         .route("/health", get(health))
         .route("/api/v2/capabilities", get(capabilities))
         .route("/api/v2/operations", post(operations))
+        .route("/api/v2/chains/{chain_id}/ledger", get(ledger))
         .with_state(state.clone())
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .layer(middleware::from_fn_with_state(state, authenticate))
@@ -181,6 +182,37 @@ struct OperationRequest {
     operation: String,
     context: ContextInput,
     payload: Value,
+}
+
+/// Read-only host-scoped ledger: the authenticated actor may read accounting
+/// for a chain it owns. The bearer is never accepted as a chain identity.
+async fn ledger(State(state): State<AppState>, Path(chain_id): Path<String>) -> Response {
+    if chain_id.is_empty() || chain_id.len() > 256 || chain_id.chars().any(char::is_control) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_chain",
+            "chain_id must be bounded text",
+        );
+    }
+    let context = OperationContext {
+        actor: state.auth.actor.clone(),
+        chain_id: Some(chain_id.clone()),
+        allow_write: false,
+        allow_model: false,
+        allow_revoke: false,
+    };
+    match state
+        .core
+        .operate("accounting.get", &context, &json!({}))
+        .await
+    {
+        Ok(value) => (
+            StatusCode::OK,
+            Json(json!({"chain_id":chain_id,"accounting":value["result"].clone()})),
+        )
+            .into_response(),
+        Err(error) => core_error_response(error),
+    }
 }
 
 async fn operations(

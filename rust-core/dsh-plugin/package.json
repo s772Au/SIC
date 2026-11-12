@@ -3,9 +3,13 @@
   "version": "0.1.1",
   "type": "module",
   "main": "index.mjs",
+  "exports": { ".": "./index.mjs", "./client": "./client.js", "./package.json": "./package.json" },
   "description": "Minimal DSH PiAi provider for the Rust SIC Chat bridge",
   "license": "MIT",
-  "dsh": { "bundle": { "patch": "cordis.patch.yml" } },
+  "dsh": { "bundle": { "patch": "cordis.patch.yml" }, "client": {
+    "inject": ["@deepseek-ai/dsh-client-connection", "@deepseek-ai/dsh-client-ui-conversation"],
+    "platform": "web"
+  } },
   "engines": { "dsh": ">=0.2.1-rc.5 <0.3", "node": ">=22.19.0" },
   "dependencies": {
     "@deepseek-ai/dsh-llm-pi-ai": "0.2.1-rc.5",

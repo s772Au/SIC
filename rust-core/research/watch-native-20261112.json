@@ -1,0 +1,41 @@
+{
+  "result": "passed",
+  "stage": "complete",
+  "failure": null,
+  "topology": "requester DSH bootstrap -> checkpoint/Socket/spawn -> supervisor watch -> DSH built-in read of synthetic file -> Socket reply -> requester ProgramFixture CB adoption",
+  "watcherMode": "one local watch process; no production DSH profile or remote Provider",
+  "requesterPublished": true,
+  "spawnRecorded": true,
+  "peerInboxPublished": true,
+  "peerReplyDelivered": true,
+  "requesterAdoptedReply": true,
+  "watcherExitCode": null,
+  "sicStatusSnapshotVerified": true,
+  "nativeToolEventVerified": true,
+  "roleModelAccountingVerified": true,
+  "signalWaitRequested": false,
+  "signalWaitVerified": false,
+  "signalCursorRequested": false,
+  "messageWaitRequested": false,
+  "messageWaitVerified": false,
+  "fixtureResultObservedByMock": true,
+  "providerCallKinds": [
+    "requester_editor",
+    "requester_bootstrap_final_text",
+    "peer_editor",
+    "peer_editor",
+    "peer_fixture_tool_call",
+    "peer_final_text_after_fixture"
+  ],
+  "protectedPrefixSummary": {
+    "requesterCount": 1,
+    "peerCount": 1,
+    "requesterDigest": "3e8e05a44a31",
+    "peerDigest": "3e8e05a44a31",
+    "identical": true
+  },
+  "rawPromptsOrMessagesInReport": false,
+  "credentialsInReport": false,
+  "remoteModelUsed": false,
+  "nativeReadResultObserved": true
+}

@@ -1,19 +1,28 @@
 param(
   [Parameter(Mandatory = $true)][string]$WatchBinaryPath,
+  [string]$CoreBinaryPath,
+  [string]$PluginDirectory,
   [string]$WatchConfigTemplatePath,
-  [int]$WatchTimeoutSeconds = 180
+  [int]$WatchTimeoutSeconds = 180,
+  [switch]$VerifySignalWait,
+  [switch]$VerifySignalCursor,
+  [switch]$VerifyMessageWait
 )
 
 # Requires PowerShell 7 (`pwsh`): Invoke-RestMethod -NoProxy is used for loopback calls.
 # Independent local end-to-end acceptance. The bundled template follows the
 # watch CLI's top-level WatchFile and nests the existing SupervisorConfig.
 $ErrorActionPreference = 'Stop'
+if ($VerifySignalCursor) { $VerifySignalWait = $true }
 $coreRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$plugin = Split-Path $PSScriptRoot -Parent
+$plugin = if ($PluginDirectory) { (Resolve-Path -LiteralPath $PluginDirectory -ErrorAction Stop).Path } else { Split-Path $PSScriptRoot -Parent }
 $templateDefault = Join-Path $PSScriptRoot 'peer-supervisor-watch-config.template.json'
 if ([string]::IsNullOrWhiteSpace($WatchConfigTemplatePath)) { $WatchConfigTemplatePath = $templateDefault }
-$coreBinary = @((Join-Path $coreRoot 'target\debug\sic-core-rust.exe'), (Join-Path $coreRoot 'target\release\sic-core-rust.exe'), (Join-Path $coreRoot 'release\sic-core-rust.exe')) |
-  Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+$coreBinary = if ($CoreBinaryPath) { [System.IO.Path]::GetFullPath($CoreBinaryPath) } else {
+  @((Join-Path $coreRoot 'target\debug\sic-core-rust.exe'), (Join-Path $coreRoot 'target\release\sic-core-rust.exe'), (Join-Path $coreRoot 'release\sic-core-rust.exe')) |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+}
+if ($coreBinary -and -not (Test-Path -LiteralPath $coreBinary -PathType Leaf)) { throw 'Core binary path does not exist.' }
 if (-not $coreBinary) { throw 'Provide release\sic-core-rust.exe or build the Rust Core binary in target.' }
 $watchBinary = [System.IO.Path]::GetFullPath($WatchBinaryPath)
 $watchTemplatePath = [System.IO.Path]::GetFullPath($WatchConfigTemplatePath)
@@ -23,7 +32,7 @@ if ($WatchTimeoutSeconds -lt 10 -or $WatchTimeoutSeconds -gt 3600) { throw 'Watc
 
 $actor = 'synthetic-peer-host'
 $saved = @{}
-foreach ($name in @('DSH_HOME', 'SIC_CORE_TOKEN', 'SIC_MOCK_PROVIDER_KEY', 'SIC_RUST_UPSTREAM', 'DSH_TOOLS_MODE')) {
+foreach ($name in @('DSH_HOME', 'SIC_CORE_TOKEN', 'SIC_MOCK_PROVIDER_KEY', 'SIC_RUST_UPSTREAM', 'DSH_TOOLS_MODE', 'SIC_FIXTURE_SIGNAL_WAIT', 'SIC_FIXTURE_SIGNAL_CURSOR')) {
   $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 $tempRoot = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
@@ -37,6 +46,9 @@ $mockPort = $null; $observerPort = $null; $corePort = $null
 $mockStatus = $null; $observerStatus = $null; $stateSummary = $null
 $parentPublished = $false; $spawnRecorded = $false; $peerInboxPublished = $false; $fixtureResultObserved = $false
 $peerReplyDelivered = $false; $requesterAdoptedReply = $false; $watchExit = $null
+$sicStatusVerified = $false
+$nativeEventVerified = $false; $roleAccountingVerified = $false
+$signalSent = $false; $signalWaitVerified = $false; $messageWaitVerified = $false; $messageCursor = [UInt64]0; $peerSocket = $null
 $stage = 'setup'; $failure = $null; $passed = $false
 
 function Invoke-CoreOperation([string]$Operation, [string]$Chain, $Payload) {
@@ -131,9 +143,11 @@ try {
   $stage = 'isolated_setup'
   $env:DSH_HOME = Join-Path $temp 'dsh-home'; $env:DSH_TOOLS_MODE = 'native'
   $env:SIC_CORE_TOKEN = [guid]::NewGuid().ToString('N'); $env:SIC_MOCK_PROVIDER_KEY = [guid]::NewGuid().ToString('N')
+  $env:SIC_FIXTURE_SIGNAL_WAIT = if ($VerifySignalWait) { '1' } else { '0' }
+  $env:SIC_FIXTURE_SIGNAL_CURSOR = if ($VerifySignalCursor) { '1' } else { '0' }
   $stage = 'local_mock_startup'
   $mockOut = Join-Path $temp 'mock.out'; $mockErr = Join-Path $temp 'mock.err'
-  $mockScript = Join-Path $plugin 'test\native-read-mock-chat-provider.mjs'
+  $mockScript = Join-Path $PSScriptRoot 'native-read-mock-chat-provider.mjs'
   $mock = Start-Process -FilePath 'node' -ArgumentList @(('"' + $mockScript + '"')) -WorkingDirectory $plugin -WindowStyle Hidden -PassThru -RedirectStandardOutput $mockOut -RedirectStandardError $mockErr
   for ($i = 0; $i -lt 100; $i++) { if (Test-Path $mockOut) { try { $mockPort = (Get-Content $mockOut -TotalCount 1 | ConvertFrom-Json).port } catch {} }; if ($mockPort) { break }; Start-Sleep -Milliseconds 100 }
   if (-not $mockPort) { throw 'local synthetic Provider did not bind' }
@@ -178,6 +192,10 @@ try {
   $null = Invoke-CoreOperation 'socket.acl.update' $requesterId @{ socket_id = $socket.socket_id; acl = @{ message = @($peerId); signal = @(); spawn = @($actor); read = @() } }
   $spawnRecorded = -not [string]::IsNullOrWhiteSpace($taskId) -and $spawn.task_queued -eq $true
   if (-not $spawnRecorded) { throw 'Core did not persist the synthetic peer task' }
+  if ($VerifySignalWait) {
+    $peerCheckpoint = Invoke-CoreOperation 'chain.checkpoint' $peerId @{}
+    $peerSocket = (Invoke-CoreOperation 'socket.create' $peerId @{ checkpoint_id = $peerCheckpoint.checkpoint_id; acl = @{ message = @(); signal = @($requesterId); spawn = @(); read = @() } }).socket_id
+  }
 
   $stage = 'watch_configuration'
   $dshCommand = Get-Command dsh -ErrorAction Stop
@@ -217,14 +235,33 @@ try {
   while ([DateTime]::UtcNow -lt $deadline) {
     if ($watch.HasExited) { $watchExit = $watch.ExitCode; throw 'peer supervisor watcher exited before Socket reply delivery' }
     try {
-      $inbox = Invoke-CoreOperation 'socket.inbox' $requesterId @{}
-      $replyEntry = @($inbox.messages | Where-Object { $_.message.phase_id -eq 'peer-task-reply' -and $_.message.reply_to -eq 'peer-watch-task-1' })[0]
-      if (-not $replyEntry) { $replyEntry = @($inbox.messages | Where-Object { $_.message.phase_id -eq 'peer-task-reply' -and $_.message.task_id -eq $taskId })[0] }
+      if ($VerifySignalWait -and -not $signalSent) {
+        $providerProgress = Invoke-RestMethod -Uri "http://127.0.0.1:$mockPort/status" -TimeoutSec 3 -NoProxy
+        if (@($providerProgress.calls | Where-Object { $_.responseKind -eq 'peer_signal_wait' }).Count -gt 0) {
+          $null = Invoke-CoreOperation 'socket.signal' $requesterId @{ socket_id = $peerSocket; signal_id = 'fixture-peer-wake'; action = 'wake' }
+          $signalSent = $true
+        }
+      }
+      if ($VerifyMessageWait -and (-not $VerifySignalWait -or $signalSent)) {
+        $notification = Invoke-CoreOperation 'message.wait' $requesterId @{ after_sequence = $messageCursor; timeout_ms = 1000 }
+        $messageCursor = [UInt64]$notification.next_after_sequence
+        $candidate = $notification.message
+        if ($candidate -and $candidate.message.phase_id -eq 'peer-task-reply' -and
+            ($candidate.message.reply_to -eq 'peer-watch-task-1' -or $candidate.message.task_id -eq $taskId)) {
+          $messageWaitVerified = $null -eq $candidate.consumed_by_cut
+          $replyEntry = $candidate
+        }
+      } elseif (-not $VerifyMessageWait) {
+        $inbox = Invoke-CoreOperation 'socket.inbox' $requesterId @{}
+        $replyEntry = @($inbox.messages | Where-Object { $_.message.phase_id -eq 'peer-task-reply' -and $_.message.reply_to -eq 'peer-watch-task-1' })[0]
+        if (-not $replyEntry) { $replyEntry = @($inbox.messages | Where-Object { $_.message.phase_id -eq 'peer-task-reply' -and $_.message.task_id -eq $taskId })[0] }
+      }
       if ($replyEntry) { break }
     } catch {}
     Start-Sleep -Milliseconds 500
   }
   if (-not $replyEntry) { throw 'watcher did not deliver a peer-task-reply Message before timeout' }
+  if ($VerifyMessageWait -and -not $messageWaitVerified) { throw 'Host did not observe the unconsumed peer Message through message.wait.' }
   $replyMessageId = [string]$replyEntry.message.message_id
   $replyText = [string]$replyEntry.message.text
   $peerReplyDelivered = -not [string]::IsNullOrWhiteSpace($replyMessageId) -and -not [string]::IsNullOrWhiteSpace($replyText)
@@ -234,6 +271,17 @@ try {
   $peerInbox = Invoke-CoreOperation 'socket.inbox' $peerId @{}
   $peerInboxPublished = @($peerInbox.messages | Where-Object { $_.message.message_id -eq 'peer-watch-task-1' -and $_.consumed_by_cut }).Count -eq 1
   if (-not $peerInboxPublished) { throw 'watcher did not consume the spawn Message into the peer CB' }
+  $requesterStatusJson = & python (Join-Path $plugin 'test\verify-status-fixture.py') $database $actor $requesterId $corePort 'requester'
+  if ($LASTEXITCODE -ne 0) { throw 'requester SIC status snapshot fixture failed' }
+  $requesterStatusReport = $requesterStatusJson | ConvertFrom-Json
+  $statusJson = & python (Join-Path $plugin 'test\verify-status-fixture.py') $database $actor $peerId $corePort 'peer'
+  if ($LASTEXITCODE -ne 0) { throw 'SIC status snapshot fixture failed' }
+  $statusReport = $statusJson | ConvertFrom-Json
+  $sicStatusVerified = [bool]$statusReport.status_verified -and [bool]$statusReport.condition_verified -and [bool]$requesterStatusReport.status_verified -and [bool]$requesterStatusReport.condition_verified
+  $nativeEventVerified = [bool]$statusReport.native_event_verified
+  $roleAccountingVerified = [bool]$statusReport.accounting_verified -and [bool]$requesterStatusReport.accounting_verified
+  if (-not $sicStatusVerified) { throw 'SIC status snapshot evidence is incomplete' }
+  if (-not $nativeEventVerified -or -not $roleAccountingVerified) { throw 'Native event or role accounting evidence is incomplete' }
   $null = Invoke-CoreOperation 'source.ingest' $requesterId @{ request = @{ messages = @(@{ role = 'user'; content = 'Review the synthetic peer response.' }) } }
   $parentReturn = Invoke-ProgramFixture $requesterId
   $parentCut = Invoke-CoreOperation 'cut.get' $requesterId @{}
@@ -245,6 +293,11 @@ try {
 
   $observerStatus = Invoke-RestMethod -Uri "http://127.0.0.1:$observerPort/status" -TimeoutSec 3 -NoProxy
   $mockStatus = Invoke-RestMethod -Uri "http://127.0.0.1:$mockPort/status" -TimeoutSec 3 -NoProxy
+  if ($VerifySignalWait) {
+    $signalReceipt = Invoke-CoreOperation 'signal.wait' $peerId @{ signal_id = 'fixture-peer-wake'; timeout_ms = 0 }
+    $signalWaitVerified = $signalSent -and [bool]$mockStatus.signalReceiptObserved -and $signalReceipt.receipt.signal_id -eq 'fixture-peer-wake'
+    if (-not $signalWaitVerified) { throw 'Peer Signal wait did not observe the authorized wake receipt.' }
+  }
   $fixtureResultObserved = @($mockStatus.calls | Where-Object { $_.responseKind -eq 'peer_final_text_after_fixture' -and $_.fixtureResultObserved }).Count -eq 1
   if (-not $fixtureResultObserved) { throw 'synthetic DSH fixture tool result was not observed by the mock Provider' }
   $allChats = @($observerStatus.observations | Where-Object { $_.route -eq '/v1/chat/completions' })
@@ -275,7 +328,7 @@ finally {
   if ($core -and -not $core.HasExited) { Stop-Process -Id $core.Id -Force -ErrorAction SilentlyContinue }
   if ($observer -and -not $observer.HasExited) { Stop-Process -Id $observer.Id -Force -ErrorAction SilentlyContinue }
   if ($mock -and -not $mock.HasExited) { Stop-Process -Id $mock.Id -Force -ErrorAction SilentlyContinue }
-  foreach ($name in @('DSH_HOME', 'SIC_CORE_TOKEN', 'SIC_MOCK_PROVIDER_KEY', 'SIC_RUST_UPSTREAM', 'DSH_TOOLS_MODE')) {
+  foreach ($name in @('DSH_HOME', 'SIC_CORE_TOKEN', 'SIC_MOCK_PROVIDER_KEY', 'SIC_RUST_UPSTREAM', 'DSH_TOOLS_MODE', 'SIC_FIXTURE_SIGNAL_WAIT', 'SIC_FIXTURE_SIGNAL_CURSOR')) {
     if ($null -eq $saved[$name]) { Remove-Item -Path ("Env:" + $name) -ErrorAction SilentlyContinue } else { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
   }
 }
@@ -286,6 +339,10 @@ $safeReport = [ordered]@{
   watcherMode = 'one local watch process; no production DSH profile or remote Provider'
   requesterPublished = $parentPublished; spawnRecorded = $spawnRecorded; peerInboxPublished = $peerInboxPublished
   peerReplyDelivered = $peerReplyDelivered; requesterAdoptedReply = $requesterAdoptedReply; watcherExitCode = $watchExit
+  sicStatusSnapshotVerified = $sicStatusVerified
+  nativeToolEventVerified = $nativeEventVerified; roleModelAccountingVerified = $roleAccountingVerified
+  signalWaitRequested = [bool]$VerifySignalWait; signalWaitVerified = $signalWaitVerified; signalCursorRequested = [bool]$VerifySignalCursor
+  messageWaitRequested = [bool]$VerifyMessageWait; messageWaitVerified = $messageWaitVerified
   fixtureResultObservedByMock = $fixtureResultObserved
   providerCallKinds = if ($mockStatus) { @($mockStatus.calls | ForEach-Object { $_.responseKind }) } else { @() }
   protectedPrefixSummary = if ($stateSummary) { [ordered]@{ requesterCount = $stateSummary.parent.protected_count; peerCount = $stateSummary.child.protected_count; requesterDigest = $stateSummary.parent.protected_digest; peerDigest = $stateSummary.child.protected_digest; identical = $stateSummary.parent.protected_digest -eq $stateSummary.child.protected_digest } } else { $null }

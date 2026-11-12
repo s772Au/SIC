@@ -1,10 +1,10 @@
 # Rust SIC DSH provider
 
-This isolated DSH bundle registers one PiAi OpenAI Chat Completions provider for the Rust Core `/v1/chat/completions` bridge. It sets `x-sic-bridge-session` from DSH's real session ID, obtains the bearer only from the named process environment variable, and disables provider retries. It does not implement Python bridge capabilities, evidence projection, tool-event reporting, Editor integration, or peer execution.
+This isolated DSH bundle registers a PiAi OpenAI Chat Completions provider for the Rust Core `/v1/chat/completions` bridge. It sets `x-sic-bridge-session` from DSH's real session ID, obtains the bearer only from the named process environment variable, and does not retry bridge requests. Rust Core separately supports an explicitly configured, bounded retry of certain Editor HTTP 5xx responses; it never retries an external tool. The host reports matching native tool-result metadata and supplies a SIC conversation view through DSH's connection service; the browser never receives the bearer. Editor and Worker orchestration is performed by Rust Core. See `../DSH-CONTEXT-ANALYSIS.md` for event-recovery, UI, accounting and verification limits; the plugin does not replace the peer supervisor.
 
 The model advertises a 1,000,000-token context window and a 393,216-token output ceiling. `maxTokens` is the configured actual fixed request cap and must match the Rust server's Worker profile (`--model-config`); defaults to 4,096. Configure the DSH value to the same actual cap used by the Rust service. DSH requires numeric price fields, so they must be explicitly configured. Zero in the isolated fixture is a placeholder, not evidence of free usage or a bill.
 
-`bindChainId` is optional and defaults to disabled. Set it only when attaching one already-owned, idle Rust Agent to a DSH Session. On that process's first provider stream, the plugin uses the host bearer to call the loopback `/v1/sic/bind` endpoint with the actual `options.sessionId`, waits for the matching acknowledgement, and only then opens the Chat stream. Concurrent calls for that Session share one bind request. A configured chain is restricted to the first Session seen in that plugin process; another Session is rejected before model access, and the Core remains authoritative for conflicts and exact replay. `bindTimeoutMs` bounds this local setup wait (default 10 seconds, capped at 60 seconds and at `timeoutMs`). A failed or cancelled bind emits a provider error and does not send the model request. The local bind operation is not retried; after an uncertain transport failure, a later call for the same Session/chain can safely ask the Core again because exact binding is idempotent. The existing model provider remains no-retry.
+`bindChainId` is optional and defaults to disabled. Set it only when attaching one already-owned, idle Rust Agent to a DSH Session. On that process's first provider stream, the plugin uses the host bearer to call the loopback `/v1/sic/bind` endpoint with the actual `options.sessionId`, waits for the matching acknowledgement, and only then opens the Chat stream. Concurrent calls for that Session share one bind request. A configured chain is restricted to the first Session seen in that plugin process; another Session is rejected before model access, and the Core remains authoritative for conflicts and exact replay. `bindTimeoutMs` bounds this local setup wait (default 10 seconds, capped at 60 seconds and at `timeoutMs`). A failed or cancelled bind emits a provider error and does not send the model request. The local bind operation is not retried; after an uncertain transport failure, a later call for the same Session/chain can safely ask the Core again because exact binding is idempotent. DSH-side bridge requests are not retried.
 
 DSH headless `--session-id` resumes an existing persisted Session; it does not create a blank Session ahead of time. The plugin therefore binds at the first provider stream, where DSH supplies the generated or resumed identity. Binding does not import DSH conversation history into Rust or make multiple DSH Sessions share one Rust Agent.
 
@@ -56,8 +56,10 @@ The local package includes only the allowlisted mock assets used below:
 `bind-provider.spec.mjs`, `run-bind-headless.ps1`,
 `run-isolated-headless.ps1`, `run-rust-bind-headless.ps1`,
 `run-peer-bootstrap-headless.ps1`, `run-peer-task-bootstrap-headless.ps1`,
-their local mock providers/observer, and redacted state summaries. These use
-loopback-only services and synthetic fixtures. The remaining `dsh-plugin/test` files are development-workspace-only;
+`run-peer-native-read-watch-headless.ps1`, `run-web-overview-fixture.ps1`,
+`run-local-launcher-fixture.ps1`, `inspect-web-fixture.mjs`, their local mock providers/observer, and redacted
+state summaries. These use loopback-only services and synthetic fixtures.
+The remaining `dsh-plugin/test` files are development-workspace-only;
 in particular, live OpenDesign and migration-database scripts are not packaged.
 The scripts find `release\\sic-core-rust.exe` in a package or fall back to a
 local Cargo release/debug build in the source workspace.
@@ -136,7 +138,9 @@ boundary and is not packaged.
 The following live OpenDesign command is available only in the development workspace; its script is not included in the local package. It sends real requests only to `amr-link.open-design.ai` with model `deepseek-v4.1-flash-eco`. It requires `SIC_PROVIDER_KEY` already present in the invoking PowerShell process environment, passes that inherited value only to the Rust child process in memory, and never scans another process or writes the credential to config, arguments, or logs. The loopback guard, bridge observer, and DSH process do not inherit this provider key. Missing credentials cause a safe exit before any model call. A loopback guard rejects other hosts, models or token budgets, and caps Editor and Worker calls. It uses a new DSH home/database, exposes only `sic_fixture_read`, disables DSH title-model/provider integrations and telemetry, retains a redacted summary, and removes the temporary database/profile afterward. The configured endpoint must stay `https://amr-link.open-design.ai/v1`; the guard intentionally rejects other hosts:
 
 ```powershell
-.\rust-core\dsh-plugin\test\run-opendesign-headless.ps1
+.\rust-core\dsh-plugin\test\run-opendesign-headless.ps1 `
+  -CoreBinaryPath '<absolute path to sic-core-rust.exe>' `
+  -PluginDirectory '<prepared runtime dsh-plugin directory>'
 ```
 
 This live command makes billable provider calls. Its report records role counts, model/budget, sanitized response shapes, and whether DSH returned the local fixture marker; it never writes provider prompts, outputs, or credentials to the report.

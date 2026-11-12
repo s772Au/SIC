@@ -1,13 +1,16 @@
 //! SIC's Rust core. Features are exposed only as they are implemented and tested.
 
+pub mod accounting;
 pub mod archive;
 pub mod board;
 pub mod core;
+pub mod cost;
 pub mod decision;
 pub mod dsh;
 pub mod dsh_bridge;
 pub mod editing;
 pub mod error;
+pub mod experiment;
 pub mod ipc;
 pub mod ipc_store;
 pub mod legacy;

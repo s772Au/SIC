@@ -81,6 +81,9 @@ const SCHEMA: &[&str] = &[
     "CREATE TABLE IF NOT EXISTS revocations(id TEXT PRIMARY KEY,record TEXT NOT NULL)",
     "CREATE TRIGGER IF NOT EXISTS immutable_revocations_update BEFORE UPDATE ON revocations BEGIN SELECT RAISE(ABORT,'immutable revocation'); END",
     "CREATE TRIGGER IF NOT EXISTS immutable_revocations_delete BEFORE DELETE ON revocations BEGIN SELECT RAISE(ABORT,'immutable revocation'); END",
+    "CREATE TABLE IF NOT EXISTS sensitivity(id TEXT PRIMARY KEY,record TEXT NOT NULL)",
+    "CREATE TRIGGER IF NOT EXISTS immutable_sensitivity_update BEFORE UPDATE ON sensitivity BEGIN SELECT RAISE(ABORT,'immutable sensitivity'); END",
+    "CREATE TRIGGER IF NOT EXISTS immutable_sensitivity_delete BEFORE DELETE ON sensitivity BEGIN SELECT RAISE(ABORT,'immutable sensitivity'); END",
     "CREATE TABLE IF NOT EXISTS receipts(key TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,result TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS runtime_queue(id TEXT PRIMARY KEY,chain_id TEXT,actor TEXT,event TEXT,status TEXT)",
     "CREATE TABLE IF NOT EXISTS bridge_bindings(actor TEXT NOT NULL,session_key TEXT NOT NULL,state TEXT NOT NULL,lease TEXT,lease_until REAL NOT NULL DEFAULT 0,lease_pid INTEGER,PRIMARY KEY(actor,session_key))",
@@ -92,6 +95,15 @@ const SCHEMA: &[&str] = &[
 impl Store {
     /// Create a new database only. Never replace or initialize an existing file.
     pub async fn create(path: &Path) -> Result<Self> {
+        Self::create_with_connections(path, 1).await
+    }
+
+    /// Test/host helper: create a file-backed store with a bounded pool so
+    /// independent transactions can actually overlap. The default remains 1.
+    pub async fn create_with_connections(path: &Path, max_connections: u32) -> Result<Self> {
+        if max_connections == 0 {
+            return Err(CoreError::invalid("max connections must be positive"));
+        }
         OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -105,7 +117,7 @@ impl Store {
             .busy_timeout(Duration::from_secs(10));
         let store = Self {
             pool: SqlitePoolOptions::new()
-                .max_connections(1)
+                .max_connections(max_connections)
                 .connect_with(options)
                 .await?,
             bridge_guard_state: bridge_guard_state(Some(bridge_lock_path(
@@ -134,9 +146,10 @@ impl Store {
         Ok(store)
     }
 
-    /// Reopen only a database previously created by this Rust core. The initial
-    /// probe is read-only, so an old Python database cannot acquire WAL changes.
-    pub async fn open(path: &Path) -> Result<Self> {
+    /// Verify the Rust schema with a read-only probe before creating a service
+    /// lock file or opening the database for writes. This is not an exclusive
+    /// guard; service callers must acquire their OS lock before `open`.
+    pub async fn verify_existing(path: &Path) -> Result<()> {
         if !path.is_file() {
             return Err(CoreError::invalid("Rust database does not exist"));
         }
@@ -169,6 +182,22 @@ impl Store {
                 409,
             ));
         }
+        Ok(())
+    }
+
+    /// Reopen only a database previously created by this Rust core. The initial
+    /// probe is read-only, so an old Python database cannot acquire WAL changes.
+    pub async fn open(path: &Path) -> Result<Self> {
+        Self::open_with_connections(path, 1).await
+    }
+
+    /// Test/host helper: reopen an existing database with a bounded pool so
+    /// independent Core instances can exercise real CAS contention.
+    pub async fn open_with_connections(path: &Path, max_connections: u32) -> Result<Self> {
+        if max_connections == 0 {
+            return Err(CoreError::invalid("max connections must be positive"));
+        }
+        Self::verify_existing(path).await?;
         let options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(false)
@@ -180,7 +209,7 @@ impl Store {
             .map_err(|_| CoreError::invalid("cannot resolve database path"))?;
         Ok(Self {
             pool: SqlitePoolOptions::new()
-                .max_connections(1)
+                .max_connections(max_connections)
                 .connect_with(options)
                 .await?,
             bridge_guard_state: bridge_guard_state(Some(bridge_lock_path(&canonical_path))),

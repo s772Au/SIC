@@ -1,0 +1,120 @@
+{
+  "format": "sic-f73-adapter-v1",
+  "frozen_at": "2026-11-12",
+  "source_pack": "sources.json",
+  "sic_snapshot": [
+    {
+      "path": "src/prefix.rs",
+      "sha256": "9cca9e2b8770dd9f643910fc2c41efc443e238b77b2ac261de2ab49b93e39cd0",
+      "lines": 862,
+      "role": "shared Worker teaching, mode-I activation, CB prefix rendering"
+    },
+    {
+      "path": "src/core.rs",
+      "sha256": "f35ed5f5b438d940b8fc39c9281dfaae6e8ec097228b035804eb7047657470ad",
+      "lines": 8721,
+      "role": "editor request contract, sic_edit_blocks schema, config freeze"
+    },
+    {
+      "path": "src/editing.rs",
+      "sha256": "05aaaa772619238606675317e8f1a90c3552b7a43bff4a88629c2ad24459750d",
+      "lines": 837,
+      "role": "seven operations, PVI, validation and materialization"
+    },
+    {
+      "path": "src/scheduler.rs",
+      "sha256": "92ca3be4a7005a7920ce4febd67fe38d87c2dceb2aa0dc49f77e025ca8f06555",
+      "lines": 687,
+      "role": "program rules, bounded scheduling, per-WB budget consumption"
+    },
+    {
+      "path": "src/experiment.rs",
+      "sha256": "8353908dd9e5a5a779a5719784687821a5dfc27a1e654f636098704e3b0cbbaa",
+      "lines": 173,
+      "role": "synthetic exact-fact retention scorer (not a real quality evaluator)"
+    }
+  ],
+  "sic_contract": {
+    "editor_tool": "sic_edit_blocks",
+    "editor_delivery": "exactly one tool call with ops and pvi; unmentioned units default to KEEP",
+    "operations": [
+      "KEEP",
+      "DELETE",
+      "FLAG",
+      "REORDER",
+      "COMPRESS",
+      "REPLACE",
+      "ADD"
+    ],
+    "pvi": "P (persistent), V (volatile pending), I (instant activation) are separated; V becomes pending source material",
+    "worker_teaching": {
+      "file": "src/prefix.rs",
+      "symbol": "WORKER_TEACHING",
+      "scope": "shared Worker SIC teaching and CB navigation"
+    },
+    "editor_mode": {
+      "file": "src/prefix.rs",
+      "mode": "EDITOR MODE",
+      "boundary": "Editor may activate only sic_edit_blocks and must not execute the task"
+    },
+    "worker_mode": {
+      "file": "src/prefix.rs",
+      "mode": "WORKER MODE",
+      "boundary": "Worker may not call sic_edit_blocks and uses only authorized tools"
+    },
+    "program_rules": {
+      "file": "src/scheduler.rs",
+      "rule": "deduplicate_exact",
+      "note": "deterministic rule package; zero model calls"
+    }
+  },
+  "adaptation": [
+    {
+      "source": "codex_compact_prompt",
+      "adopted": "checkpoint handoff sections: progress, constraints, remaining steps, critical references; explicit next-LLM audience",
+      "rejected": "single mutable summary as the only artifact; SIC keeps immutable CBs and ordered ops",
+      "difference": "SIC Editor returns sic_edit_blocks ops with default KEEP and PVI; a summary-like compression is one COMPRESS/REPLACE choice, not the whole protocol"
+    },
+    {
+      "source": "codex_summary_prefix",
+      "adopted": "summary framing is explicit and separable from generated content",
+      "rejected": "prefix alone cannot establish traceability; SIC binds frozen Editor snapshot and candidate revision",
+      "difference": "SIC records editor_source_snapshot_ids, candidate revision and program KEEP provenance"
+    },
+    {
+      "source": "swe_history_processors",
+      "adopted": "deterministic LastNObservations / ClosedWindow / RemoveRegex baselines, zero model calls",
+      "rejected": "dropping old observations without an edit record",
+      "difference": "SIC DELETE/FLAG/REPLACE are explicit, target-addressed, and replayable; late material is not claimed as Editor-seen"
+    },
+    {
+      "source": "aider_repomap",
+      "adopted": "deterministic relevance selection as a non-LLM baseline (PageRank/tree-sitter)",
+      "rejected": "repo-map relevance as a substitute for conversational WB/CB state",
+      "difference": "SIC material is WB/CB hierarchy with source anchors, not a repository symbol graph"
+    },
+    {
+      "source": "llmlingua_compressor",
+      "adopted": "compression-rate baseline and token-cost measurement",
+      "rejected": "unstructured token deletion; no target/op/PVI record",
+      "difference": "SIC compression is an ordered operation on units with PVI and validation; program KEEP closes late material"
+    }
+  ],
+  "model_freeze": {
+    "future_route": "fixed deepseek-v4.1-flash-eco",
+    "route_status": "not_run",
+    "price_status": "not_configured",
+    "note": "No paid provider call was made for this preparation package."
+  },
+  "status": {
+    "preparation": "partial",
+    "mechanical_acceptance": "not_run",
+    "research_evaluation": "not_evaluated",
+    "reasons": [
+      "only five representative public sources are locked; the survey is not exhaustive",
+      "new task set and a real independent rubric/scorer are not yet authored",
+      "no two-arm or variant comparison has been executed",
+      "synthetic exact-fact retention is not a semantic quality score"
+    ]
+  }
+}

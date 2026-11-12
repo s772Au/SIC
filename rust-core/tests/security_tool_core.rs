@@ -132,6 +132,28 @@ async fn configure_tool(core: &Core, ctx: &OperationContext) {
 }
 
 #[tokio::test]
+async fn worker_can_record_a_decision_without_asserting_completion() {
+    let response = tool_response(vec![tool_call(
+        "decision-add",
+        "sic_decision_write",
+        json!({"events":[{
+            "id":"worker-idea","kind":"candidate","text":"inspect the synthetic evidence","evidence":[]
+        }]}),
+    )]);
+    let (core, server, _) = fixture_core(response, Store::memory().await.unwrap()).await;
+    let chain = create_chain(&core, "alice").await;
+    let ctx = context("alice", Some(&chain), true, false);
+    ingest(&core, &ctx, "do the task").await;
+    let _ = core.operate("worker.run", &ctx, &json!({})).await.unwrap();
+    let decision = call(&core, &ctx, "decision.get", json!({})).await;
+    assert_eq!(
+        decision["decision"]["views"]["Not Tried Yet"][0]["id"],
+        "worker-idea"
+    );
+    server.abort();
+}
+
+#[tokio::test]
 async fn worker_cannot_mark_decision_item_completed_without_host_attestation() {
     let response = tool_response(vec![tool_call(
         "decision-1",

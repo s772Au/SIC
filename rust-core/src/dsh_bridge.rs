@@ -5,6 +5,9 @@
 //! The bridge persists session history and turn receipts in the Rust Core
 //! Store. In-flight work is never automatically replayed after an interruption.
 
+#[path = "dsh_bridge_observation.rs"]
+mod observation;
+
 #[path = "dsh.rs"]
 mod wire;
 
@@ -32,6 +35,16 @@ use std::{
 use uuid::Uuid;
 
 const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
+
+fn valid_native_id(value: &str) -> bool {
+    !value.trim().is_empty() && value.len() <= 256 && !value.chars().any(char::is_control)
+}
+
+fn valid_worker_attempt_id(value: &str) -> bool {
+    value.strip_prefix("worker_attempt_").is_some_and(|suffix| {
+        suffix.len() == 32 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
+}
 
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
@@ -83,9 +96,22 @@ impl DshRuntime for CoreRuntime {
             };
             core.operate(&operation, &context, &payload)
                 .await
-                // Only the fixed error code crosses this boundary; never the
-                // Core error text, source content, or provider response.
-                .map_err(|error| error.code.to_owned())
+                // Only fixed error codes and an independently validated,
+                // non-secret attempt ID cross this boundary; never source
+                // content, provider text, or arbitrary Core error messages.
+                .map_err(|error| {
+                    if matches!(
+                        error.code,
+                        "worker_invalid_choice_count" | "worker_retryable_http_5xx"
+                    ) {
+                        if let Some((id, _)) = error.message.split_once(": ") {
+                            if valid_worker_attempt_id(id) {
+                                return format!("{}:{id}", error.code);
+                            }
+                        }
+                    }
+                    error.code.to_owned()
+                })
         })
     }
 }
@@ -151,6 +177,12 @@ pub struct DshBridge {
     _store_guard: Arc<storage::StoreBridgeGuard>,
     runtime: Arc<dyn DshRuntime>,
     config: DshBridgeConfig,
+    invalid_worker_choice_retries: u8,
+    /// Retries after the first Worker turn whose Core result was classified as
+    /// an explicit HTTP 5xx. Default 1 preserves the historical single retry.
+    worker_http_retry_limit: u8,
+    /// Base delay before the first HTTP-5xx retry; doubles per retry.
+    worker_http_retry_backoff_ms: u64,
     session_gates: Arc<
         std::sync::Mutex<
             std::collections::HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>,
@@ -358,7 +390,7 @@ impl DshBridge {
         if config.model_alias.trim().is_empty()
             || config.fixed_max_tokens.is_some_and(|tokens| tokens == 0)
             || config.max_worker_calls_per_turn == 0
-            || config.max_worker_calls_per_turn > 32
+            || config.max_worker_calls_per_turn > 64
             || config.max_host_tasks_per_response == 0
             || config.max_host_tasks_per_response > 16
             || config.max_harness_tools == 0
@@ -366,9 +398,7 @@ impl DshBridge {
             || config
                 .fixed_reasoning_effort
                 .as_deref()
-                .is_some_and(|effort| {
-                    !matches!(effort, "low" | "medium" | "high" | "xhigh" | "max")
-                })
+                .is_some_and(|effort| !crate::model_policy::REASONING_EFFORTS.contains(&effort))
         {
             return Err(DshBridgeError::invalid(
                 "invalid fixed DSH route configuration",
@@ -388,10 +418,56 @@ impl DshBridge {
             _store_guard: Arc::new(store_guard),
             runtime,
             config,
+            invalid_worker_choice_retries: 0,
+            worker_http_retry_limit: 1,
+            worker_http_retry_backoff_ms: crate::model_policy::DEFAULT_WORKER_RETRY_BACKOFF_MS,
             session_gates: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         };
         bridge.initialize().await?;
         Ok(bridge)
+    }
+
+    /// Opt in to a bounded retry only after a complete Worker response had an
+    /// invalid choice count and Core confirmed no output/tool was admitted.
+    pub fn with_invalid_worker_choice_retries(
+        mut self,
+        retries: u8,
+    ) -> Result<Self, DshBridgeError> {
+        if retries > 2 {
+            return Err(DshBridgeError::invalid("invalid Worker choice retry limit"));
+        }
+        self.invalid_worker_choice_retries = retries;
+        Ok(self)
+    }
+
+    /// Shape the Worker HTTP-5xx retry that Core classifies. The profile's
+    /// `retry_worker_http_5xx` remains the opt-in switch; these values only
+    /// decide how many retries the bridge performs and how long it waits.
+    pub fn with_worker_http_retry_policy(
+        mut self,
+        max_attempts: u32,
+        backoff_ms: u64,
+    ) -> Result<Self, DshBridgeError> {
+        if !(1..=crate::model_policy::MAX_WORKER_RETRY_ATTEMPTS).contains(&max_attempts)
+            || backoff_ms > crate::model_policy::MAX_WORKER_RETRY_BACKOFF_MS
+        {
+            return Err(DshBridgeError::invalid("invalid Worker retry policy"));
+        }
+        self.worker_http_retry_limit = (max_attempts - 1) as u8;
+        self.worker_http_retry_backoff_ms = backoff_ms;
+        Ok(self)
+    }
+
+    /// Exponential backoff for retry number `retry` (1 is the first retry):
+    /// base, 2x, 4x, ... capped. Zero disables the wait without disabling retry.
+    fn worker_retry_delay_ms(&self, retry: u8) -> u64 {
+        let base = self.worker_http_retry_backoff_ms;
+        if base == 0 {
+            return 0;
+        }
+        let shift = retry.saturating_sub(1).min(3);
+        base.saturating_mul(1u64 << shift)
+            .min(crate::model_policy::MAX_WORKER_RETRY_BACKOFF_MS)
     }
 
     async fn initialize(&self) -> Result<(), DshBridgeError> {
@@ -439,12 +515,45 @@ impl DshBridge {
             "CREATE TABLE IF NOT EXISTS dsh_bridge_tool_tasks(\
                 actor TEXT NOT NULL,session_key TEXT NOT NULL,call_id TEXT NOT NULL,\
                 task_id TEXT NOT NULL,tool_name TEXT NOT NULL,arguments TEXT NOT NULL,\
-                task_state TEXT NOT NULL,result_fingerprint TEXT,created INTEGER NOT NULL,\
+                task_state TEXT NOT NULL,result_fingerprint TEXT,created INTEGER NOT NULL,completion_outcome TEXT,\
                 PRIMARY KEY(actor,session_key,call_id),UNIQUE(actor,session_key,task_id))",
         )
         .execute(&mut *tx)
         .await
         .map_err(|_| DshBridgeError::internal())?;
+        let task_columns = sqlx::query("PRAGMA table_info(dsh_bridge_tool_tasks)")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|_| DshBridgeError::internal())?;
+        if !task_columns.iter().any(|row| {
+            row.try_get::<String, _>("name")
+                .is_ok_and(|name| name == "completion_outcome")
+        }) {
+            sqlx::query("ALTER TABLE dsh_bridge_tool_tasks ADD COLUMN completion_outcome TEXT")
+                .execute(&mut *tx)
+                .await
+                .map_err(|_| DshBridgeError::internal())?;
+        }
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS dsh_bridge_tool_events(\
+             actor TEXT NOT NULL,session_key TEXT NOT NULL,call_id TEXT NOT NULL,\
+             event_seq INTEGER NOT NULL,outcome TEXT NOT NULL,observed_at INTEGER NOT NULL,core_observed INTEGER NOT NULL DEFAULT 0,\
+             PRIMARY KEY(actor,session_key,call_id),UNIQUE(actor,session_key,event_seq))",
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| DshBridgeError::internal())?;
+        let event_columns = sqlx::query("PRAGMA table_info(dsh_bridge_tool_events)")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|_| DshBridgeError::internal())?;
+        if !event_columns.iter().any(|row| {
+            row.try_get::<String, _>("name")
+                .is_ok_and(|name| name == "core_observed")
+        }) {
+            sqlx::query("ALTER TABLE dsh_bridge_tool_events ADD COLUMN core_observed INTEGER NOT NULL DEFAULT 0")
+                .execute(&mut *tx).await.map_err(|_| DshBridgeError::internal())?;
+        }
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS dsh_bridge_turns(\
                 actor TEXT NOT NULL,session_key TEXT NOT NULL,fingerprint TEXT NOT NULL,\
@@ -455,6 +564,12 @@ impl DshBridge {
         .execute(&mut *tx)
         .await
         .map_err(|_| DshBridgeError::internal())?;
+        // The extra index permits a bounded latest-turn lookup for one
+        // authenticated session without ordering the whole turn history.
+        sqlx::query("CREATE INDEX IF NOT EXISTS dsh_bridge_turns_session_order ON dsh_bridge_turns(actor,session_key)")
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| DshBridgeError::internal())?;
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS dsh_bridge_retirements(\
             actor TEXT NOT NULL,session_key TEXT NOT NULL,chain_id TEXT,\
@@ -495,6 +610,10 @@ impl DshBridge {
         // a per-session gate across the whole turn, then recheck history and
         // receipts. No network or database lock is held while waiting.
         let _permit = self.lock_session(actor, &request.session_id).await?;
+        // Finish recording any previously acknowledged-by-DSH observation
+        // before building an Editor/Worker request. No external tool is replayed.
+        self.reconcile_native_observations(actor, &request.session_id)
+            .await?;
         if request
             .reasoning_effort
             .as_deref()
@@ -620,11 +739,36 @@ impl DshBridge {
         let active: Option<String> = row
             .try_get("active_fingerprint")
             .map_err(|_| DshBridgeError::internal())?;
-        if active.is_some() {
-            return Err(DshBridgeError::conflict(
-                "session_busy",
-                "DSH session has an unresolved turn",
-            ));
+        if let Some(active_fingerprint) = active.as_deref() {
+            // A failed turn is terminal, but its admission fingerprint used to
+            // remain set forever, making the DSH session permanently busy. A
+            // new turn may reclaim only an explicitly failed turn; running or
+            // missing turn state stays busy.
+            let turn_state: Option<String> = sqlx::query(
+                "SELECT state FROM dsh_bridge_turns WHERE actor=? AND session_key=? AND fingerprint=?",
+            )
+            .bind(actor)
+            .bind(&request.session_id)
+            .bind(active_fingerprint)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|_| DshBridgeError::internal())?
+            .and_then(|row| row.try_get::<String, _>("state").ok());
+            if turn_state.as_deref() != Some("failed") {
+                return Err(DshBridgeError::conflict(
+                    "session_busy",
+                    "DSH session has an unresolved turn",
+                ));
+            }
+            sqlx::query(
+                "UPDATE dsh_bridge_sessions SET active_fingerprint=NULL WHERE actor=? AND session_key=? AND active_fingerprint=?",
+            )
+            .bind(actor)
+            .bind(&request.session_id)
+            .bind(active_fingerprint)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| DshBridgeError::internal())?;
         }
         let history_text: String = row
             .try_get("history")
@@ -775,6 +919,41 @@ impl DshBridge {
                 .map(str::to_owned)
                 .ok_or((DshBridgeError::core_failure(), false))?;
             pending_sources.push(source_id.clone());
+            // A session may resume after another host operation (for example a
+            // peer adoption/program schedule) already consumed older sources.
+            // Keep only sources that are still pending, or belong to a pending
+            // group, so include_earlier_pending cannot resurrect stale roots.
+            // A first turn has a single pending source, so it keeps the cheap
+            // path; test hosts that do not implement chain.get also stay valid.
+            if pending_sources.len() > 1 {
+                if let Ok(current) = self
+                    .operation(actor, Some(chain), "chain.get", json!({}), false)
+                    .await
+                {
+                    let pending_roots =
+                        current["result"]["contexts"]["main"]["levels"]["1"]["pending"]
+                            .as_array()
+                            .cloned()
+                            .unwrap_or_default();
+                    // A test host or a status-only projection may omit the
+                    // context; only filter when the live pending set is known.
+                    if !pending_roots.is_empty() {
+                        let groups = &current["result"]["groups"];
+                        let mut allowed = std::collections::BTreeSet::new();
+                        for root in &pending_roots {
+                            if let Some(root) = root.as_str() {
+                                allowed.insert(root.to_owned());
+                                if let Some(parts) = groups.get(root).and_then(Value::as_array) {
+                                    for part in parts.iter().filter_map(Value::as_str) {
+                                        allowed.insert(part.to_owned());
+                                    }
+                                }
+                            }
+                        }
+                        pending_sources.retain(|id| allowed.contains(id));
+                    }
+                }
+            }
             progress["ingested_source_id"] = json!(source_id);
             self.set_phase(
                 actor,
@@ -798,17 +977,17 @@ impl DshBridge {
             // `wb.form` may combine prior Worker output and the new harness
             // message. Its root is the earliest pending source, not necessarily
             // the source just ingested on this turn.
-            let expected_wb_source = pending_sources
-                .first()
-                .cloned()
-                .ok_or((DshBridgeError::core_failure(), false))?;
+            if pending_sources.is_empty() {
+                return Err((DshBridgeError::core_failure(), false));
+            }
             let formed = self
                 .operation(
                     actor,
                     Some(chain),
                     "wb.form",
                     json!({
-                        "source_ids":pending_sources,"reason":"dsh-turn"
+                        "source_ids":pending_sources,"reason":"dsh-turn",
+                        "include_earlier_pending":true
                     }),
                     false,
                 )
@@ -818,9 +997,15 @@ impl DshBridge {
                 .as_str()
                 .map(str::to_owned)
                 .ok_or((DshBridgeError::core_failure(), false))?;
+            let roots: Vec<String> =
+                serde_json::from_value(formed["result"]["source_roots"].clone())
+                    .map_err(|_| (DshBridgeError::core_failure(), false))?;
+            if !roots.ends_with(&pending_sources) {
+                return Err((DshBridgeError::core_failure(), false));
+            }
             let wb_source_id = formed["result"]["source_id"]
                 .as_str()
-                .filter(|source| *source == expected_wb_source)
+                .filter(|source| roots.first().is_some_and(|root| root == source))
                 .map(str::to_owned)
                 .ok_or((DshBridgeError::core_failure(), false))?;
             progress["wb_id"] = json!(wb_id);
@@ -912,6 +1097,22 @@ impl DshBridge {
                 .await
                 .map_err(|e| (e, true))?;
             progress["published_cut"] = published["result"]["cut_id"].clone();
+            progress["published_cb"] = published["result"]["cb_id"].clone();
+            if let Some(volatile_source) = published["result"]["volatile_source_id"].as_str() {
+                // V is already visible as pending input to this Worker's next
+                // call and must also precede its output in the next WB.
+                pending_sources.push(volatile_source.to_owned());
+                progress["volatile_source_id"] = json!(volatile_source);
+            }
+            self.set_phase(
+                actor,
+                &request.session_id,
+                fingerprint,
+                "cut_published",
+                &progress,
+            )
+            .await
+            .map_err(|e| (e, true))?;
         } else {
             let additions_by_id: std::collections::HashMap<&str, &Value> = additions
                 .iter()
@@ -939,6 +1140,17 @@ impl DshBridge {
                     false,
                 ))?;
                 let result = Value::String(content.to_owned());
+                // A native tool event may have arrived before this continuation.
+                // Absence or a recovered unknown outcome remains unknown.
+                let native = self
+                    .native_tool_outcome(actor, &request.session_id, &task.call_id)
+                    .await
+                    .map_err(|e| (e, true))?;
+                let succeeded = match native.as_deref() {
+                    Some("ok") => Some(true),
+                    Some("error" | "not_started") => Some(false),
+                    _ => None,
+                };
                 self.set_phase(
                     actor,
                     &request.session_id,
@@ -948,21 +1160,31 @@ impl DshBridge {
                 )
                 .await
                 .map_err(|e| (e, true))?;
-                let completed = self.operation(
-                    actor,
-                    Some(chain),
-                    "tool.complete",
-                    json!({
-                        "task_id":task.task_id,
-                        "claim_id":stable_tool_claim_id(actor, &request.session_id, &task.task_id)
-                            .map_err(|e| (e, true))?,
-                        "succeeded":Value::Null,"result":result,"delivery":"received"
-                    }),
-                    false,
-                )
-                .await
-                .map_err(|e| (e, true))?;
-                if completed["result"]["status"].as_str() != Some("delivered_unattested") {
+                let mut completion_payload = json!({
+                    "task_id":task.task_id,
+                    "claim_id":stable_tool_claim_id(actor, &request.session_id, &task.task_id)
+                        .map_err(|e| (e, true))?,
+                    "succeeded":succeeded,"result":result
+                });
+                if succeeded.is_none() {
+                    completion_payload["delivery"] = json!("received");
+                }
+                let completed = self
+                    .operation(
+                        actor,
+                        Some(chain),
+                        "tool.complete",
+                        completion_payload,
+                        false,
+                    )
+                    .await
+                    .map_err(|e| (e, true))?;
+                let expected_status = if succeeded.is_some() {
+                    "completed"
+                } else {
+                    "delivered_unattested"
+                };
+                if completed["result"]["status"].as_str() != Some(expected_status) {
                     return Err((
                         DshBridgeError::conflict(
                             "tool_delivery_unconfirmed",
@@ -972,13 +1194,17 @@ impl DshBridge {
                     ));
                 }
                 let result_fingerprint =
-                    storage::digest(&json!({"succeeded":null,"result":result}))
+                    storage::digest(&json!({"succeeded":succeeded,"result":result}))
                         .map_err(|_| (DshBridgeError::internal(), true))?;
                 self.mark_task_completed(
                     actor,
                     &request.session_id,
                     &task.call_id,
                     &result_fingerprint,
+                    native
+                        .as_deref()
+                        .filter(|_| succeeded.is_some())
+                        .unwrap_or("unknown"),
                 )
                 .await
                 .map_err(|e| (e, true))?;
@@ -1049,6 +1275,9 @@ impl DshBridge {
             .map_err(|e| (e, true))?;
         }
 
+        let mut invalid_choice_retries = 0u8;
+        let mut worker_http_5xx_retries = 0u8;
+        let mut retry_after_attempt: Option<String> = None;
         loop {
             if worker_calls >= self.config.max_worker_calls_per_turn {
                 return Err((
@@ -1078,10 +1307,60 @@ impl DshBridge {
             )
             .await
             .map_err(|e| (e, true))?;
-            let worker = self
-                .operation(actor, Some(chain), "worker.run", json!({}), true)
-                .await
-                .map_err(|e| (e, true))?;
+            let payload = match retry_after_attempt.take() {
+                Some(attempt) => json!({"retry_after_attempt":attempt}),
+                None => json!({}),
+            };
+            let worker = match self.worker_operation(actor, chain, payload).await {
+                Ok(worker) => worker,
+                Err((error, Some(attempt)))
+                    if error.code == "worker_invalid_choice_count"
+                        && invalid_choice_retries < self.invalid_worker_choice_retries
+                        && worker_calls < self.config.max_worker_calls_per_turn =>
+                {
+                    invalid_choice_retries += 1;
+                    retry_after_attempt = Some(attempt);
+                    progress["invalid_worker_choice_retries"] = json!(invalid_choice_retries);
+                    self.set_phase(
+                        actor,
+                        &request.session_id,
+                        fingerprint,
+                        "worker_invalid_choice_rejected",
+                        &progress,
+                    )
+                    .await
+                    .map_err(|e| (e, true))?;
+                    continue;
+                }
+                // Core returns this code only after persisting a completed
+                // attempt with an explicitly retryable HTTP status, no
+                // admitted response or tools, and profile opt-in. The bridge
+                // retry is bounded by both the host policy and the turn budget.
+                Err((error, Some(attempt)))
+                    if error.code == "worker_retryable_http_5xx"
+                        && worker_http_5xx_retries < self.worker_http_retry_limit
+                        && worker_calls < self.config.max_worker_calls_per_turn =>
+                {
+                    worker_http_5xx_retries += 1;
+                    retry_after_attempt = Some(attempt);
+                    progress["worker_http_5xx_retries"] = json!(worker_http_5xx_retries);
+                    self.set_phase(
+                        actor,
+                        &request.session_id,
+                        fingerprint,
+                        "worker_http_5xx_rejected",
+                        &progress,
+                    )
+                    .await
+                    .map_err(|e| (e, true))?;
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        self.worker_retry_delay_ms(worker_http_5xx_retries),
+                    ))
+                    .await;
+                    continue;
+                }
+                Err((error, _)) => return Err((error, true)),
+            };
             let result = &worker["result"];
             let calls = result
                 .get("tool_calls")
@@ -1263,14 +1542,15 @@ impl DshBridge {
         session: &str,
         call_id: &str,
         fingerprint: &str,
+        completion_outcome: &str,
     ) -> Result<(), DshBridgeError> {
         let mut tx = self
             .store
             .begin()
             .await
             .map_err(|_| DshBridgeError::internal())?;
-        let changed = sqlx::query("UPDATE dsh_bridge_tool_tasks SET task_state='completed',result_fingerprint=? WHERE actor=? AND session_key=? AND call_id=? AND task_state='issued'")
-            .bind(fingerprint).bind(actor).bind(session).bind(call_id).execute(&mut *tx).await.map_err(|_|DshBridgeError::internal())?;
+        let changed = sqlx::query("UPDATE dsh_bridge_tool_tasks SET task_state='completed',result_fingerprint=?,completion_outcome=? WHERE actor=? AND session_key=? AND call_id=? AND task_state='issued'")
+            .bind(fingerprint).bind(completion_outcome).bind(actor).bind(session).bind(call_id).execute(&mut *tx).await.map_err(|_|DshBridgeError::internal())?;
         if changed.rows_affected() != 1 {
             return Err(DshBridgeError::conflict(
                 "tool_task_state",
@@ -1297,13 +1577,62 @@ impl DshBridge {
                 allow_model,
             )
             .await
-            .map_err(|error| match error.as_str() {
-                "protected_prefix_conflict" => DshBridgeError::conflict(
-                    "protected_prefix_conflict",
-                    "Harness instructions differ from the Agent's immutable protected prefix",
-                ),
-                _ => DshBridgeError::core_failure(),
+            .map_err(|error| Self::map_operation_error(&error))
+    }
+
+    async fn worker_operation(
+        &self,
+        actor: &str,
+        chain_id: &str,
+        payload: Value,
+    ) -> Result<Value, (DshBridgeError, Option<String>)> {
+        self.runtime
+            .operate(
+                actor.to_owned(),
+                Some(chain_id.to_owned()),
+                "worker.run".to_owned(),
+                payload,
+                true,
+            )
+            .await
+            .map_err(|error| {
+                let (code, attempt) = match error.split_once(':') {
+                    Some((code, id))
+                        if matches!(
+                            code,
+                            "worker_invalid_choice_count" | "worker_retryable_http_5xx"
+                        ) && valid_worker_attempt_id(id) =>
+                    {
+                        (code, Some(id.to_owned()))
+                    }
+                    _ => (error.as_str(), None),
+                };
+                (Self::map_operation_error(code), attempt)
             })
+    }
+
+    fn map_operation_error(error: &str) -> DshBridgeError {
+        match error {
+            "protected_prefix_conflict" => DshBridgeError::conflict(
+                "protected_prefix_conflict",
+                "Harness instructions differ from the Agent's immutable protected prefix",
+            ),
+            "worker_invalid_choice_count" => DshBridgeError {
+                status: StatusCode::BAD_GATEWAY,
+                code: "worker_invalid_choice_count",
+                message: "Provider returned an invalid choice count; no output or tool from it was admitted",
+            },
+            "worker_retryable_http_5xx" => DshBridgeError {
+                status: StatusCode::BAD_GATEWAY,
+                code: "worker_retryable_http_5xx",
+                message: "Provider returned an explicit temporary server error; no output or tool from it was admitted",
+            },
+            "worker_retry_context_changed" => DshBridgeError::conflict(
+                "worker_retry_context_changed",
+                "Worker context changed before the failed attempt could be retried",
+            ),
+            _ => DshBridgeError::core_failure(),
+        }
     }
 
     async fn set_phase(
@@ -1419,47 +1748,6 @@ impl DshBridge {
             ));
         }
         tx.commit().await.map_err(|_| DshBridgeError::internal())
-    }
-
-    /// Return a persisted state summary for host recovery tooling. It contains
-    /// no prompt bodies, credentials, or provider response text.
-    pub async fn session_status(
-        &self,
-        actor: &str,
-        session: &str,
-    ) -> Result<Value, DshBridgeError> {
-        let mut tx = self
-            .store
-            .begin()
-            .await
-            .map_err(|_| DshBridgeError::internal())?;
-        let row = sqlx::query("SELECT s.chain_id,s.active_fingerprint,t.state,t.phase,t.error_code FROM dsh_bridge_sessions s LEFT JOIN dsh_bridge_turns t ON t.actor=s.actor AND t.session_key=s.session_key AND t.fingerprint=s.active_fingerprint WHERE s.actor=? AND s.session_key=?")
-            .bind(actor).bind(session).fetch_optional(&mut *tx).await.map_err(|_| DshBridgeError::internal())?;
-        let Some(row) = row else {
-            return Err(DshBridgeError {
-                status: StatusCode::NOT_FOUND,
-                code: "session_not_found",
-                message: "DSH session not found",
-            });
-        };
-        let active_fingerprint = row
-            .try_get::<Option<String>, _>("active_fingerprint")
-            .map_err(|_| DshBridgeError::internal())?;
-        let retired: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM dsh_bridge_retirements WHERE actor=? AND session_key=?",
-        )
-        .bind(actor)
-        .bind(session)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|_| DshBridgeError::internal())?;
-        let status = json!({"chain_id":row.try_get::<Option<String>,_>("chain_id").map_err(|_|DshBridgeError::internal())?,
-            "active":active_fingerprint.is_some(),"active_fingerprint":active_fingerprint,"retired":retired.is_some(),
-            "state":row.try_get::<Option<String>,_>("state").map_err(|_|DshBridgeError::internal())?,
-            "phase":row.try_get::<Option<String>,_>("phase").map_err(|_|DshBridgeError::internal())?,
-            "error_code":row.try_get::<Option<String>,_>("error_code").map_err(|_|DshBridgeError::internal())?});
-        tx.commit().await.map_err(|_| DshBridgeError::internal())?;
-        Ok(status)
     }
 
     /// Seal an unresolved DSH session without replaying its provider calls or
@@ -2030,7 +2318,30 @@ pub fn router(bridge: Arc<DshBridge>, resolve_actor: ActorResolver) -> Router {
     };
     Router::new()
         .route("/chat/completions", post(chat_completions))
-        .route("/sic/status", post(session_status_route))
+        .route(
+            "/sic/status",
+            post(observation::session_status_route).layer(DefaultBodyLimit::max(4 * 1024)),
+        )
+        .route(
+            "/sic/accounting",
+            post(observation::session_accounting_route).layer(DefaultBodyLimit::max(4 * 1024)),
+        )
+        .route(
+            "/sic/native-tool-event",
+            post(observation::native_tool_event_route).layer(DefaultBodyLimit::max(4 * 1024)),
+        )
+        .route(
+            "/sic/tool-events",
+            post(observation::session_tool_events_route).layer(DefaultBodyLimit::max(4 * 1024)),
+        )
+        .route(
+            "/sic/context",
+            post(observation::session_context_route).layer(DefaultBodyLimit::max(4 * 1024)),
+        )
+        .route(
+            "/sic/decision-event",
+            post(observation::session_decision_event_route).layer(DefaultBodyLimit::max(8 * 1024)),
+        )
         .route("/sic/bind", post(bind_existing_session_route))
         .route("/sic/retire", post(retire_unresolved_session_route))
         .with_state(state.clone())
@@ -2138,53 +2449,6 @@ async fn bind_existing_session_route(
         .bind_existing_session(&actor, session, chain)
         .await
     {
-        Ok(value) => (StatusCode::OK, Json(value)).into_response(),
-        Err(error) => error_response(error.status, error.code, error.message),
-    }
-}
-
-async fn session_status_route(
-    State(state): State<RouteState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    let actor = match (state.resolve_actor)(&headers) {
-        Ok(actor) if !actor.trim().is_empty() => actor,
-        _ => {
-            return error_response(
-                StatusCode::UNAUTHORIZED,
-                "unauthorized",
-                "Host authentication required",
-            );
-        }
-    };
-    let value: Value = match serde_json::from_slice(&body) {
-        Ok(value) => value,
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid_json",
-                "Request body must be JSON",
-            );
-        }
-    };
-    let session = match value
-        .as_object()
-        .filter(|fields| fields.len() == 1)
-        .and_then(|fields| fields.get("session_id"))
-        .and_then(Value::as_str)
-        .filter(|id| !id.trim().is_empty() && id.len() <= 256)
-    {
-        Some(id) => id,
-        None => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid_request",
-                "A bounded session_id is required",
-            );
-        }
-    };
-    match state.bridge.session_status(&actor, session).await {
         Ok(value) => (StatusCode::OK, Json(value)).into_response(),
         Err(error) => error_response(error.status, error.code, error.message),
     }

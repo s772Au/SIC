@@ -1,6 +1,6 @@
 {
   "schema": "sic-functional-source-acceptance-v2",
-  "status": "author-cost-and-shared-prefix-target-revision; prior-implementation-acceptance-separately-pinned",
+  "status": "publication-aligned-functional-targets; implementation evidence must bind this revision separately",
   "source_priority": "当前作者补正/冻结两稿决定机制；救回稿只补机制来源；当前代码/API和旧实验不决定需求。",
   "legacy_baseline": "旧R01–R65失配、不可证明本基线完备；旧场景记录仅能按其真实范围另行引用。",
   "sources": [
@@ -46,7 +46,7 @@
     {
       "id": "U-COST-PREFIX",
       "type": "explicit-author-cost-design-correction",
-      "section": "作者最新补正：同WB/CB共同成本；分离CP/WP当前对照；同一Worker SIC教学与CB公共前缀；后置宿主可信I编辑模式；操作式CB交付及真实权限；方案B待实现验证。"
+      "section": "作者成本与模式补正：同WB/CB共同成本；分离CP/WP为A对照；B采用一致的Worker SIC教学、CB公共前缀和同序公共注册表，仅在后置可信I激活角色/功能/工具；七类op/PVI交付；当前可选原型状态与物理缓存/费用/质量证据分开。"
     }
   ],
   "groups": [
@@ -286,7 +286,7 @@
       "negative": "删去任一必要usage/价/测量应保持unknown/不完整；改变币种不得暗加；有高阶/peer实际调用必须全入账",
       "controlled_case": {
         "id": "T-COST-CONTROL",
-        "scope": "虚构TEST代数fixture，与总账280例独立；不是旧实验参数",
+        "scope": "独立TEST代数特例；A首次冷/随后命中；不是通用净差式或实测",
         "background_counts": [
           10,
           20,
@@ -304,7 +304,20 @@
           "H": "10",
           "delta_cost": "19"
         },
-        "negative": "任一控制条件不成立不强套此式，返回两臂实际总账并记录不适用原因"
+        "negative": "任一控制条件不成立不强套此式，返回两臂实际总账并记录不适用原因",
+        "mapping_to_general_delta": {
+          "C_E_CB_bg": "61",
+          "R_E": "0",
+          "S_W_prefix": "40",
+          "Delta_C_CB_target": "-9 = p_o*(O_S-O_B)",
+          "D_front": "0",
+          "Delta_C_mix": "0",
+          "Delta_C_other": "7",
+          "Delta_C_WB_once": "0",
+          "Delta_C_Worker_CB_first": "0",
+          "C_cache_write": "0",
+          "condition": "旧S_W=40在本例仅表示prefix节省，Worker其他差额为0；原D=7明确映射Delta_C_other"
+        }
       }
     },
     {
@@ -315,7 +328,7 @@
     },
     {
       "id": "T-COST-SHARED-PREFIX",
-      "scope": "新B方案验收目标，不声明实现/通过",
+      "scope": "明确B功能与代价验收；自有TEST代数/机械fixture，不是物理命中或实测收益",
       "cases": [
         "同对象集中/增量共同项抵消及额外WB重读/输出/目标/首次接入差额",
         "A F冷/H命中、全冷及B理想共享的独立手算",
@@ -323,7 +336,152 @@
         "新WB scope正确、上CB与跨job单元拒绝target、操作式新CB append",
         "宿主激活工具正例、未激活/伪造pvi.I/capability/撤权负例",
         "model/cache namespace/schema/envelope/context/level/预算/媒体分叉及完整fallback",
-        "公共教学新增费与额外轮次不双算；未知物理cache保持unknown"
+        "公共教学新增费与额外轮次不双算；未知物理cache保持unknown",
+        "公共教学稳定段CP=WP；可信I后置激活而模型editable I伪造不能改mode/权限",
+        "两个Editor共同plan、独立assigned units并行；main三阶与private Editor三阶各实际运行、不同scope不宣称共享",
+        "新cut追加后重新冻结；完整预算不足明确拒绝/回A且无静默截断/丢媒体",
+        "Langflow与Studio各自保存/重载/执行，真实请求与Core一致，两个GUI分开记状态",
+        "迟到program KEEP不是Editor已读；源一次读取条件按source_snapshot核实际覆盖"
+      ],
+      "required_feature_ids": [
+        "F01",
+        "F02",
+        "F04",
+        "F05",
+        "F13",
+        "F14",
+        "F17",
+        "F19",
+        "F25",
+        "F27",
+        "F28",
+        "F35",
+        "F36",
+        "F51",
+        "F52",
+        "F54",
+        "F56",
+        "F57",
+        "F58",
+        "F59",
+        "F60",
+        "F64",
+        "F69",
+        "F70",
+        "F71",
+        "F73"
+      ],
+      "algebra_cases": [
+        {
+          "id": "C01-A-cold-then-hit",
+          "F": "30",
+          "H": "10",
+          "M": "30",
+          "p_u": "2",
+          "p_h": "0.1",
+          "write_adjust": "0",
+          "expected_background": "61"
+        },
+        {
+          "id": "C02-A-all-cold",
+          "F": "30",
+          "H": "10",
+          "M": "40",
+          "p_u": "2",
+          "p_h": "0.1",
+          "write_adjust": "0",
+          "expected_background": "80"
+        },
+        {
+          "id": "C03-B-ideal-conditional",
+          "F": "30",
+          "H": "10",
+          "M": "0",
+          "p_u": "2",
+          "p_h": "0.1",
+          "write_adjust": "0",
+          "expected_background": "4",
+          "condition": "只为理想条件手算，实际M须provider证据"
+        },
+        {
+          "id": "C04-B-partial-miss",
+          "F": "30",
+          "H": "10",
+          "M": "5",
+          "p_u": "2",
+          "p_h": "0.1",
+          "write_adjust": "0",
+          "expected_background": "13.5"
+        },
+        {
+          "id": "C05-inclusive-cache-write",
+          "F": "30",
+          "H": "10",
+          "M": "30",
+          "p_u": "2",
+          "p_h": "0.1",
+          "write_adjust": "15",
+          "expected_background": "76",
+          "exclusive_provider_bill": "30*2.5+10*0.1=76",
+          "negative": "61+30*2.5=136为重复加基础输入"
+        },
+        {
+          "id": "C06-general-delta",
+          "components": {
+            "C_E_CB_bg": "61",
+            "R_E": "12",
+            "S_W_prefix": "40",
+            "Delta_C_WB_once": "0",
+            "Delta_C_CB_target": "0",
+            "Delta_C_Worker_CB_first": "0",
+            "D_front": "0",
+            "Delta_C_mix": "3",
+            "Delta_C_other": "7"
+          },
+          "expected_delta": "43"
+        },
+        {
+          "id": "C07-unmatched-common-items",
+          "components": {
+            "C_E_CB_bg": "61",
+            "R_E": "12",
+            "S_W_prefix": "40",
+            "Delta_C_WB_once": "5",
+            "Delta_C_CB_target": "-9",
+            "Delta_C_Worker_CB_first": "2",
+            "D_front": "4",
+            "Delta_C_mix": "3",
+            "Delta_C_other": "7"
+          },
+          "expected_delta": "45"
+        },
+        {
+          "id": "C08-extra-round-prompt-once",
+          "paired_mix_growth": "3",
+          "extra_round_full_prompt_cost_in_R_E": "12",
+          "expected_added": "15",
+          "negative": "额外轮次中的共同提示不能再加到Delta_C_mix"
+        },
+        {
+          "id": "C09-missing-usage-or-price",
+          "usage": null,
+          "price": null,
+          "expected": "unknown; no invented M=0, cash total or saving"
+        },
+        {
+          "id": "C10-cross-route-overlap",
+          "editor_A": [
+            10,
+            12
+          ],
+          "tool_B": [
+            10,
+            12
+          ],
+          "tools_A": [],
+          "expected_task_intersection": "2",
+          "expected_same_route_overlap": "0"
+        }
       ]
     }
   ],
@@ -337,21 +495,25 @@
       "normal_steps": [
         "提交带精确重复与需重述材料的任务",
         "运行规则及Editor",
-        "让Worker使用结果继续任务"
+        "让Worker使用结果继续任务",
+        "在同一Agent内切换Worker与Editor模式：公共SIC教学及CB前缀不变，仅可信I和其后角色材料变化；分别实际续做和提交编辑操作"
       ],
       "pass_conditions": [
         "确定规则有程序执行证据且无需模型代做",
         "语义编辑真实经过Editor",
-        "增加Editor不自动增加Agent数"
+        "增加Editor不自动增加Agent数",
+        "B中CP/WP的稳定教学一致，Editor职责已纳入Worker的SIC教学；程序主动编辑及原角色分工不因共用教学而消失"
       ],
       "negative_cases": [
         "把每个模型实例算成独立Agent",
-        "规则通过便断言语义正确"
+        "规则通过便断言语义正确",
+        "把完整CP与WP拼接或角色名提前置入公共前缀后仍称B一致"
       ],
       "required_evidence": [
         "角色配置",
         "规则执行记录",
-        "Editor和Worker实际请求/响应与链身份"
+        "Editor和Worker实际请求/响应与链身份",
+        "两种模式实际原生请求、可信激活来源及七类op交付"
       ],
       "sources": [
         {
@@ -369,12 +531,21 @@
         {
           "source": "P",
           "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -386,21 +557,25 @@
       "normal_steps": [
         "给Worker和Editor配置不同的允许profile",
         "冻结任务后更新默认配置",
-        "分别运行原任务和新任务"
+        "分别运行原任务和新任务",
+        "在同模型/同scope下冻结一次共同计划，计入公共教学、CB/op/索引、注册表、可信I、editable I及角色WB；再分别改变模型、level和完整预算"
       ],
       "pass_conditions": [
         "原任务保留冻结绑定",
         "新任务采用新版本",
-        "正文/提示/op/索引/工具/元数据均计入输入预算"
+        "正文/提示/op/索引/工具/元数据均计入输入预算",
+        "角色模型与预算仍可分别配置；共享只在实际相容的model/provider/cache namespace及同scope/预算下成立；不足时显式拒绝或完整回A，不截断新WB或媒体"
       ],
       "negative_cases": [
         "无声明切换模型或截断材料后称完整",
-        "把同系列兼容写成已证实"
+        "把同系列兼容写成已证实",
+        "为共享强制所有角色同模型或压低预算并静默丢材料"
       ],
       "required_evidence": [
         "配置版本",
         "实际返回模型身份",
-        "完整请求计数与tokenizer依据"
+        "完整请求计数与tokenizer依据",
+        "完整实际请求计数、准入结果、冻结模型/预算及回退原因"
       ],
       "sources": [
         {
@@ -430,12 +605,21 @@
         {
           "source": "P",
           "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -498,23 +682,27 @@
       "normal_steps": [
         "分配两范围并用屏障令两个Editor同时在途",
         "完成两份响应",
-        "合并发布"
+        "合并发布",
+        "两个Editor围绕共同cut分配不重叠单元；公共计划相同，各可信I携带各自job/assigned units并同时在途"
       ],
       "pass_conditions": [
         "两次调用确有并行区间",
         "未分配单元KEEP",
-        "冲突/不全不半发布"
+        "冲突/不全不半发布",
+        "job、分工和时间不进入公共前缀；宿主在合并及采用时重核分工范围/当前授权"
       ],
       "negative_cases": [
         "顺序执行冒充并行",
         "两个Editor被当两Agent",
-        "晚响应覆盖新版本"
+        "晚响应覆盖新版本",
+        "共享计划使Editor甲可提交Editor乙的单元"
       ],
       "required_evidence": [
         "分工/背景快照",
         "调用区间",
         "冲突测试",
-        "合并后正文/op"
+        "合并后正文/op",
+        "共同plan与两份可信I、实际并发区间、跨分工拒绝及合并结果"
       ],
       "sources": [
         {
@@ -532,12 +720,21 @@
         {
           "source": "P",
           "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -554,7 +751,8 @@
       "pass_conditions": [
         "正文编辑有效",
         "角色、调用ID、控制字段按宿主约束合法",
-        "适配在SIC内部，proxy可选"
+        "适配在SIC内部，proxy可选",
+        "共同前缀不得通过抹去原生role/tool-call/result关联或媒体骨架来形成；Editor仍只编辑授权正文"
       ],
       "negative_cases": [
         "Editor修改完整请求控制JSON",
@@ -565,7 +763,8 @@
         "原请求",
         "正文/sidecar对照",
         "encode后请求",
-        "后续实际响应与声明格式清单"
+        "后续实际响应与声明格式清单",
+        "共享/分离两种请求编码及原生协议对照"
       ],
       "sources": [
         {
@@ -575,12 +774,21 @@
         {
           "source": "P",
           "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -953,12 +1161,14 @@
       "normal_steps": [
         "构造低阶全文超预算、高阶表示可容纳的历史",
         "选择高阶视图",
-        "实际运行Worker下一步"
+        "实际运行Worker下一步",
+        "让Worker实际采用三阶CB；对同三阶scope生成Editor参考请求并核公共序列；再改回一阶核首差"
       ],
       "pass_conditions": [
         "请求中有真实高阶CB/层级信息",
         "未同时重复灌入全部低阶全文",
-        "模型在声明预算内继续"
+        "模型在声明预算内继续",
+        "真正采用高阶产物和逐阶追溯能力保留；不同阶视图不被报告为同一共享scope"
       ],
       "negative_cases": [
         "只有preview",
@@ -990,12 +1200,21 @@
         {
           "source": "P",
           "section": "§6.2 多阶记忆与双维导航"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -1007,12 +1226,14 @@
       "normal_steps": [
         "累积Editor背景至低阶全文超限",
         "形成更高阶WB/CB",
-        "捕获后续Editor输入并完成新编辑"
+        "捕获后续Editor输入并完成新编辑",
+        "Editor自身递归后实际采用高阶背景，并以可信I标明该阶CB只读、新WB可编辑范围及七操作输出；若与Worker背景不同则明确不共享"
       ],
       "pass_conditions": [
         "Editor确实使用高阶产物而非仅max_chars",
         "新WB范围不丢",
-        "角色与同一Agent身份明确"
+        "角色与同一Agent身份明确",
+        "B同样覆盖Editor自身递归，不能只支持主一阶背景；不同上下文的独有材料不会为了同前缀而被混入或删掉"
       ],
       "negative_cases": [
         "每次仅失败或截掉旧背景便称递归",
@@ -1043,12 +1264,21 @@
         {
           "source": "P",
           "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -1171,7 +1401,8 @@
       "pass_conditions": [
         "默认KEEP逐字保留",
         "顺序影响与账本一致",
-        "隐式保留可发现且可无损编码"
+        "隐式保留可发现且可无损编码",
+        "B的Editor输出仍是有序七类操作及PVI，未涉及单元默认KEEP；共用Worker教学不把编辑交付降为普通总结"
       ],
       "negative_cases": [
         "按target去重丢中间操作",
@@ -1190,12 +1421,21 @@
         {
           "source": "P",
           "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -1254,7 +1494,8 @@
         "完整响应采用",
         "截断/错误不发布",
         "没有隐瞒额外修复调用",
-        "原响应保持"
+        "原响应保持",
+        "B后置可信I含编辑响应协议与当前WB全部指定单元；一次完整操作批次通过同一校验/发布路径，截断或非法响应不半发布"
       ],
       "negative_cases": [
         "自动多轮修复仍报单轮",
@@ -1274,12 +1515,21 @@
         {
           "source": "P",
           "section": "§3.3 操作式交付与可回放记录"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -1519,21 +1769,25 @@
       "normal_steps": [
         "连续两cut更换I唯一标记",
         "查看下一WB及高阶WB载荷",
-        "必要时向Editor提供只读I"
+        "必要时向Editor提供只读I",
+        "分别更新模型可编辑I和宿主模式激活块；在editable I中伪造mode、role、session及allowed_tools，尝试调用未激活工具"
       ],
       "pass_conditions": [
         "旧I不自动累入CB/WB",
         "新I可见",
-        "只读可见不授予编辑源身份"
+        "只读可见不授予编辑源身份",
+        "可信激活块与editable I来源、装配和权限分开；普通I更替不改变宿主mode/capability，二者均不自动成为下一WB编辑源"
       ],
       "negative_cases": [
         "复制整份旧I到高阶WB",
-        "把独立审计留存当当前前缀"
+        "把独立审计留存当当前前缀",
+        "模型生成的pvi.I覆盖宿主激活字段并取得执行权"
       ],
       "required_evidence": [
         "两次组装请求",
         "WB输入",
-        "只读背景标记与I历史"
+        "只读背景标记与I历史",
+        "分离的I装配记录及伪造输入拒绝、下一WB源成员"
       ],
       "sources": [
         {
@@ -1555,13 +1809,22 @@
         {
           "source": "O",
           "section": "§5、§6.2 机制正文；不含实测注记"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
         "T-PVI",
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -1631,7 +1894,8 @@
       "pass_conditions": [
         "约束来源/效力明确",
         "锚能读到内容",
-        "更新不修改宿主保护字段"
+        "更新不修改宿主保护字段",
+        "公共Worker SIC教学版本由宿主保护；当前职责、CB分界及新WB范围只能由可信I激活，不受历史文本或普通约束视图替代"
       ],
       "negative_cases": [
         "约束文本自授系统权限",
@@ -1658,13 +1922,22 @@
         {
           "source": "P",
           "section": "§6.1 持续维护当前工作条件"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
         "T-PVI",
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -1676,22 +1949,26 @@
       "normal_steps": [
         "先不暴露某工具，再按需展开并调用，随后收回",
         "尝试越权调用",
-        "比较实际请求schema变化"
+        "比较实际请求schema变化",
+        "保持两模式API公共工具schema同构同序，只在可信I展示不同激活集；Worker可运行一个原生工具，Editor可提交编辑响应；分别跨模式调用并在撤权后重试旧capability"
       ],
       "pass_conditions": [
         "可见和可执行权限分开校验",
         "回收真生效",
-        "顶层schema缓存影响入账"
+        "顶层schema缓存影响入账",
+        "工具注册表共同公开不等于共同执行许可；dispatch和结果采用检查当前真实actor/chain/mode/session/job/toolID/ACL；Lazy回收生效且工具schema改变引起的前缀差异可见"
       ],
       "negative_cases": [
         "只改说明却能力不变",
         "源文本授权",
-        "把I工具更新一概记免费"
+        "把I工具更新一概记免费",
+        "API tools静默按角色切表却仍称公共schema一致；仅靠提示文字阻止跨模式工具"
       ],
       "required_evidence": [
         "定义/ACL版本",
         "实际dispatch与结果",
-        "请求前缀/计量"
+        "请求前缀/计量",
+        "共同schema原文/顺序及两份激活集，跨模式/撤权拒绝与合法工具实际结果"
       ],
       "sources": [
         {
@@ -1709,13 +1986,22 @@
         {
           "source": "P",
           "section": "§3.1、§3.3、§7 授权和撤销保证"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
         "T-PVI",
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -2023,22 +2309,26 @@
       "normal_steps": [
         "比较必要替换/同次附加两请求",
         "另改更早保护前缀和顶层tools作反例",
-        "依VIII共享稳定前缀目标，从同一冻结scope/plan生成Worker与Editor请求；共同规则、CB renderer与公共API工具schema序列相等，职责/范围/激活差异仅出现在后置宿主I或其后的角色材料。逐项改变query、context、level、预算、system提示、schema顺序及媒体策略，报告实际首差与不适用原因；不得牺牲原tool/media协议或编辑范围来制造相同。逻辑比较结果与物理缓存usage分列，当前分离实现的旧成对比较不覆盖此新增目标。"
+        "依本契约共享稳定教学与可信I统一要求，从同一冻结scope/plan生成Worker与Editor请求；共同规则、CB renderer与公共API工具schema序列相等，职责/范围/激活差异仅出现在后置宿主I或其后的角色材料。逐项改变query、context、level、预算、system提示、schema顺序及媒体策略，报告实际首差与不适用原因；不得牺牲原tool/media协议或编辑范围来制造相同。逻辑比较结果与物理缓存usage分列，当前分离实现的旧成对比较不覆盖此新增目标。",
+        "同一次冻结计划生成W/E公共前缀，核实际编码字节、消息分块和工具表顺序；I中角色/边界/范围不同；在新WB上交付操作、append新CB后冻结新计划复验"
       ],
       "pass_conditions": [
         "共同前缀和长度差可核",
         "越前沿或控制变化不报局部免费",
         "不推断总成本或实际命中",
-        "同一冻结plan及renderer生成相同公共序列；后置可信I区分模式；不破坏原tool/media、scope和权限；逻辑前缀一致不证明物理cache。"
+        "同一冻结plan及renderer生成相同公共序列；后置可信I区分模式；不破坏原tool/media、scope和权限；逻辑前缀一致不证明物理cache。",
+        "公共前缀由同一Worker SIC教学与同一CB renderer构成，CP/WP稳定部分一致；query/job/mode/当前时间不进入公共段；新cut要重新绑定计划"
       ],
       "negative_cases": [
         "拿相邻历史请求凑成一对",
-        "只看生命周期而忽略API序列化"
+        "只看生命周期而忽略API序列化",
+        "plan digest相同但实际渲染字节不同；CB已追加仍复用旧cut计划"
       ],
       "required_evidence": [
         "成对原生请求",
         "共同前缀位置",
-        "布局变化和预算"
+        "布局变化和预算",
+        "成对实际请求及首差索引、共同字节长度、schema/renderer/cut版本"
       ],
       "sources": [
         {
@@ -2060,6 +2350,14 @@
         {
           "source": "U-COST-PREFIX",
           "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
@@ -2069,12 +2367,13 @@
         "T-COST-SHARED-PREFIX"
       ],
       "new_shared_prefix_target": {
-        "status": "new-target-not-covered-by-prior-acceptance",
+        "status": "required-target; optional prototype not blanket acceptance",
         "prefix": "same Worker SIC teaching + same rendered CB chain + ordered public tool schema",
         "host_I": "reference-CB boundary, authenticated mode, new WB editable scope, output protocol and activated tools",
         "loop": "new WB -> seven ordered ops/PVI -> validated candidate -> append immutable CB -> refresh I",
         "authorization": "host mode/role/session/job/toolID capability and current ACL; editable pvi.I cannot grant/switch mode",
-        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss"
+        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss",
+        "requirement_ref": "shared_prefix_requirements"
       }
     },
     {
@@ -2086,12 +2385,14 @@
       "normal_steps": [
         "恢复同checkpoint但不给物理缓存命中",
         "另给真实usage类别",
-        "检查报告"
+        "检查报告",
+        "给相同逻辑请求但未知缓存usage的实例，再给明确未命中实例，保持结构一致与物理命中两个判定独立"
       ],
       "pass_conditions": [
         "逻辑恢复不直接变成cache hit",
         "TTL/粒度/未知有记录",
-        "不伪造免费复用"
+        "不伪造免费复用",
+        "记录真实provider envelope中的response_format/tool_choice等差异及其cache-key影响的已知/未知，不用相同plan或SDK loopback推断M=0"
       ],
       "negative_cases": [
         "仅有hash前缀或checkpoint ID就填命中token"
@@ -2117,12 +2418,21 @@
         {
           "source": "P",
           "section": "§4.1–4.3 同交付对象、共享教学前缀与净差"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-SCHEDULE"
+        "T-SCHEDULE",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -2833,12 +3143,14 @@
         "发布",
         "生成高阶并选择使用",
         "沿两链和跨阶返回",
-        "实际协作/board/计量"
+        "实际协作/board/计量",
+        "在Langflow真实表单配置A/B布局与共同教学/注册表及角色scope，查看两模式请求边界和回退原因；伪造普通I不改变宿主权限"
       ],
       "pass_conditions": [
         "每项动作绑定后端且影响实际状态/请求",
         "原档/固定CB/op/保护控制只读",
-        "缺失与权限明确"
+        "缺失与权限明确",
+        "B参数实际影响同Core请求，可信控制与可编辑I分开展示；公共计划及完整预算/原生工具/媒体限制可见，不用SDK测试替代GUI验收"
       ],
       "negative_cases": [
         "有节点/API枚举即通过",
@@ -2878,13 +3190,22 @@
         {
           "source": "O",
           "section": "§2.1、§6.2 机制正文"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
         "T-RUNTIME-GUI",
-        "T-PEER"
+        "T-PEER",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -2899,12 +3220,14 @@
         "从空KEEP只改PVI及追加/移除",
         "恢复发布",
         "查高阶与来源",
-        "看真实peer工具和账目"
+        "看真实peer工具和账目",
+        "在Studio typed表单实际保存B布局及角色scope并重载，执行Worker/Editor两模式，核公共前缀和I；查看不相容scope的完整回退"
       ],
       "pass_conditions": [
         "实际GUI保存/执行/查看均有证据",
         "持久thread非Agent fork",
-        "GUI问题不以Swagger/API替代"
+        "GUI问题不以Swagger/API替代",
+        "Studio独立显示共享计划、可信I/可编辑I边界和预算/回退，不以Langflow通过替代"
       ],
       "negative_cases": [
         "仅schema/SDK通过",
@@ -2944,13 +3267,22 @@
         {
           "source": "O",
           "section": "§2.1、§6.2 机制正文"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
         "T-RUNTIME-GUI",
-        "T-PEER"
+        "T-PEER",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -3007,13 +3339,15 @@
       "outputs": "无越权泄露的原档/候选/派生层访问",
       "normal_steps": [
         "尝试冒充actor、以Message授工具、改固定CB、访问撤销来源及其高阶派生",
-        "再用合法主体执行允许操作"
+        "再用合法主体执行允许操作",
+        "捕获旧B capability后撤销工具或源读取权限，再尝试调用/采用；向editable I、旧CB和普通请求字段注入mode/capability"
       ],
       "pass_conditions": [
         "越权无副作用",
         "普通DELETE不等于安全撤销",
         "高阶/缓存/工具/导出不漏撤销内容",
-        "发布对象不经普通编辑重写"
+        "发布对象不经普通编辑重写",
+        "当前授权优先于冻结计划和历史分支；共同注册表不泄露不能共同公开的定义"
       ],
       "negative_cases": [
         "只在UI隐藏而HTTP可改",
@@ -3023,7 +3357,8 @@
       "required_evidence": [
         "身份/ACL正负记录",
         "派生依赖与撤销检查",
-        "导出扫描"
+        "导出扫描",
+        "撤权前后实际执行/采用结果及原固定对象摘要"
       ],
       "sources": [
         {
@@ -3037,13 +3372,22 @@
         {
           "source": "U-RUNTIME",
           "section": "常驻、恢复、安全与实验工程要求"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
         "T-RUNTIME-GUI",
-        "T-PEER"
+        "T-PEER",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -3121,7 +3465,8 @@
         "缺项unknown非0",
         "钱十进制、多币种不暗加",
         "WB共同输入、CB共同目标、Worker首次接入和额外轮次有互斥归属，净差分解与两臂完整总账一致",
-        "CB不同或类别不匹配不得仍置差额为零"
+        "CB不同或类别不匹配不得仍置差额为零",
+        "完整任务账覆盖B共享/不共享scope、所有角色/阶次/peer及失败未知调用；同CB原文在公共段并不自动填cache-read"
       ],
       "negative_cases": [
         "只算Worker或正文token",
@@ -3137,7 +3482,8 @@
         "价格版本",
         "归一规则与独立重算",
         "逐调用/计费类别的共同项和净差映射",
-        "目标/范围差异及unknown"
+        "目标/范围差异及unknown",
+        "逐调用layout/scope/plan与原usage、模型route和价版本映射"
       ],
       "sources": [
         {
@@ -3171,6 +3517,14 @@
         {
           "source": "U-COST-PREFIX",
           "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
@@ -3178,7 +3532,8 @@
       "acceptance_fixture_ids": [
         "T-COST",
         "T-TEXT",
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -3196,7 +3551,8 @@
       "pass_conditions": [
         "明确测量范围/方法",
         "不因无法测量便删除项目",
-        "fixture虚构价格明示"
+        "fixture虚构价格明示",
+        "公共注册表/教学增长的token费用与计划装配/鉴权的程序资源分别测量，未测资源保持unknown"
       ],
       "negative_cases": [
         "只记token成本",
@@ -3220,6 +3576,14 @@
         {
           "source": "U-COST-PREFIX",
           "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
@@ -3227,7 +3591,8 @@
       "acceptance_fixture_ids": [
         "T-COST",
         "T-TEXT",
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -3239,17 +3604,20 @@
       "normal_steps": [
         "运行三种调度情形及并行Editor/peer",
         "从原时间戳独立计算",
-        "以相同调用内容对照自然等待与串行调度，确认重叠只改变时间口径，不把模型输入/输出费用归零"
+        "以相同调用内容对照自然等待与串行调度，确认重叠只改变时间口径，不把模型输入/输出费用归零",
+        "构造路线A的Editor[10,12]与无关路线B的tool[10,12]，A没有tool，核全任务交集2而同路线搭载为0"
       ],
       "pass_conditions": [
         "累计模型时间不等于墙钟",
         "Editor/实际工具交集真实",
-        "等待/交错单列"
+        "等待/交错单列",
+        "全任务区间并集/交集标明可能跨路线；免费自然窗口只引用同路线实际工具与Editor的有效重叠；停止/未知外部执行不伪造tool_end"
       ],
       "negative_cases": [
         "proposal时刻当tool_start",
         "模型响应时间混为工具执行",
-        "重叠多次加总"
+        "重叠多次加总",
+        "把Editor甲与无关peer乙工具的并发交集当同Agent自然等待的成本证据"
       ],
       "required_evidence": [
         "原时间戳/关联ID",
@@ -3296,26 +3664,28 @@
         "保留T-COST-CONTROL的c=[10,20,30]独立验证F=30、H=10及其既定费率/控制项下ΔC=19，不将该算例当研究结果",
         "再用无cache-read的实际fixture账",
         "加入前缀/工具变化反例",
-        "构造同任务/同WB/同CB目标的集中/增量配对，核三项公共费用抵消及R_E−S_W",
-        "给额外WB重读、额外推理、新CB目标、首次接入类别变化和共同共同SIC提示增加各一例，保证差额恢复",
+        "构造同任务/同WB/同CB目标的集中/增量配对，核三项公共费用按计费类别配对抵消，并按完整主式核C_E,CB-bg+R_E−S_W,prefix及其余差额；全Worker费用差S_W只作独立核对",
+        "给额外WB重读、额外推理、新CB目标、首次接入类别变化和共同SIC教学增加各一例，保证差额恢复",
         "A方案首次冷建/随后命中取M=F，完全无命中取M=F+H",
         "B方案同一冻结计划下比较W/E公共前缀，I模式不同而公共序列/工具表相同；仅在实际共享证据成立时取M=0",
         "改model/cache namespace、CP/WP/system、工具schema、context/level/预算或媒体scope，逐项触发不适用/前缀分叉，不冒充共享",
-        "正常激活工具成功、未激活工具拒绝，模型pvi.I伪造mode/capability拒绝，撤权后旧capability拒绝"
+        "正常激活工具成功、未激活工具拒绝，模型pvi.I伪造mode/capability拒绝，撤权后旧capability拒绝",
+        "运行T-COST-SHARED-PREFIX全部具名手算案例，分别核A首次冷/全冷、B条件共享/部分未命中、写入价已含输入、ΔC_mix与额外轮次不双算；两臂总账必须与净差分解相等"
       ],
       "pass_conditions": [
         "F/H是读取量而非默认命中",
         "c_i含op/索引及实际编码，最后CB未进入下一编辑不虚计背景。一般背景费用按p_h,E(F+H)+(p_u,E−p_h,E)M+C_write重算",
         "A不复用当前Worker前缀，B的条件优势仅为获证实的冷建差额。净差包含新增CB背景、其他额外轮次、Worker工作前缀节省、三项未匹配差额、额外前沿破坏、ΔC_mix和其他明确项目，与两臂实际总账相等。前缀节省分量与Worker全部费用差分列，恢复其余输出/调用变化，不把p_h长度式套到未命中调用。B公共计划/renderer相同，可信I激活与普通I分隔，宿主权限真实生效，原native tool/media及Editor边界完整。逻辑前缀一致不证明物理命中",
         "局部免费不称总价0、质量收益或已实测持平",
-        "C_cache-write/C_write为写入类别相对式中已计输入价的净调整；含基础输入的完整write价不重复叠加，实际按provider互斥类别重算并以手算负例核对。"
+        "C_cache-write/C_write为写入类别相对式中已计输入价的净调整；含基础输入的完整write价不重复叠加，实际按provider互斥类别重算并以手算负例核对。",
+        "CP/WP在B共享稳定教学层一致，不是整份CP+WP拼接；角色特有职责/当前范围在可信I后置，差异输入和所有额外WB重读/推理/新输出仍入账"
       ],
       "negative_cases": [
         "强套旧固定rho/价格/命中",
         "忽略基线自有缓存",
         "价值抵扣账单",
         "当前CP/WP分离却把F全当Worker已缓存",
-        "B公共共同SIC提示增长不计",
+        "B公共SIC教学增长不计",
         "各角色按不同query/预算重算前缀",
         "I后置但API tools前置分叉仍称共享",
         "把模型I里的mode文字当执行授权",
@@ -3330,7 +3700,8 @@
         "宿主mode/capability与授权负例",
         "原usage、缓存写入和两臂总账",
         "F/H/M及所有净差项独立重算",
-        "独立质量证据或not_evaluated。B实现/机械一致性/物理缓存/经济结果分别记录，当前旧场景不自动算B通过"
+        "独立质量证据或not_evaluated。B实现/机械一致性/物理缓存/经济结果分别记录，当前旧场景不自动算B通过",
+        "各具名代数fixture参数、独立Decimal重算及主式逐项映射"
       ],
       "sources": [
         {
@@ -3352,6 +3723,14 @@
         {
           "source": "U-COST-PREFIX",
           "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
@@ -3368,12 +3747,13 @@
         "research_evaluation"
       ],
       "new_shared_prefix_target": {
-        "status": "new-target-not-covered-by-prior-acceptance",
+        "status": "required-target; optional prototype not blanket acceptance",
         "prefix": "same Worker SIC teaching + same rendered CB chain + ordered public tool schema",
         "host_I": "reference-CB boundary, authenticated mode, new WB editable scope, output protocol and activated tools",
         "loop": "new WB -> seven ordered ops/PVI -> validated candidate -> append immutable CB -> refresh I",
         "authorization": "host mode/role/session/job/toolID capability and current ACL; editable pvi.I cannot grant/switch mode",
-        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss"
+        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss",
+        "requirement_ref": "shared_prefix_requirements"
       }
     },
     {
@@ -3397,7 +3777,8 @@
         "实际差异可归因",
         "fixture仅机制验证",
         "A/B与集中/增量两种比较维度分别标记，模型/前缀/工具或目标变化不能暗混成单变量效应",
-        "研究状态不由旧通过报告或逻辑相同升级成实际缓存/费用优势"
+        "研究状态不由旧通过报告或逻辑相同升级成实际缓存/费用优势",
+        "分离A与共享B均保留实际失败/未知记录；非固定gateway路由的探索按实际模型/路由记录，不称冻结模型单变量实证"
       ],
       "negative_cases": [
         "复用旧丢失实验数字",
@@ -3430,6 +3811,14 @@
         {
           "source": "U-COST-PREFIX",
           "section": "本轮作者共同成本及共享SIC教学/I模式方案B"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
@@ -3441,12 +3830,13 @@
         "T-COST-SHARED-PREFIX"
       ],
       "new_shared_prefix_target": {
-        "status": "new-target-not-covered-by-prior-acceptance",
+        "status": "required-target; optional prototype not blanket acceptance",
         "prefix": "same Worker SIC teaching + same rendered CB chain + ordered public tool schema",
         "host_I": "reference-CB boundary, authenticated mode, new WB editable scope, output protocol and activated tools",
         "loop": "new WB -> seven ordered ops/PVI -> validated candidate -> append immutable CB -> refresh I",
         "authorization": "host mode/role/session/job/toolID capability and current ACL; editable pvi.I cannot grant/switch mode",
-        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss"
+        "fallback": "incompatible scope/media/budget uses complete separated A; no silent loss",
+        "requirement_ref": "shared_prefix_requirements"
       }
     },
     {
@@ -3594,12 +3984,14 @@
       "normal_steps": [
         "生成一份高阶CB",
         "让Worker与两个Editor都选择它",
-        "分别给各角色不同提示/预算并实际调用"
+        "分别给各角色不同提示/预算并实际调用",
+        "在同一三阶context/cut/预算下共用一份B计划；再给某Editor不同私有context或预算，保留材料并明确共享不适用"
       ],
       "pass_conditions": [
         "不为角色强制复制两套互不共享原料的链",
         "三角色确实引用同份合法产物",
-        "活动选择和绑定分别明确"
+        "活动选择和绑定分别明确",
+        "逻辑共享产物与物理共享请求不同；允许分别配置角色，不强制复制或合并私有材料"
       ],
       "negative_cases": [
         "上下文ID被解释成必须孤立数据",
@@ -3630,12 +4022,21 @@
         {
           "source": "P",
           "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -3870,13 +4271,15 @@
         "Editor看到已有进展后保持在途",
         "让真实工具结果晚到",
         "完成编辑并继续",
-        "回看最终WB/CB与下一块"
+        "回看最终WB/CB与下一块",
+        "Editor冻结新WB后工具结果晚到；分别核Editor已见单元、program KEEP补充和后续块归属及最终源/操作关系"
       ],
       "pass_conditions": [
         "后到材料保留",
         "不会被伪称为Editor已审",
         "同阶对应可回溯实际边界",
-        "协议完整"
+        "协议完整",
+        "当前CB中program KEEP的迟到补充不能记作该轮Editor已读/已压缩；同源各读一次的成本条件按实际Editor source_snapshot核对，不因最终CB覆盖而自动成立"
       ],
       "negative_cases": [
         "晚到结果覆盖冻结源",
@@ -3887,7 +4290,8 @@
         "任务范围快照",
         "到达事件",
         "WB边界/对应",
-        "实际encode和下一调用"
+        "实际encode和下一调用",
+        "冻结source_snapshot、晚到source/WB关系、program op处理者、后续实际请求及未匹配成本项"
       ],
       "sources": [
         {
@@ -3917,12 +4321,21 @@
         {
           "source": "O",
           "section": "§2.1、§6.2 机制正文"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-TEXT"
+        "T-TEXT",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -3940,7 +4353,8 @@
         "角色选择分别可见",
         "固定对象不变",
         "被概括下阶P仍可追溯",
-        "切换不自动记免费"
+        "切换不自动记免费",
+        "角色level/context/预算或CB选择变化时建立新的共享scope/计划并报告实际首差；不同视图不能沿用旧计划声称复用"
       ],
       "negative_cases": [
         "后台改view不留边界",
@@ -3981,12 +4395,21 @@
         {
           "source": "P",
           "section": "§5 P/V/I与各阶工作视图"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -3998,13 +4421,15 @@
       "normal_steps": [
         "为一个Editor产生持续独有材料",
         "形成两级以上WB/CB",
-        "与共享链一起供它后续编辑使用"
+        "与共享链一起供它后续编辑使用",
+        "对一个具名Editor私有三阶背景生成实际Editor模式请求，再与Worker共享主背景比较；私有材料完整且scope明确"
       ],
       "pass_conditions": [
         "独有材料有本阶双链/跨阶成员",
         "不强制混入Worker原WB",
         "共享与独有可共同使用",
-        "不产生新Agent"
+        "不产生新Agent",
+        "公共教学相同不要求角色CB背景相同；Editor独有递归仍运行，若私有CB选择不同则相应请求不套跨scope共享结论"
       ],
       "negative_cases": [
         "只给Worker升阶",
@@ -4036,12 +4461,21 @@
         {
           "source": "P",
           "section": "§3.1 一个Agent及其内部工作上下文"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
       "evidence_rule": "场景必须实际执行；原始输入/操作/输出与结果可重验；Fixture不证明真实LLM任务质量；GUI/API/SDK证据分开。",
       "acceptance_fixture_ids": [
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ]
     },
     {
@@ -4123,14 +4557,16 @@
       "normal_steps": [
         "收集代表harness的公开压缩prompt及公开LLM引擎、非LLM规则方案，逐项记录原链接/版本/SHA/许可与不可得项",
         "形成SIC编辑prompt、响应schema、Worker导航教学和确定程序规则的适配包",
-        "在同组新任务上比较公开方案/适配变体，冻结模型、材料边界、规则与价格并独立评分"
+        "在同组新任务上比较公开方案/适配变体，冻结模型、材料边界、规则与价格并独立评分",
+        "冻结统一Worker SIC教学：涵盖上下文/块/op/导航、宿主Editor模式识别和七操作交付；分别冻结后置可信I模板与程序规则，保留A对照包"
       ],
       "pass_conditions": [
         "不是仅列论文标题或写一个通用prompt",
         "适配包说明默认KEEP、op/PVI、两链/跨阶导航与权限边界",
         "对照变化/适用范围清楚，非LLM方案的零模型调用和程序费用如实记录",
         "资料/测试包实际可用且版本冻结",
-        "缺来源/适配包不能记准备完成；未执行机械对照不能记机械通过；真实质量未评价时研究维度记not_evaluated，不预填结果"
+        "缺来源/适配包不能记准备完成；未执行机械对照不能记机械通过；真实质量未评价时研究维度记not_evaluated，不预填结果",
+        "B适配不是CP全文拼WP；模板、公共注册表、I能力边界及对应负例有版本锁，不因可选原型或少量探索完成而自动取得质量结论"
       ],
       "negative_cases": [
         "沿用原稿E1/E2旧结果",
@@ -4168,6 +4604,14 @@
         {
           "source": "P",
           "section": "§6.3、§8 编辑质量与后续新实验"
+        },
+        {
+          "source": "D",
+          "section": "§3.2 共享Worker SIC教学与CB前缀、可信I编辑模式"
+        },
+        {
+          "source": "P",
+          "section": "§4.2 共享SIC适应性教学与CB链，I激活编辑模式"
         }
       ],
       "requirement_kind": "required-functional-target",
@@ -4175,7 +4619,8 @@
       "acceptance_fixture_ids": [
         "T-COST",
         "T-TEXT",
-        "T-HIERARCHY"
+        "T-HIERARCHY",
+        "T-COST-SHARED-PREFIX"
       ],
       "completion_dimensions": [
         "preparation",
@@ -4185,7 +4630,7 @@
     }
   ],
   "cost_definitions": {
-    "scope": "同任务/WB集合/终点/等效CB目标的条件对照；A当前分离，B共享教学前缀是新实现目标；无已实测缓存/费用优势",
+    "scope": "同任务/WB集合/终点/等效CB目标的条件对照；A为分离布局，B为共享稳定教学及可信I模式；B可选原型的结构/权限验证不等于物理命中或成本/质量优势",
     "conditions": [
       "同模型/tokenizer/价版本，集中基线与增量同源WB集合、同终点和等效CB目标",
       "WB首次读取、目标生成及Worker首次接入按同计费类别匹配，目标/推理/封装或缓存不同则恢复差额",
@@ -4200,8 +4645,8 @@
       "c_i": "CB_i正文、持久op和实际呈现索引在指定Editor计数器下的背景输入量",
       "F": "Σ_(i=1)^(N−1)c_i，各CB首次进入后续Editor的量；最后CB不计",
       "H": "Σ_(i=1)^(N−2)(N−i−1)c_i，后续重复量；命中需另证",
-      "S_W": "基线Worker全部费用减SIC Worker全部费用，含首次接入、重读、后缀重建及输出，可为负",
-      "D": "逐项保留其他提示、缓存类别、程序、存储和维护差额，不作隐藏支出的容器",
+      "S_W": "基线Worker全部费用减SIC Worker全部费用，可为负；仅作为全Worker汇总核对，不与主式S_W_prefix再次相减",
+      "D": "旧简式的其他差额仅用于具名特例；通式展开D_front、Delta_C_mix、Delta_C_other及三个未匹配共同项，禁止将未测量项塞入已知残差",
       "rho_content": "CB可见正文/WB正文，声明计数器与模型",
       "rho_billed": "Editor计费输出/声明源长度，声明计数器与模型",
       "M": "F+H中实际未命中背景量；A首次冷/后续命中取F，全冷取F+H，B获证理想共享取0",
@@ -4209,7 +4654,11 @@
       "R_E": "额外Editor轮次中除CB背景以外的旧WB重读、提示/封装、额外推理/新输出与调用费",
       "Delta_C_mix": "共同Worker SIC教学/公共表在已配对调用上的净增输入费；非CP/WP全文拼接；额外轮次读取整份提示已在R_E",
       "D_front": "超出同次必要覆写范围的额外前沿破坏；同scope/前缀/位置/长度条件下局部附加编辑为0",
-      "C_cache_write": "C_cache-write/C_write为写入类别相对式中已计输入价的净调整；含基础输入的完整write价不重复叠加，实际按provider互斥类别重算并以手算负例核对。"
+      "C_cache_write": "C_cache-write/C_write为写入类别相对式中已计输入价的净调整；含基础输入的完整write价不重复叠加，实际按provider互斥类别重算并以手算负例核对。",
+      "Delta_C_WB_once": "同WB首次读取的实际费用差；同量不同缓存类别/模型或未由Editor读取时不得直接抵消",
+      "Delta_C_CB_target": "约定同目标生成费用差；不同正文/op/索引、额外响应封装与生成差额分类一次入账",
+      "Delta_C_Worker_CB_first": "Worker首次接入约定CB的费用差；相同计费状态才能抵消，不把CB覆写重复算成新增输入",
+      "Delta_C_other": "逐项列明Worker其他调用/输出、高阶维护、导航、协作、程序及存储差额；缺测量保持unknown"
     },
     "equations": [
       "C_E_CB-bg=p_h,E(F+H)+(p_u,E−p_h,E)M+C_cache-write",
@@ -4220,12 +4669,35 @@
       "C_LLM=Σ_jΣ_c p_jc*t_jc; mutually exclusive categories",
       "C_total=C_LLM+C_program+C_storage"
     ],
-    "output_price_condition": "p_o为单一编辑输出价的控制表示；实际不同输出类别分别计价",
+    "output_price_condition": "主式按各调用实际互斥类别计价；单一p_o只用于T-COST-CONTROL具名特例，不能覆盖不同角色输出价",
     "fallback": "条件变化回实际总账，基线自身缓存不省略；质量缺评保持not_evaluated，价值不抵扣现金费用"
   },
   "completion_dimensions": {
     "preparation": "来源、配置、提示/规则、评价器和适配包已实际准备且冻结",
     "mechanical_acceptance": "自有fixture/确定性规则对工作流、计量、评价器及失败语义的实际验证",
     "research_evaluation": "真实任务质量与效果的新独立证据；未执行保持not_evaluated，不能由fixture通过推得"
+  },
+  "shared_prefix_requirements": {
+    "status": "required-functional-target; optional prototype existence is not acceptance of all scopes or physical caching",
+    "sources": [
+      {
+        "source": "D",
+        "section": "§3.2–3.4"
+      },
+      {
+        "source": "P",
+        "section": "§4.1–4.3"
+      }
+    ],
+    "common_prefix": "同一Worker SIC适应性教学（包含Editor模式识别/职责/上下文导航）+同一renderer的CB链+同序同构可共同公开的工具注册表；B中CP/WP稳定教学一致，不拼两份全文",
+    "scope": "Agent/chain、context、level、cut、CB IDs/顺序、完整预算、model/provider/cache namespace、媒体策略、schema/工具版本冻结为同一plan；job/mode/query/时间不进入共同前缀",
+    "trusted_I": "公共CB之后的宿主激活块标明mode/role、CB边界/此前只读参考、新WB editable scope/assigned units、输出协议与激活工具；独立于模型editable I",
+    "loop": "新WB→有序七操作与PVI候选→程序核scope/授权/物化→append发布新CB→更新I并冻结新cut计划；旧CB不能target，未涉及单元KEEP",
+    "authority": "宿主真实actor/chain/mode/role/session/job/assigned units/toolID/current ACL epoch在派发与采用重核；模型pvi.I和旧capability不能授予或恢复权限",
+    "roles_recursion": "Worker/多个Editor可用共享或独有N阶context；共享教学不强制同模型/同预算/同CB选择。不同scope如实分开，不为相同字节删材料",
+    "budget_media_fallback": "完整计入教学/CB/op/索引/tools/协议/I/WB/媒体；不相容时明确不适用并完整回A，或报告预算拒绝；不截断/丢图/丢工具关系",
+    "cache_evidence": "字节序列/工具表/消息分块与位置先比较；provider envelope差异记录；物理cache key、M/usage/写入费用未知保持unknown；逻辑plan/loopback不充当命中证据",
+    "cost": "共同项按同类别配对一次；R_E含额外WB重读/完整提示/推理与新输出；Delta_C_mix只计已配对调用共同教学/注册表增长；自然窗口只影响适用墙钟/前沿项，不免token费",
+    "gui": "Langflow与Studio分别实际保存/重载/执行并与同Core对照；展示可信I与editable I、scope、角色/预算/回退和请求首差；各GUI状态单列"
   }
 }

@@ -340,6 +340,197 @@ async fn run_turn(
         }
     };
     assert_eq!(sse_text(&response), format!("mock worker answer {turn}"));
+    if [1, RESTART_AFTER, RESTART_AFTER + 1, TURN_COUNT].contains(&turn) {
+        let status = bridge.session_status(OWNER, SESSION).await.unwrap();
+        let chain = status["chain_id"].as_str().unwrap();
+        let context = OperationContext {
+            actor: OWNER.into(),
+            chain_id: Some(chain.into()),
+            allow_write: false,
+            allow_model: false,
+            allow_revoke: false,
+        };
+        let cut = core.operate("cut.get", &context, &json!({})).await.unwrap();
+        assert_eq!(
+            status["last_turn"]["references"]["published_cut_id"],
+            cut["result"]["cut_id"]
+        );
+        let cb_id = cut["result"]["view"]["cbs"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()["cb_id"]
+            .as_str()
+            .unwrap();
+        assert_eq!(status["last_turn"]["references"]["published_cb_id"], cb_id);
+        assert_eq!(status["last_publication"]["cb_id"], cb_id);
+        let expanded = core
+            .operate("hierarchy.expand", &context, &json!({"cb_id":cb_id}))
+            .await
+            .unwrap();
+        assert_eq!(
+            status["last_turn"]["references"]["wb_id"],
+            expanded["result"]["wb_id"]
+        );
+        if turn == 1 || turn == TURN_COUNT {
+            let timeline = bridge
+                .session_context(
+                    OWNER,
+                    SESSION,
+                    "timeline",
+                    &json!({"level":1,"kind":"cb","offset":0,"limit":20}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(timeline["result"]["total"], turn);
+            let first = &timeline["result"]["rows"][0];
+            let first_cb = first["cb_id"].as_str().unwrap();
+            let detail = bridge
+                .session_context(OWNER, SESSION, "expand", &json!({"cb_id":first_cb}))
+                .await
+                .unwrap();
+            assert_eq!(detail["result"]["wb_id"], first["wb_id"]);
+            let page = bridge
+                .session_context(
+                    OWNER,
+                    SESSION,
+                    "page",
+                    &json!({"kind":"cb","object_id":first_cb,"offset":0,"limit":8192}),
+                )
+                .await
+                .unwrap();
+            assert!(
+                page["result"]["value"]
+                    .as_str()
+                    .unwrap()
+                    .contains("immutable synthetic fact 1")
+            );
+            assert_eq!(
+                bridge
+                    .session_context(
+                        "another-owner",
+                        SESSION,
+                        "timeline",
+                        &json!({"level":1,"kind":"cb","offset":0,"limit":20})
+                    )
+                    .await
+                    .unwrap_err()
+                    .status,
+                StatusCode::NOT_FOUND
+            );
+            assert!(
+                bridge
+                    .session_context(
+                        OWNER,
+                        SESSION,
+                        "timeline",
+                        &json!({"level":1,"kind":"cb","offset":0,"limit":20,"chain_id":"forged"})
+                    )
+                    .await
+                    .is_err()
+            );
+            assert!(
+                bridge
+                    .session_context(OWNER, SESSION, "chain.create", &json!({}))
+                    .await
+                    .is_err()
+            );
+            if turn == 1 {
+                let before = bridge
+                    .session_context(OWNER, SESSION, "decision", &json!({}))
+                    .await
+                    .unwrap();
+                assert_eq!(before["result"]["decision"]["revision"], 0);
+                let changed = bridge
+                    .session_decision_event(
+                        OWNER,
+                        SESSION,
+                        0,
+                        "fixture-decision-1",
+                        "work",
+                        "Consider the synthetic next step",
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(changed["decision"]["revision"], 1);
+                assert_eq!(
+                    changed["decision"]["views"]["Working on"][0]["text"],
+                    "Consider the synthetic next step"
+                );
+                assert_eq!(
+                    bridge
+                        .session_decision_event(
+                            OWNER,
+                            SESSION,
+                            0,
+                            "fixture-decision-1",
+                            "work",
+                            "Consider the synthetic next step"
+                        )
+                        .await
+                        .unwrap_err()
+                        .status,
+                    StatusCode::CONFLICT
+                );
+                assert_eq!(
+                    bridge
+                        .session_decision_event(
+                            "another-owner",
+                            SESSION,
+                            1,
+                            "fixture-decision-2",
+                            "work",
+                            "unauthorized"
+                        )
+                        .await
+                        .unwrap_err()
+                        .status,
+                    StatusCode::NOT_FOUND
+                );
+                assert!(
+                    bridge
+                        .session_decision_event(
+                            OWNER,
+                            SESSION,
+                            1,
+                            "fixture-decision-3",
+                            "complete",
+                            "not allowed"
+                        )
+                        .await
+                        .is_err()
+                );
+            }
+        }
+        assert_eq!(status["last_turn"]["worker_rounds_recorded"], 1);
+        let accounting = bridge.session_accounting(OWNER, SESSION).await.unwrap();
+        assert_eq!(accounting["complete"], true);
+        for role in ["editor", "worker"] {
+            let group = accounting["groups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|group| group["role"] == role)
+                .unwrap();
+            assert_eq!(group["attempts"], turn);
+            assert_eq!(group["prompt_tokens"]["known_tokens"], turn * 15);
+            assert_eq!(group["completion_tokens"]["known_tokens"], turn * 6);
+            assert_eq!(group["cached_prompt_tokens"]["unknown_attempts"], turn);
+        }
+        assert_eq!(
+            bridge
+                .session_accounting("another-owner", SESSION)
+                .await
+                .unwrap_err()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        assert!(
+            !status
+                .to_string()
+                .contains(&format!("synthetic user turn {turn}"))
+        );
+    }
     let assistant = json!({"role":"assistant","content":sse_text(&response)});
     messages.push(assistant.clone());
     (response, body)
@@ -398,6 +589,8 @@ async fn twenty_four_editor_worker_turns_preserve_history_cuts_and_replay_across
     assert_eq!(provider.requests.lock().await.len(), count_before_replay);
 
     let history_before_restart = persisted_history(&database, OWNER, SESSION).await;
+    let revision_before_restart =
+        bridge.session_status(OWNER, SESSION).await.unwrap()["revision"].clone();
     assert_eq!(history_before_restart, json!(messages));
     drop(bridge);
     drop(core);
@@ -411,6 +604,13 @@ async fn twenty_four_editor_worker_turns_preserve_history_cuts_and_replay_across
         provider.core_errors.clone(),
     )
     .await;
+    assert_eq!(
+        recovered_bridge
+            .session_status(OWNER, SESSION)
+            .await
+            .unwrap()["revision"],
+        revision_before_restart
+    );
     assert_eq!(
         persisted_history(&database, OWNER, SESSION).await,
         json!(messages),

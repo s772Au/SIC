@@ -3,6 +3,7 @@
   "namespace": "REPLACE_WITH_STABLE_HOST_WATCH_NAMESPACE",
   "poll_interval_ms": 5000,
   "max_tasks_per_cycle": 1,
+  "max_concurrent_runs": 1,
   "page_size": 32,
   "supervisor": {
     "db_path": "C:\\ABSOLUTE\\PATH\\TO\\runtime\\data\\sic-rust.sqlite",

@@ -13,6 +13,10 @@ pub const WORKER_TEACHING: &str = "You are the SIC Worker operating on an append
 
 pub const EDIT_TOOL: &str = "sic_edit_blocks";
 
+/// Bump when the fixed registry changes. A new registry changes the shared
+/// prefix and may require providers to rebuild their physical cache.
+pub const COMMON_TOOL_VERSION: &str = "2";
+
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -162,9 +166,9 @@ pub fn common_tool_registry() -> Vec<Value> {
         ),
         tool(
             "sic_signal_wait",
-            "Poll an authorized Signal receipt; currently only timeout_ms=0 is supported.",
-            json!({"signal_id":string_property("Signal identifier."),"timeout_ms":{"type":"integer","minimum":0}}),
-            &["signal_id"],
+            "Wait for one Signal on this Agent, selecting exactly one of signal_id or after_sequence. Nonzero timeout requires this to be the only tool call in the response.",
+            json!({"signal_id":string_property("Exact Signal identifier."),"after_sequence":{"type":"integer","minimum":0,"description":"Read the earliest Signal after this cursor; keep next_after_sequence for the next wait."},"timeout_ms":{"type":"integer","minimum":0,"maximum":30000}}),
+            &[],
         ),
         tool(
             "sic_message_send",
@@ -174,9 +178,16 @@ pub fn common_tool_registry() -> Vec<Value> {
         ),
         tool(
             "sic_message_receive",
-            "Receive authorized Messages for the current cut.",
-            json!({"cursor":string_property("Optional opaque receive cursor.")}),
+            "Read a page of Messages already delivered at a CB publication. Long texts are previews; read complete text with sic_message_read.",
+            json!({"cursor":string_property("Optional receive cursor."),"limit":{"type":"integer","minimum":1,"maximum":20}}),
             &[],
+        ),
+        tool(
+            "sic_message_read",
+            "Read a bounded page of one already delivered Message on this Agent's route.",
+            json!({"message_id":string_property("Delivered Message ID."),"offset":{"type":"integer","minimum":0},
+                   "limit":{"type":"integer","minimum":1,"maximum":4096}}),
+            &["message_id"],
         ),
         tool(
             "sic_decision_read",
@@ -229,9 +240,36 @@ pub fn common_tool_registry() -> Vec<Value> {
             &["kind", "object_id"],
         ),
         tool(
+            "sic_source_text_page",
+            "Read exact archived text of an authorized source unit in bounded pages, including full large tool results.",
+            json!({"source_id":string_property("Source ID from a SIC projection or search."),
+                   "unit_id":string_property("Source unit ID."),"offset":{"type":"integer","minimum":0},
+                   "limit":{"type":"integer","minimum":1,"maximum":8192}}),
+            &["source_id", "unit_id"],
+        ),
+        tool(
+            "sic_memory_search",
+            "Search exact text in pending source units, published source units, or CB bodies at one level of the current Worker context. Results distinguish these scopes; follow the returned cursor.",
+            json!({
+                "query":{"type":"string","minLength":1,"maxLength":96},
+                "scope":{"type":"string","enum":["source","cb","pending"]},
+                "level":{"type":"integer","minimum":1,"maximum":128},
+                "limit":{"type":"integer","minimum":1,"maximum":8},
+                "cursor":{"type":"object","properties":{
+                    "snapshot":{"type":"string"},
+                    "cb_index":{"type":"integer","minimum":0},
+                    "root_index":{"type":"integer","minimum":0},
+                    "source_index":{"type":"integer","minimum":0},
+                    "unit_index":{"type":"integer","minimum":0}
+                },"required":["snapshot","source_index","unit_index"],"additionalProperties":false}
+            }),
+            &["query"],
+        ),
+        tool(
             "sic_memory_replay",
-            "Replay an authorized CB operation prefix without executing external side effects.",
-            json!({"cb_id":string_property("CB ID."),"step":{"type":"integer","minimum":0}}),
+            "Replay an authorized CB operation prefix without external effects; page the reconstructed body using next_offset.",
+            json!({"cb_id":string_property("CB ID."),"step":{"type":"integer","minimum":0},
+                   "offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":4096}}),
             &["cb_id"],
         ),
         tool(
@@ -243,8 +281,9 @@ pub fn common_tool_registry() -> Vec<Value> {
         ),
         tool(
             "sic_hierarchy_expand",
-            "Expand an authorized CB or WB to its original source and lower-level members.",
-            json!({"cb_id":string_property("CB ID."),"wb_id":string_property("WB ID.")}),
+            "Expand an authorized CB or WB with bounded source-unit previews. Follow next_offset for more units and use memory_page for complete text.",
+            json!({"cb_id":string_property("CB ID."),"wb_id":string_property("WB ID."),
+                   "offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":8}}),
             &[],
         ),
     ]
@@ -745,6 +784,59 @@ fn build_request(
         common_prefix_digest: digest(&plan.common_prefix_bytes()?),
         physical_cache_hit: "unknown".to_owned(),
     })
+}
+
+/// Reports the first JSON-pointer-like path where two request values differ.
+/// Object keys are compared in sorted order; arrays by index. Missing keys or
+/// elements also count as a difference at that path.
+pub fn first_request_difference(left: &Value, right: &Value) -> Option<String> {
+    fn escape(key: &str) -> String {
+        key.replace('~', "~0").replace('/', "~1")
+    }
+    fn walk(left: &Value, right: &Value, path: &str) -> Option<String> {
+        match (left, right) {
+            (Value::Object(left), Value::Object(right)) => {
+                let keys: std::collections::BTreeSet<&String> =
+                    left.keys().chain(right.keys()).collect();
+                for key in keys {
+                    let child = format!("{path}/{}", escape(key));
+                    match (left.get(key), right.get(key)) {
+                        (Some(left), Some(right)) => {
+                            if let Some(difference) = walk(left, right, &child) {
+                                return Some(difference);
+                            }
+                        }
+                        _ => return Some(child),
+                    }
+                }
+                None
+            }
+            (Value::Array(left), Value::Array(right)) => {
+                for index in 0..left.len().max(right.len()) {
+                    let child = format!("{path}/{index}");
+                    match (left.get(index), right.get(index)) {
+                        (Some(left), Some(right)) => {
+                            if let Some(difference) = walk(left, right, &child) {
+                                return Some(difference);
+                            }
+                        }
+                        _ => return Some(child),
+                    }
+                }
+                None
+            }
+            _ => {
+                if left == right {
+                    None
+                } else if path.is_empty() {
+                    Some("/".to_owned())
+                } else {
+                    Some(path.to_owned())
+                }
+            }
+        }
+    }
+    walk(left, right, "")
 }
 
 /// Build a Worker request with host-authorized tools and Worker I views.

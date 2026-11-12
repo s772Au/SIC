@@ -286,6 +286,16 @@ pub async fn complete_worker_response_in_transaction(
     scope: &AuthenticatedWorkerScope,
     host_response_id: &str,
 ) -> Result<WorkerRoundCompletion> {
+    complete_worker_response_with_new_expansions_in_transaction(tx, scope, host_response_id, &[])
+        .await
+}
+
+pub async fn complete_worker_response_with_new_expansions_in_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
+    scope: &AuthenticatedWorkerScope,
+    host_response_id: &str,
+    newly_expanded: &[String],
+) -> Result<WorkerRoundCompletion> {
     if host_response_id.trim().is_empty() {
         return Err(CoreError::invalid("host Worker response ID is required"));
     }
@@ -307,8 +317,13 @@ pub async fn complete_worker_response_in_transaction(
             evicted,
         });
     }
-    let evicted =
-        ToolStore::advance_worker_round_in_transaction(tx, &scope.chain_id, &scope.actor).await?;
+    let evicted = ToolStore::advance_worker_round_with_new_expansions_in_transaction(
+        tx,
+        &scope.chain_id,
+        &scope.actor,
+        newly_expanded,
+    )
+    .await?;
     let encoded = serde_json::to_string(&evicted)
         .map_err(|_| CoreError::invalid("eviction list is invalid"))?;
     sqlx::query("INSERT INTO sic_tool_worker_rounds(chain_id,actor,response_id,evicted_json) VALUES(?,?,?,?)")

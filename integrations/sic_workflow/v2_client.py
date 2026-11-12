@@ -68,7 +68,13 @@ class CoreClient:
         # Editable JSON cannot override these independent UI gates.
         context["allow_write"] = allow_write is True
         context["allow_model"] = allow_model is True
-        result = self._request("/api/v2/operations", {"operation": operation, "context": context, "payload": payload})
+        # The wire context is deliberately narrow: operation-specific keys
+        # such as job_id/source_id belong in the payload and must not be
+        # serialized as unknown operation-envelope fields.
+        wire_context = {key: context.get(key) for key in
+                        ("actor", "chain_id", "allow_write", "allow_model", "allow_revoke")
+                        if key in context}
+        result = self._request("/api/v2/operations", {"operation": operation, "context": wire_context, "payload": payload})
         clean_context = {key: value for key, value in context.items() if key not in {"allow_write", "allow_model"}}
         clean_context.update({key: value for key, value in result.get("context", {}).items()
                               if key not in {"allow_write", "allow_model"}})

@@ -680,6 +680,46 @@ fn materialize_inner(
     )
 }
 
+/// Validate the assignment rows of one WB without needing any response yet.
+///
+/// F04 allows 1..=N Editors on the same frozen WB. Uniqueness, membership and
+/// non-overlap are the same rules the merge uses; this helper only makes them
+/// available before an Editor is dispatched or a response is submitted.
+pub fn validate_assignments(source: &Value, assignments_value: &Value) -> Result<(), String> {
+    let units = source_units(source)?;
+    let rows = assignments(assignments_value, &units, false)?;
+    if rows.is_empty() {
+        return Err(invalid("at least one Editor assignment is required"));
+    }
+    if rows.iter().any(|(_, scope)| scope.is_empty()) {
+        return Err(invalid(
+            "each Editor assignment requires at least one assigned unit",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate one response against the scope of the Editor it names.
+///
+/// A response may be submitted before its siblings arrive; it still cannot
+/// touch a unit outside its own assignment.
+pub fn validate_editor_response(
+    source: &Value,
+    assignments_value: &Value,
+    editor: &str,
+    response: &Value,
+    primary_decision: bool,
+) -> Result<(), String> {
+    let units = source_units(source)?;
+    let rows = assignments(assignments_value, &units, false)?;
+    let (_, scope) = rows
+        .into_iter()
+        .find(|(name, _)| name == editor)
+        .ok_or_else(|| invalid("Editor not assigned"))?;
+    let scope: HashSet<String> = scope.into_iter().collect();
+    validate_response(&scope, response, primary_decision)
+}
+
 pub fn materialize(
     source: &Value,
     assignments_value: &Value,

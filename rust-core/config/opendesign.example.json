@@ -13,7 +13,8 @@
       "max_output_tokens": 393216,
       "max_supported_output_tokens": 393216,
       "default_output_tokens": 4096,
-      "timeout_seconds": 180
+      "timeout_seconds": 180,
+      "retry_editor_http_5xx": true
     }
   },
   "roles": {

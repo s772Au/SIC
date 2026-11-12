@@ -1,3 +1,7 @@
+mod model_policy {
+    pub use sic_core_rust::model_policy::*;
+}
+
 #[path = "../src/dsh.rs"]
 mod dsh;
 
@@ -45,6 +49,23 @@ fn request(messages: Value) -> Value {
 
 fn parse(session: &str, body: &Value) -> DshChatRequest {
     DshChatRequest::parse(&headers(session), body, "sic-worker").unwrap()
+}
+
+#[test]
+fn accepts_reasoning_mode_and_compatibility_efforts_without_mapping_them() {
+    for effort in [
+        "none", "minimal", "low", "medium", "high", "xhigh", "ultra", "max",
+    ] {
+        let mut body = request(json!([{"role":"user","content":"x"}]));
+        body["reasoning_effort"] = json!(effort);
+        assert_eq!(
+            parse("sess-effort", &body).reasoning_effort.as_deref(),
+            Some(effort)
+        );
+    }
+    let mut invalid = request(json!([{"role":"user","content":"x"}]));
+    invalid["reasoning_effort"] = json!("unrecognized");
+    assert!(DshChatRequest::parse(&headers("sess-effort"), &invalid, "sic-worker").is_err());
 }
 
 #[test]
@@ -99,7 +120,7 @@ fn requires_session_and_fixed_route_and_rejects_unexpressible_controls() {
         ("store", json!(true)),
         ("temperature", json!(0.2)),
         ("tool_choice", json!("required")),
-        ("reasoning_effort", json!("none")),
+        ("reasoning_effort", json!("unrecognized")),
         ("unknown_control", json!(true)),
     ] {
         let mut invalid = body.clone();

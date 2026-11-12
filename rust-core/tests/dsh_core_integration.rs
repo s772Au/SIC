@@ -1,3 +1,7 @@
+mod model_policy {
+    pub use sic_core_rust::model_policy::*;
+}
+
 pub mod core {
     pub use sic_core_rust::core::*;
 }
@@ -13,10 +17,18 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode},
     routing::post,
 };
-use dsh_bridge::{ActorResolver, CoreRuntime, DshBridge, DshBridgeConfig, router as bridge_router};
+use dsh_bridge::{
+    ActorResolver, CoreRuntime, DshBridge, DshBridgeConfig, DshRuntime, router as bridge_router,
+};
 use serde_json::{Value, json};
 use sic_core_rust::{core::Core, storage::Store};
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 use tokio::sync::Mutex;
 
 #[derive(Clone, Default)]
@@ -73,6 +85,731 @@ async fn completion(
             "choices":[{"finish_reason":finish_reason,"message":message}]}),
         ),
     )
+}
+
+#[derive(Clone)]
+struct InvalidChoiceFixture {
+    requests: Arc<Mutex<Vec<Value>>>,
+    mode: &'static str,
+}
+
+async fn invalid_choice_completion(
+    State(fixture): State<InvalidChoiceFixture>,
+    Json(request): Json<Value>,
+) -> (StatusCode, Json<Value>) {
+    let index = {
+        let mut requests = fixture.requests.lock().await;
+        requests.push(request);
+        requests.len()
+    };
+    if index == 1 {
+        return (
+            StatusCode::OK,
+            Json(json!({"model":"deepseek-v4.1-flash-eco",
+            "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[{"finish_reason":"tool_calls",
+            "message":{"role":"assistant","content":null,"tool_calls":[{"id":"editor-one","type":"function",
+            "function":{"name":"sic_edit_blocks","arguments":"{\"ops\":[],\"pvi\":{}}"}}]}}]})),
+        );
+    }
+    if fixture.mode == "http_failure" {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error":{"message":"synthetic"}})),
+        );
+    }
+    if index == 2 || fixture.mode == "always_invalid" {
+        return (
+            StatusCode::OK,
+            Json(json!({"model":"deepseek-v4.1-flash-eco",
+                "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[
+                {"index":0,"message":{"role":"assistant","content":"synthetic ambiguous candidate"}},
+                {"index":1,"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{
+                    "id":"ambiguous-call","type":"function","function":{"name":"sic_tool_call",
+                    "arguments":json!({"name":"calculator","arguments":{"a":1,"b":2}}).to_string()}}]}}
+            ]})),
+        );
+    }
+    let (finish, message) = worker_tool_call(
+        "actual-call",
+        "sic_tool_call",
+        json!({"name":"calculator","arguments":{"a":7,"b":5}}),
+    );
+    (
+        StatusCode::OK,
+        Json(json!({"model":"deepseek-v4.1-flash-eco",
+        "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[{"finish_reason":finish,"message":message}]})),
+    )
+}
+
+#[tokio::test]
+async fn dsh_retries_only_rejected_complete_choice_sets_without_dispatching_them() {
+    for mode in ["recover", "always_invalid", "http_failure"] {
+        let fixture = InvalidChoiceFixture {
+            requests: Arc::new(Mutex::new(Vec::new())),
+            mode,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(
+            axum::serve(
+                listener,
+                Router::new()
+                    .route("/v1/chat/completions", post(invalid_choice_completion))
+                    .with_state(fixture.clone()),
+            )
+            .into_future(),
+        );
+        let store = Store::memory().await.unwrap();
+        let core = new_core(store.clone(), provider_config(format!("http://{addr}/v1"))).await;
+        let bridge = DshBridge::new(
+            store,
+            Arc::new(CoreRuntime::new(core.clone())),
+            bridge_config(),
+        )
+        .await
+        .unwrap()
+        .with_invalid_worker_choice_retries(1)
+        .unwrap();
+        let headers = session_headers("choice-retry");
+        let body = request(json!([{"role":"user","content":"Use the calculator."}]));
+        let result = bridge.handle("integration-actor", &headers, &body).await;
+        let requests = fixture.requests.lock().await;
+        if mode == "recover" {
+            let text = String::from_utf8(result.unwrap()).unwrap();
+            assert!(text.contains("actual-call"));
+            assert!(!text.contains("ambiguous-call"));
+            assert_eq!(requests.len(), 3);
+            let status = bridge
+                .session_status("integration-actor", "choice-retry")
+                .await
+                .unwrap();
+            let context = sic_core_rust::core::OperationContext {
+                actor: "integration-actor".into(),
+                chain_id: status["chain_id"].as_str().map(str::to_owned),
+                allow_write: true,
+                allow_model: true,
+                allow_revoke: false,
+            };
+            let tasks = core
+                .operate("tools.tasks", &context, &json!({}))
+                .await
+                .unwrap();
+            assert_eq!(tasks["result"]["tasks"].as_array().unwrap().len(), 1);
+            assert_eq!(tasks["result"]["tasks"][0]["call_id"], "actual-call");
+            let usage = core
+                .operate("accounting.get", &context, &json!({}))
+                .await
+                .unwrap();
+            let worker = usage["result"]["groups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|group| group["role"] == "worker")
+                .unwrap();
+            assert_eq!(worker["attempts"], 2);
+            assert_eq!(worker["prompt_tokens"]["known_tokens"], 22);
+        } else if mode == "always_invalid" {
+            let error = result.unwrap_err();
+            assert_eq!(error.code, "worker_invalid_choice_count");
+            assert!(!error.message.contains("synthetic ambiguous"));
+            assert_eq!(requests.len(), 3);
+        } else {
+            assert_eq!(result.unwrap_err().code, "core_failed");
+            assert_eq!(requests.len(), 2, "HTTP failures are not retried");
+        }
+        server.abort();
+    }
+}
+
+#[derive(Clone)]
+struct HttpFailureFixture {
+    requests: Arc<Mutex<Vec<Value>>>,
+    status: StatusCode,
+    always_fail: bool,
+    timeout_worker: bool,
+    invalid_choice: bool,
+}
+
+async fn worker_http_failure_completion(
+    State(fixture): State<HttpFailureFixture>,
+    Json(request): Json<Value>,
+) -> (StatusCode, Json<Value>) {
+    let index = {
+        let mut requests = fixture.requests.lock().await;
+        requests.push(request);
+        requests.len()
+    };
+    if index == 1 {
+        return (
+            StatusCode::OK,
+            Json(json!({"model":"deepseek-v4.1-flash-eco",
+                "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[{
+                    "finish_reason":"tool_calls","message":{"role":"assistant","content":null,
+                    "tool_calls":[{"id":"editor-one","type":"function","function":{
+                        "name":"sic_edit_blocks","arguments":"{\"ops\":[],\"pvi\":{}}"}}]}}]})),
+        );
+    }
+    if index == 2 || fixture.always_fail {
+        if fixture.timeout_worker {
+            tokio::time::sleep(std::time::Duration::from_millis(1600)).await;
+        }
+        if fixture.invalid_choice {
+            return (
+                StatusCode::OK,
+                Json(json!({"model":"deepseek-v4.1-flash-eco",
+                "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[
+                    {"message":{"role":"assistant","content":"ambiguous one"}},
+                    {"message":{"role":"assistant","content":"ambiguous two"}}
+                ]})),
+            );
+        }
+        // A non-success body must never be admitted even if it resembles a
+        // valid tool call. Only the HTTP status can guide the retry policy.
+        return (
+            fixture.status,
+            Json(
+                json!({"choices":[{"message":{"role":"assistant","tool_calls":[{
+                "id":"must-not-dispatch","type":"function","function":{"name":"sic_tool_call",
+                "arguments":"{\"name\":\"calculator\",\"arguments\":{}}"}}]}}]}),
+            ),
+        );
+    }
+    (
+        StatusCode::OK,
+        Json(json!({"model":"deepseek-v4.1-flash-eco",
+            "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[{
+                "finish_reason":"stop","message":{"role":"assistant","content":"recovered"}}]})),
+    )
+}
+
+#[tokio::test]
+async fn dsh_worker_explicit_5xx_retry_is_opt_in_bounded_and_records_unknown_usage() {
+    for (status, enabled, always_fail, timeout_worker, max_calls, succeeds, expected_calls) in [
+        (500, Some(true), false, false, 8, true, 3),
+        (502, Some(true), false, false, 8, true, 3),
+        (503, Some(true), false, false, 8, true, 3),
+        (504, Some(true), false, false, 8, true, 3),
+        (500, Some(false), false, false, 8, false, 2),
+        (500, None, false, false, 8, false, 2),
+        (429, Some(true), false, false, 8, false, 2),
+        (400, Some(true), false, false, 8, false, 2),
+        (501, Some(true), false, false, 8, false, 2),
+        (500, Some(true), true, false, 8, false, 3),
+        (500, Some(true), false, false, 1, false, 2),
+        (500, Some(true), false, true, 8, false, 2),
+    ] {
+        let fixture = HttpFailureFixture {
+            requests: Arc::new(Mutex::new(Vec::new())),
+            status: StatusCode::from_u16(status).unwrap(),
+            always_fail,
+            timeout_worker,
+            invalid_choice: false,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(
+            axum::serve(
+                listener,
+                Router::new()
+                    .route("/v1/chat/completions", post(worker_http_failure_completion))
+                    .with_state(fixture.clone()),
+            )
+            .into_future(),
+        );
+        let store = Store::memory().await.unwrap();
+        let mut model_config = provider_config(format!("http://{addr}/v1"));
+        if let Some(enabled) = enabled {
+            model_config["roles"]["worker"]["retry_worker_http_5xx"] = json!(enabled);
+        }
+        if timeout_worker {
+            model_config["roles"]["worker"]["timeout_seconds"] = json!(1);
+        }
+        let core = new_core(store.clone(), model_config).await;
+        let mut config = bridge_config();
+        config.max_worker_calls_per_turn = max_calls;
+        let bridge = DshBridge::new(store, Arc::new(CoreRuntime::new(core.clone())), config)
+            .await
+            .unwrap();
+        let headers = session_headers("http-retry");
+        let body = request(json!([{"role":"user","content":"synthetic task"}]));
+        let result = bridge.handle("integration-actor", &headers, &body).await;
+        if succeeds {
+            let bytes = result.unwrap();
+            let text = String::from_utf8(bytes.clone()).unwrap();
+            assert!(text.contains("recovered"));
+            assert!(!text.contains("must-not-dispatch"));
+            assert_eq!(
+                bridge
+                    .handle("integration-actor", &headers, &body)
+                    .await
+                    .unwrap(),
+                bytes
+            );
+        } else {
+            let error = result.unwrap_err();
+            assert_eq!(error.status, StatusCode::BAD_GATEWAY);
+            assert!(!error.message.contains("must-not-dispatch"));
+        }
+        let requests = fixture.requests.lock().await;
+        assert_eq!(
+            requests.len(),
+            expected_calls,
+            "HTTP {status}, enabled={enabled:?}, always_fail={always_fail}, timeout={timeout_worker}, budget={max_calls}"
+        );
+        if succeeds {
+            assert_eq!(
+                requests[1], requests[2],
+                "retry must use the same frozen request"
+            );
+        }
+        drop(requests);
+        let session = bridge
+            .session_status("integration-actor", "http-retry")
+            .await
+            .unwrap();
+        let context = sic_core_rust::core::OperationContext {
+            actor: "integration-actor".into(),
+            chain_id: session["chain_id"].as_str().map(str::to_owned),
+            allow_write: true,
+            allow_model: true,
+            allow_revoke: false,
+        };
+        let tasks = core
+            .operate("tools.tasks", &context, &json!({}))
+            .await
+            .unwrap();
+        assert!(tasks["result"]["tasks"].as_array().unwrap().is_empty());
+        let usage = core
+            .operate("accounting.get", &context, &json!({}))
+            .await
+            .unwrap();
+        let worker_groups: Vec<&Value> = usage["result"]["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|group| group["role"] == "worker")
+            .collect();
+        assert_eq!(
+            worker_groups
+                .iter()
+                .map(|g| g["attempts"].as_u64().unwrap())
+                .sum::<u64>(),
+            (expected_calls - 1) as u64
+        );
+        assert_eq!(
+            worker_groups
+                .iter()
+                .map(|g| g["prompt_tokens"]["unknown_attempts"].as_u64().unwrap())
+                .sum::<u64>(),
+            if always_fail { 2 } else { 1 }
+        );
+        server.abort();
+    }
+}
+
+#[derive(Clone)]
+struct SequentialWorkerFailureFixture {
+    requests: Arc<Mutex<Vec<Value>>>,
+    /// How many Worker calls (not counting the first Editor tool call) must fail.
+    fail_workers: usize,
+}
+
+async fn sequential_worker_failure_completion(
+    State(fixture): State<SequentialWorkerFailureFixture>,
+    Json(request): Json<Value>,
+) -> (StatusCode, Json<Value>) {
+    let index = {
+        let mut requests = fixture.requests.lock().await;
+        requests.push(request);
+        requests.len()
+    };
+    if index == 1 {
+        return (
+            StatusCode::OK,
+            Json(json!({"model":"deepseek-v4.1-flash-eco",
+                "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[{
+                    "finish_reason":"tool_calls","message":{"role":"assistant","content":null,
+                    "tool_calls":[{"id":"editor-one","type":"function","function":{
+                        "name":"sic_edit_blocks","arguments":"{\"ops\":[],\"pvi\":{}}"}}]}}]})),
+        );
+    }
+    if index - 1 <= fixture.fail_workers {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error":{"message":"synthetic 503"}})),
+        );
+    }
+    (
+        StatusCode::OK,
+        Json(json!({"model":"deepseek-v4.1-flash-eco",
+            "usage":{"prompt_tokens":11,"completion_tokens":7},"choices":[{
+                "finish_reason":"stop","message":{"role":"assistant","content":"recovered"}}]})),
+    )
+}
+
+#[tokio::test]
+async fn worker_5xx_retry_attempts_follow_the_frozen_profile() {
+    for (attempts, fail_workers, expected_calls, succeeds) in [
+        (1u32, 1usize, 2usize, false),
+        (2, 1, 3, true),
+        (3, 2, 4, true),
+        (3, 3, 4, false),
+        (5, 9, 6, false),
+    ] {
+        let fixture = SequentialWorkerFailureFixture {
+            requests: Arc::new(Mutex::new(Vec::new())),
+            fail_workers,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(
+            axum::serve(
+                listener,
+                Router::new()
+                    .route(
+                        "/v1/chat/completions",
+                        post(sequential_worker_failure_completion),
+                    )
+                    .with_state(fixture.clone()),
+            )
+            .into_future(),
+        );
+        let store = Store::memory().await.unwrap();
+        let mut model_config = provider_config(format!("http://{addr}/v1"));
+        model_config["roles"]["worker"]["retry_worker_http_5xx"] = json!(true);
+        model_config["roles"]["worker"]["worker_retry_max_attempts"] = json!(attempts);
+        model_config["roles"]["worker"]["worker_retry_backoff_ms"] = json!(0);
+        let core = new_core(store.clone(), model_config).await;
+        let mut config = bridge_config();
+        config.max_worker_calls_per_turn = 8;
+        let bridge = DshBridge::new(store, Arc::new(CoreRuntime::new(core)), config)
+            .await
+            .unwrap()
+            .with_worker_http_retry_policy(attempts, 0)
+            .unwrap();
+        let headers = session_headers("http-retry-policy");
+        let body = request(json!([{"role":"user","content":"synthetic task"}]));
+        let result = bridge.handle("integration-actor", &headers, &body).await;
+        let requests = fixture.requests.lock().await;
+        assert_eq!(
+            requests.len(),
+            expected_calls,
+            "attempts={attempts} fail_workers={fail_workers}"
+        );
+        if succeeds {
+            let text = String::from_utf8(result.unwrap()).unwrap();
+            assert!(text.contains("recovered"));
+            assert_eq!(
+                requests[1], requests[2],
+                "every retry must reuse the same frozen Worker request"
+            );
+        } else {
+            assert_eq!(result.unwrap_err().code, "worker_retryable_http_5xx");
+        }
+        drop(requests);
+        server.abort();
+    }
+}
+
+#[tokio::test]
+async fn worker_5xx_retry_backoff_waits_between_attempts() {
+    let fixture = SequentialWorkerFailureFixture {
+        requests: Arc::new(Mutex::new(Vec::new())),
+        fail_workers: 2,
+    };
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route(
+                    "/v1/chat/completions",
+                    post(sequential_worker_failure_completion),
+                )
+                .with_state(fixture.clone()),
+        )
+        .into_future(),
+    );
+    let store = Store::memory().await.unwrap();
+    let mut model_config = provider_config(format!("http://{addr}/v1"));
+    model_config["roles"]["worker"]["retry_worker_http_5xx"] = json!(true);
+    model_config["roles"]["worker"]["worker_retry_max_attempts"] = json!(3);
+    model_config["roles"]["worker"]["worker_retry_backoff_ms"] = json!(60);
+    let core = new_core(store.clone(), model_config).await;
+    let mut config = bridge_config();
+    config.max_worker_calls_per_turn = 8;
+    let bridge = DshBridge::new(store, Arc::new(CoreRuntime::new(core)), config)
+        .await
+        .unwrap()
+        .with_worker_http_retry_policy(3, 60)
+        .unwrap();
+    let headers = session_headers("http-retry-backoff");
+    let body = request(json!([{"role":"user","content":"synthetic task"}]));
+    let started = std::time::Instant::now();
+    let result = bridge.handle("integration-actor", &headers, &body).await;
+    let elapsed = started.elapsed();
+    assert!(
+        String::from_utf8(result.unwrap())
+            .unwrap()
+            .contains("recovered")
+    );
+    assert_eq!(fixture.requests.lock().await.len(), 4);
+    // First retry waits 60 ms, the second 120 ms; a lower bound is stable.
+    assert!(
+        elapsed >= std::time::Duration::from_millis(150),
+        "two bounded retries must wait for their backoff, saw {elapsed:?}"
+    );
+    server.abort();
+}
+
+#[derive(Clone)]
+struct MutatingRuntime {
+    core: Core,
+    inner: CoreRuntime,
+    changed: Arc<AtomicBool>,
+}
+
+impl DshRuntime for MutatingRuntime {
+    fn operate(
+        &self,
+        actor: String,
+        chain_id: Option<String>,
+        operation: String,
+        payload: Value,
+        allow_model: bool,
+    ) -> dsh_bridge::BoxFuture<Result<Value, String>> {
+        let this = self.clone();
+        Box::pin(async move {
+            let result = this
+                .inner
+                .operate(
+                    actor.clone(),
+                    chain_id.clone(),
+                    operation.clone(),
+                    payload,
+                    allow_model,
+                )
+                .await;
+            if operation == "worker.run"
+                && result.as_ref().err().is_some_and(|error| {
+                    error.starts_with("worker_retryable_http_5xx:")
+                        || error.starts_with("worker_invalid_choice_count:")
+                })
+                && !this.changed.swap(true, Ordering::SeqCst)
+            {
+                let context = sic_core_rust::core::OperationContext {
+                    actor,
+                    chain_id,
+                    allow_write: true,
+                    allow_model: false,
+                    allow_revoke: false,
+                };
+                this.core
+                    .operate(
+                        "source.ingest",
+                        &context,
+                        &json!({"request":{"messages":[{"role":"user","content":"new concurrent input"}]}}),
+                    )
+                    .await
+                    .expect("isolated concurrent input must be accepted");
+            }
+            result
+        })
+    }
+}
+
+#[tokio::test]
+async fn worker_retry_rejects_changed_context_before_another_provider_call() {
+    for invalid_choice in [false, true] {
+        let fixture = HttpFailureFixture {
+            requests: Arc::new(Mutex::new(Vec::new())),
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            always_fail: false,
+            timeout_worker: false,
+            invalid_choice,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(
+            axum::serve(
+                listener,
+                Router::new()
+                    .route("/v1/chat/completions", post(worker_http_failure_completion))
+                    .with_state(fixture.clone()),
+            )
+            .into_future(),
+        );
+        let store = Store::memory().await.unwrap();
+        let mut model_config = provider_config(format!("http://{addr}/v1"));
+        model_config["roles"]["worker"]["retry_worker_http_5xx"] = json!(true);
+        let core = new_core(store.clone(), model_config).await;
+        let changed = Arc::new(AtomicBool::new(false));
+        let runtime = MutatingRuntime {
+            inner: CoreRuntime::new(core.clone()),
+            core,
+            changed: changed.clone(),
+        };
+        let bridge = DshBridge::new(store, Arc::new(runtime), bridge_config())
+            .await
+            .unwrap()
+            .with_invalid_worker_choice_retries(1)
+            .unwrap();
+        let error = bridge
+            .handle(
+                "integration-actor",
+                &session_headers("changed-retry"),
+                &request(json!([{"role":"user","content":"original task"}])),
+            )
+            .await
+            .unwrap_err();
+        assert!(changed.load(Ordering::SeqCst));
+        assert_eq!(error.code, "worker_retry_context_changed");
+        assert_eq!(error.status, StatusCode::CONFLICT);
+        assert_eq!(fixture.requests.lock().await.len(), 2);
+        let accounting = bridge
+            .session_accounting("integration-actor", "changed-retry")
+            .await
+            .unwrap();
+        assert_eq!(
+            accounting["groups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|group| group["role"] == "worker")
+                .map(|group| group["attempts"].as_u64().unwrap())
+                .sum::<u64>(),
+            1
+        );
+        server.abort();
+    }
+}
+
+async fn tool_then_worker_http_failure(
+    State(fixture): State<ProviderFixture>,
+    Json(request): Json<Value>,
+) -> (StatusCode, Json<Value>) {
+    let index = {
+        let mut requests = fixture.requests.lock().await;
+        requests.push(request);
+        requests.len()
+    };
+    let (finish, message) = match index {
+        1 => (
+            "tool_calls",
+            json!({"role":"assistant","content":null,"tool_calls":[{
+                "id":"editor","type":"function","function":{"name":"sic_edit_blocks",
+                    "arguments":"{\"ops\":[],\"pvi\":{}}"}}]}),
+        ),
+        2 => worker_tool_call(
+            "one-external-call",
+            "sic_tool_call",
+            json!({"name":"calculator","arguments":{"a":7,"b":5}}),
+        ),
+        3 => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error":"synthetic"})),
+            );
+        }
+        4 => (
+            "stop",
+            json!({"role":"assistant","content":"result adopted"}),
+        ),
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error":"unexpected"})),
+            );
+        }
+    };
+    (
+        StatusCode::OK,
+        Json(json!({"model":"deepseek-v4.1-flash-eco",
+            "usage":{"prompt_tokens":11,"completion_tokens":7},
+            "choices":[{"finish_reason":finish,"message":message}]})),
+    )
+}
+
+#[tokio::test]
+async fn worker_5xx_after_host_result_does_not_reissue_the_external_tool() {
+    let fixture = ProviderFixture::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/v1/chat/completions", post(tool_then_worker_http_failure))
+                .with_state(fixture.clone()),
+        )
+        .into_future(),
+    );
+    let store = Store::memory().await.unwrap();
+    let mut model_config = provider_config(format!("http://{addr}/v1"));
+    model_config["roles"]["worker"]["retry_worker_http_5xx"] = json!(true);
+    let core = new_core(store.clone(), model_config).await;
+    let bridge = DshBridge::new(
+        store,
+        Arc::new(CoreRuntime::new(core.clone())),
+        bridge_config(),
+    )
+    .await
+    .unwrap();
+    let headers = session_headers("retry-after-tool");
+    let initial = request(json!([{"role":"user","content":"calculate"}]));
+    let first = String::from_utf8(
+        bridge
+            .handle("integration-actor", &headers, &initial)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(first.contains("one-external-call"));
+    let continuation = request(json!([
+        {"role":"user","content":"calculate"},
+        {"role":"assistant","content":null,"tool_calls":[{"id":"one-external-call","type":"function",
+            "function":{"name":"calculator","arguments":"{\"a\":7,\"b\":5}"}}]},
+        {"role":"tool","tool_call_id":"one-external-call","name":"calculator","content":"12"}
+    ]));
+    let result = bridge
+        .handle("integration-actor", &headers, &continuation)
+        .await
+        .unwrap();
+    assert!(String::from_utf8_lossy(&result).contains("result adopted"));
+    assert_eq!(
+        bridge
+            .handle("integration-actor", &headers, &continuation)
+            .await
+            .unwrap(),
+        result
+    );
+    let requests = fixture.requests.lock().await;
+    assert_eq!(requests.len(), 4);
+    assert_eq!(requests[2], requests[3]);
+    drop(requests);
+    let session = bridge
+        .session_status("integration-actor", "retry-after-tool")
+        .await
+        .unwrap();
+    let context = sic_core_rust::core::OperationContext {
+        actor: "integration-actor".into(),
+        chain_id: session["chain_id"].as_str().map(str::to_owned),
+        allow_write: true,
+        allow_model: false,
+        allow_revoke: false,
+    };
+    let tasks = core
+        .operate("tools.tasks", &context, &json!({}))
+        .await
+        .unwrap();
+    let tasks = tasks["result"]["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["call_id"], "one-external-call");
+    // The harness supplied a tool result, but no independent native event
+    // attested its outcome. Preserve that distinction during retry.
+    assert_eq!(tasks[0]["status"], "delivered_unattested");
+    server.abort();
 }
 
 fn worker_tool_call(id: &str, name: &str, arguments: Value) -> (&'static str, Value) {

@@ -124,10 +124,25 @@ async fn immutable_dual_chain_publication_routes_pvi_and_replay() {
         json!({"level":1,"kind":"cb"}),
     )
     .await;
-    assert_eq!(wb_timeline["total"], 2);
+    // V is immediately pending, but its WB forms at the next edit boundary
+    // instead of freezing a singleton before later material can join it.
+    assert_eq!(wb_timeline["total"], 1);
     assert_eq!(cb_timeline["total"], 1);
     assert_eq!(wb_timeline["rows"][0]["cb_id"], cb);
-    assert!(wb_timeline["rows"][1]["cb_id"].is_null());
+    let volatile_source = view["pending"][0].as_str().unwrap();
+    let next_cb = program_publish(&core, &ctx, volatile_source, "publish-volatile").await;
+    let expanded = call(&core, &ctx, "hierarchy.expand", json!({"cb_id":next_cb})).await;
+    assert_eq!(expanded["original_units"][0]["text"], "V next");
+    assert_eq!(
+        call(
+            &core,
+            &ctx,
+            "hierarchy.timeline",
+            json!({"level":1,"kind":"wb"})
+        )
+        .await["total"],
+        2
+    );
     store.close().await;
 }
 

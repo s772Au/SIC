@@ -3,6 +3,8 @@ import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai';
 import { resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
+import { createNativeEventForwarder } from './native-events.mjs';
+import { mountSicOverview } from './view-host.mjs';
 
 export const name = 'sic-core-rust-dsh';
 export const inject = ['llm', 'agents'];
@@ -42,11 +44,26 @@ function localV1Url(value) {
 }
 
 export function apply(ctx, cfg) {
-  const provider = createProvider(cfg);
+  // Validate the endpoint before installing the event observer.
+  localV1Url(cfg.baseURL);
+  const nativeEvents = createNativeEventForwarder({ baseURL: cfg.baseURL, credential: () => {
+    const token = process.env[cfg.apiKeyEnv];
+    if (!token) throw new Error('SIC Rust bearer environment reference is not configured');
+    return token;
+  }, getSession: id => ctx.get('sessions')?.get(id),
+  readEventPage: (sessionId, seq, before, signal) => {
+    const query = ctx.get('sessionQuery');
+    if (typeof query?.readEvent !== 'function') return null;
+    return query.readEvent({ sessionId, seq, before, after: 0 }, signal);
+  } });
+  ctx.on('session/event', (session, event) => nativeEvents.observe(session, event));
+  ctx.effect(() => () => nativeEvents.dispose());
+  const provider = createProvider(cfg, { nativeEvents });
   const model = provider.model;
   const profiles = provider.profiles;
   const credential = provider.credential;
   const auth = provider.auth;
+  mountSicOverview(ctx, cfg, credential);
   class NoRetryAdapter extends PiAiAdapter {
     async prepareCall(providerId, modelId, signal) {
       const prepared = await super.prepareCall(providerId, modelId, signal);
@@ -67,7 +84,7 @@ export function apply(ctx, cfg) {
   }
 }
 
-export function createProvider(cfg, { protocol = openAICompletionsApi(), fetchImpl = globalThis.fetch } = {}) {
+export function createProvider(cfg, { protocol = openAICompletionsApi(), fetchImpl = globalThis.fetch, nativeEvents } = {}) {
   const url = localV1Url(cfg.baseURL);
   const credential = () => {
     const value = process.env[cfg.apiKeyEnv];
@@ -149,6 +166,9 @@ export function createProvider(cfg, { protocol = openAICompletionsApi(), fetchIm
     }
     return lazyStream(selected, async () => {
       await bindSession(sessionOptions);
+      // Give committed native result events a chance to reach SIC before its
+      // tool-result continuation. Failure remains an unknown outcome.
+      await nativeEvents?.activateAndFlush(sessionOptions.sessionId);
       if (sessionOptions.signal?.aborted) {
         throw new Error('SIC session binding was cancelled');
       }

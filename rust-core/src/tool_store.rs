@@ -340,6 +340,18 @@ impl ToolStore {
         mutate(tx, chain_id, actor, ToolSet::advance_worker_round).await
     }
 
+    pub async fn advance_worker_round_with_new_expansions_in_transaction(
+        tx: &mut Transaction<'_, Sqlite>,
+        chain_id: &str,
+        actor: &str,
+        newly_expanded: &[String],
+    ) -> Result<Vec<String>> {
+        mutate(tx, chain_id, actor, |set| {
+            set.advance_worker_round_with_new_expansions(newly_expanded)
+        })
+        .await
+    }
+
     /// Recover leases after process restart without redispatching them. The
     /// caller must reconcile each external outcome and explicitly finish it.
     pub async fn active_leases(&self, chain_id: &str, actor: &str) -> Result<Vec<ExecutionLease>> {

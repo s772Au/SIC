@@ -72,6 +72,11 @@ class SICCandidate(Component):
         if not original.get("ok") or self.action == "读取候选":
             return original
         candidate = original["result"]
+        # Rust v2 returns the mutable candidate under result.candidate while
+        # the job identity/revision sit beside it. Normalize that envelope for
+        # the editable body without losing the outer revision.
+        if isinstance(candidate.get("candidate"), dict):
+            candidate = {**candidate, **candidate["candidate"]}
         expected_revision = context.get("candidate_revision") if self.expected_revision == -1 else self.expected_revision
         if candidate["revision"] != expected_revision:
             return {"ok": False, "context": context, "error": {"code": "candidate_stale", "message": f"候选已是版本{candidate['revision']}，请重新读取；不自动覆盖。"}}

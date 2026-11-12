@@ -23,6 +23,17 @@ class CoreContract(TestCase):
                 self.assertEqual(result["error"]["code"], code)
             request.assert_not_called()
 
+    def test_operation_context_is_narrowed_before_the_wire(self):
+        client = CoreClient()
+        response = {"ok": True, "context": {"chain_id": "chain"}, "result": {}}
+        with patch.object(client, "capabilities", return_value={"operations": [
+                {"operation": "chain.get", "write": False, "model": False}]}),              patch.object(client, "_request", return_value=response) as request:
+            client.execute("chain.get", {"chain_id": "chain", "job_id": "job-1", "source_id": "source-1"})
+        body = request.call_args.args[1]
+        self.assertEqual(body["context"], {"actor": "host", "chain_id": "chain",
+                                           "allow_write": False, "allow_model": False})
+        self.assertNotIn("job_id", body["context"])
+
     def test_fork_preserves_core_identity_and_bindings(self):
         client = CoreClient()
         response = {"ok": True, "context": {"chain_id": "peer"}, "result": {"checkpoint_id": "cp"}}

@@ -77,6 +77,24 @@ pub struct PublishedBlock {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InterleaveReceipt {
+    pub wb_source_id: String,
+    pub permit_id: String,
+    pub cost: u64,
+    pub remaining: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WaitDeclaration {
+    pub code: String,
+    pub required_action: String,
+    pub context_id: String,
+    pub level: u32,
+    pub available: Option<usize>,
+    pub required: Option<usize>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SchedulerReport {
     pub context_id: String,
     pub editor_mode: EditorMode,
@@ -84,8 +102,10 @@ pub struct SchedulerReport {
     pub model_calls_observed: usize,
     pub model_calls_reserved_unknown: usize,
     pub published: Vec<PublishedBlock>,
+    pub interleaves: Vec<InterleaveReceipt>,
     pub needs_flush: bool,
     pub wait_reason: Option<String>,
+    pub wait: Option<WaitDeclaration>,
     pub failure: Option<SchedulerFailure>,
     pub completed: bool,
 }
@@ -99,8 +119,10 @@ impl SchedulerReport {
             model_calls_observed: 0,
             model_calls_reserved_unknown: 0,
             published: Vec::new(),
+            interleaves: Vec::new(),
             needs_flush: false,
             wait_reason: None,
+            wait: None,
             failure: None,
             completed: false,
         }
@@ -217,7 +239,7 @@ impl Runner<'_> {
                 let mut units = 0_usize;
                 for source_id in pending.iter().take(self.policy.max_sources_per_wb) {
                     let read = self
-                        .operate("source.read", json!({"source_id":source_id}))
+                        .operate("source.read", json!({"source_id":source_id,"group":true}))
                         .await?;
                     let source = &read["result"]["source"];
                     if source["open_calls"]
@@ -226,6 +248,15 @@ impl Runner<'_> {
                     {
                         self.report.wait_reason =
                             Some("pending source has unresolved native tool calls".into());
+                        self.report.wait = Some(WaitDeclaration {
+                            code: "unresolved_tool_calls".into(),
+                            required_action: "host must close or reject the open native call"
+                                .into(),
+                            context_id: self.policy.context_id.clone(),
+                            level: 1,
+                            available: Some(pending.len()),
+                            required: None,
+                        });
                         return Ok(());
                     }
                     let count = source["units"].as_array().map_or(0, Vec::len);
@@ -246,11 +277,46 @@ impl Runner<'_> {
                     return Ok(());
                 }
                 if selected.len() < self.policy.min_sources_per_wb && !self.policy.flush {
-                    self.report.needs_flush = true;
-                    self.report.wait_reason = Some(
-                        "pending batch is below min_sources_per_wb; explicit flush required".into(),
-                    );
-                    return Ok(());
+                    // F34: an early block is allowed only with a host-set,
+                    // per-WB permit; the receipt is idempotent and charged
+                    // once. Without budget the pass waits as before.
+                    let wb_source_id = selected[0].clone();
+                    let permit_id = format!("early:{wb_source_id}");
+                    let receipt = match self
+                        .operate(
+                            "runtime.budget",
+                            json!({"wb_source_id":wb_source_id,"permit_id":permit_id,"cost":1}),
+                        )
+                        .await
+                    {
+                        Ok(receipt) => receipt["result"].clone(),
+                        Err(error)
+                            if matches!(error.code, "budget_missing" | "budget_exhausted") =>
+                        {
+                            self.report.needs_flush = true;
+                            self.report.wait_reason = Some(format!(
+                                "pending batch is below min_sources_per_wb; explicit flush required (interleave {})",
+                                error.code
+                            ));
+                            self.report.wait = Some(WaitDeclaration {
+                                code: format!("interleave_{}", error.code),
+                                required_action:
+                                    "host must grant a per-WB budget or explicitly flush".into(),
+                                context_id: self.policy.context_id.clone(),
+                                level: 1,
+                                available: Some(selected.len()),
+                                required: Some(self.policy.min_sources_per_wb),
+                            });
+                            return Ok(());
+                        }
+                        Err(error) => return Err(error),
+                    };
+                    self.report.interleaves.push(InterleaveReceipt {
+                        wb_source_id: required_string(&receipt, "wb_source_id")?.to_owned(),
+                        permit_id: required_string(&receipt, "permit_id")?.to_owned(),
+                        cost: receipt["cost"].as_u64().unwrap_or(0),
+                        remaining: receipt["remaining"].as_u64().unwrap_or(0),
+                    });
                 }
                 let source_id = if selected.len() > 1 {
                     let formed = self
@@ -323,6 +389,15 @@ impl Runner<'_> {
             self.report.needs_flush = true;
             self.report.wait_reason.get_or_insert_with(|| {
                 format!("level {level} has an unconsumed CB interval below its batch threshold; explicit flush required")
+            });
+            self.report.wait.get_or_insert(WaitDeclaration {
+                code: "level_batch".into(),
+                required_action: "host must explicitly flush the remaining lower-level interval"
+                    .into(),
+                context_id: self.policy.context_id.clone(),
+                level,
+                available: Some(available_members),
+                required: Some(batch),
             });
         }
         for members in groups {

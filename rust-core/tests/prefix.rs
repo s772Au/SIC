@@ -5,7 +5,8 @@ mod toolset;
 
 use prefix::{
     EditableUnit, EditorScope, HostAuthorization, HostAuthorizationSpec, Mode, PrefixPlan,
-    PrefixPlanSpec, RenderedCb, common_tool_registry, editor_request, worker_request,
+    PrefixPlanSpec, RenderedCb, common_tool_registry, editor_request, first_request_difference,
+    worker_request,
 };
 use serde_json::{Value, json};
 use toolset::{AclGrant, ToolAcl, ToolDescriptor, ToolSet};
@@ -137,6 +138,192 @@ fn one_plan_produces_identical_public_messages_tools_and_common_serialization() 
     );
     assert_eq!(worker.common_prefix_digest, editor.common_prefix_digest);
     assert_eq!(worker.physical_cache_hit, "unknown");
+}
+
+#[test]
+fn f59_prefix_applicability_matrix_separates_logical_prefix_from_scope() {
+    let base = plan();
+    let same_bytes = |other: &PrefixPlan| {
+        base.common_prefix_bytes().unwrap() == other.common_prefix_bytes().unwrap()
+    };
+
+    let mut model = spec("cut-1", "cb-1");
+    model.model = "other-model".into();
+    let model_plan = PrefixPlan::freeze(model).unwrap();
+    assert!(!same_bytes(&model_plan));
+    assert_ne!(base.digest(), model_plan.digest());
+
+    let protected = PrefixPlan::freeze_with_instructions(
+        spec("cut-1", "cb-1"),
+        vec![json!({"role":"system","content":"protected"})],
+    )
+    .unwrap();
+    assert!(!same_bytes(&protected));
+
+    let mut cb_spec = spec("cut-1", "cb-2");
+    cb_spec.cb_chain[0].messages = vec![json!({"role":"user","content":"different"})];
+    let cb_plan = PrefixPlan::freeze(cb_spec).unwrap();
+    assert!(!same_bytes(&cb_plan));
+
+    // Provider/cache namespace and scope identifiers change the plan scope
+    // digest but not the canonical logical prefix bytes; this is not proof of a
+    // shared physical cache.
+    let mut provider = spec("cut-1", "cb-1");
+    provider.provider_id = "provider-B".into();
+    let provider_plan = PrefixPlan::freeze(provider).unwrap();
+    assert!(same_bytes(&provider_plan));
+    assert_ne!(base.digest(), provider_plan.digest());
+
+    let mut namespace = spec("cut-1", "cb-1");
+    namespace.cache_namespace = "cache-B".into();
+    let namespace_plan = PrefixPlan::freeze(namespace).unwrap();
+    assert!(same_bytes(&namespace_plan));
+    assert_ne!(base.digest(), namespace_plan.digest());
+
+    let mut context = spec("cut-1", "cb-1");
+    context.context_id = "other-context".into();
+    context.level = 3;
+    let context_plan = PrefixPlan::freeze(context).unwrap();
+    assert!(same_bytes(&context_plan));
+    assert_ne!(base.digest(), context_plan.digest());
+
+    for mutate in [
+        |value: &mut PrefixPlanSpec| value.projection_budget = 4096,
+        |value: &mut PrefixPlanSpec| value.schema_version = "v2".into(),
+        |value: &mut PrefixPlanSpec| value.tool_version = "3".into(),
+    ] {
+        let mut spec = spec("cut-1", "cb-1");
+        mutate(&mut spec);
+        let plan = PrefixPlan::freeze(spec).unwrap();
+        assert!(same_bytes(&plan));
+        assert_ne!(base.digest(), plan.digest());
+    }
+}
+
+#[test]
+fn f35_variable_changes_report_first_difference_and_applicability() {
+    let base = plan();
+    let base_request =
+        worker_request(&base, &worker_auth(&base), &suffix("task"), &json!({"v":1})).unwrap();
+
+    let mut model_spec = spec("cut-1", "cb-1");
+    model_spec.model = "other-model".into();
+    let model_plan = PrefixPlan::freeze(model_spec).unwrap();
+    let model_request = worker_request(
+        &model_plan,
+        &worker_auth(&model_plan),
+        &suffix("task"),
+        &json!({"v":1}),
+    )
+    .unwrap();
+    let model_diff =
+        first_request_difference(&base_request.request, &model_request.request).unwrap();
+    // Activation carries the plan digest, so a model change is first visible in
+    // the trusted I message; the request model field also differs.
+    assert!(model_diff.starts_with("/messages/") || model_diff == "/model");
+    assert_ne!(
+        base_request.request["model"],
+        model_request.request["model"]
+    );
+    assert_ne!(
+        base.common_prefix_bytes().unwrap(),
+        model_plan.common_prefix_bytes().unwrap()
+    );
+
+    let protected_plan = PrefixPlan::freeze_with_instructions(
+        spec("cut-1", "cb-1"),
+        vec![json!({"role":"system","content":"extra protected instruction"})],
+    )
+    .unwrap();
+    let protected_request = worker_request(
+        &protected_plan,
+        &worker_auth(&protected_plan),
+        &suffix("task"),
+        &json!({"v":1}),
+    )
+    .unwrap();
+    let protected_diff =
+        first_request_difference(&base_request.request, &protected_request.request).unwrap();
+    assert!(protected_diff.starts_with("/messages/"));
+    assert_ne!(
+        base.common_prefix_bytes().unwrap(),
+        protected_plan.common_prefix_bytes().unwrap()
+    );
+
+    let mut context_spec = spec("cut-1", "cb-1");
+    context_spec.context_id = "other-context".into();
+    context_spec.level = 2;
+    let context_plan = PrefixPlan::freeze(context_spec).unwrap();
+    let context_request = worker_request(
+        &context_plan,
+        &worker_auth(&context_plan),
+        &suffix("task"),
+        &json!({"v":1}),
+    )
+    .unwrap();
+    let context_diff =
+        first_request_difference(&base_request.request, &context_request.request).unwrap();
+    assert!(context_diff.starts_with("/messages/"));
+    assert_ne!(base.digest(), context_plan.digest());
+
+    let query_request = worker_request(
+        &base,
+        &worker_auth(&base),
+        &suffix("different task"),
+        &json!({"v":1}),
+    )
+    .unwrap();
+    let query_diff =
+        first_request_difference(&base_request.request, &query_request.request).unwrap();
+    assert!(query_diff.starts_with("/messages/"));
+    assert_eq!(
+        base_request.common_prefix_digest,
+        query_request.common_prefix_digest
+    );
+
+    let mut budget_spec = spec("cut-1", "cb-1");
+    budget_spec.projection_budget = 4096;
+    let budget_plan = PrefixPlan::freeze(budget_spec).unwrap();
+    let budget_request = worker_request(
+        &budget_plan,
+        &worker_auth(&budget_plan),
+        &suffix("task"),
+        &json!({"v":1}),
+    )
+    .unwrap();
+    assert_ne!(base.digest(), budget_plan.digest());
+    let budget_diff =
+        first_request_difference(&base_request.request, &budget_request.request).unwrap();
+    assert!(
+        budget_diff.starts_with("/messages/"),
+        "projection budget changes the activation digest: {budget_diff}"
+    );
+    assert_eq!(
+        base_request.request["tools"],
+        budget_request.request["tools"]
+    );
+
+    let mut schema_spec = spec("cut-1", "cb-1");
+    schema_spec.schema_version = "v2".into();
+    let schema_plan = PrefixPlan::freeze(schema_spec).unwrap();
+    let schema_request = worker_request(
+        &schema_plan,
+        &worker_auth(&schema_plan),
+        &suffix("task"),
+        &json!({"v":1}),
+    )
+    .unwrap();
+    assert_ne!(base.digest(), schema_plan.digest());
+    let schema_diff =
+        first_request_difference(&base_request.request, &schema_request.request).unwrap();
+    assert!(
+        schema_diff.starts_with("/messages/"),
+        "schema version changes the activation digest: {schema_diff}"
+    );
+    assert_eq!(
+        base_request.request["tools"],
+        schema_request.request["tools"]
+    );
 }
 
 #[test]
@@ -410,6 +597,7 @@ fn common_schema_contains_required_shared_operations_in_fixed_order() {
             "sic_signal_wait",
             "sic_message_send",
             "sic_message_receive",
+            "sic_message_read",
             "sic_decision_read",
             "sic_decision_write",
             "sic_board_read",
@@ -418,6 +606,8 @@ fn common_schema_contains_required_shared_operations_in_fixed_order() {
             "sic_board_release",
             "sic_board_progress",
             "sic_memory_page",
+            "sic_source_text_page",
+            "sic_memory_search",
             "sic_memory_replay",
             "sic_hierarchy_timeline",
             "sic_hierarchy_expand"

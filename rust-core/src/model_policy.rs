@@ -8,6 +8,49 @@
 
 use serde_json::Value;
 
+/// Accepted wire values are passed through unchanged. The configured Provider
+/// decides which values or aliases it actually supports and how they map.
+pub const REASONING_EFFORTS: [&str; 8] = [
+    "none", "minimal", "low", "medium", "high", "xhigh", "ultra", "max",
+];
+
+/// Worker HTTP-5xx retry policy shared by profile validation and the DSH bridge.
+///
+/// `max_attempts` counts the first try, so the bridge retries at most
+/// `max_attempts - 1` times. The defaults reproduce the pre-existing single
+/// retry with a fixed 250 ms wait: an omitted key changes no behavior. The
+/// opt-in switch stays `retry_worker_http_5xx`; these keys only shape it.
+pub const DEFAULT_WORKER_RETRY_ATTEMPTS: u32 = 2;
+pub const MAX_WORKER_RETRY_ATTEMPTS: u32 = 5;
+pub const DEFAULT_WORKER_RETRY_BACKOFF_MS: u64 = 250;
+pub const MAX_WORKER_RETRY_BACKOFF_MS: u64 = 5_000;
+
+/// Validate and return `(max_attempts, backoff_ms)` from one Worker profile.
+///
+/// A malformed or out-of-range value is a configuration error, never a silent
+/// fallback. An omitted value keeps the compatibility default.
+pub fn worker_retry_policy(profile: &Value) -> Result<(u32, u64), String> {
+    let fields = profile
+        .as_object()
+        .ok_or_else(|| "profile must be an object".to_string())?;
+    let attempts = match fields.get("worker_retry_max_attempts") {
+        None => DEFAULT_WORKER_RETRY_ATTEMPTS,
+        Some(value) => value
+            .as_u64()
+            .filter(|attempts| (1..=MAX_WORKER_RETRY_ATTEMPTS as u64).contains(attempts))
+            .map(|attempts| attempts as u32)
+            .ok_or_else(|| "worker_retry_max_attempts must be an integer in 1..=5".to_string())?,
+    };
+    let backoff = match fields.get("worker_retry_backoff_ms") {
+        None => DEFAULT_WORKER_RETRY_BACKOFF_MS,
+        Some(value) => value
+            .as_u64()
+            .filter(|delay| *delay <= MAX_WORKER_RETRY_BACKOFF_MS)
+            .ok_or_else(|| "worker_retry_backoff_ms must be an integer in 0..=5000".to_string())?,
+    };
+    Ok((attempts, backoff))
+}
+
 /// Validate the explicit host profile registry, role defaults, and profile maps.
 ///
 /// Expected shape:
@@ -181,6 +224,14 @@ fn validate_profile(profile: &Value) -> Result<(), String> {
 
     required_nonempty_string(fields, "model")?;
     required_nonempty_string(fields, "tokenizer_model")?;
+    if let Some(value) = fields.get("reasoning_effort") {
+        if value
+            .as_str()
+            .is_none_or(|effort| !REASONING_EFFORTS.contains(&effort))
+        {
+            return Err("unsupported host reasoning_effort".into());
+        }
+    }
     let context = positive_integer(fields, "context_window")?;
     let max_input = positive_integer(fields, "max_input_tokens")?;
     let max_output = positive_integer(fields, "max_output_tokens")?;
@@ -203,6 +254,15 @@ fn validate_profile(profile: &Value) -> Result<(), String> {
     if let Some(status) = fields.get("tokenizer_status") {
         if status.as_str().is_none_or(|value| value.trim().is_empty()) {
             return Err("tokenizer_status must be a nonempty string when provided".into());
+        }
+    }
+    // This is a host assertion used to distinguish plans, not a provider cache
+    // key and never evidence of a physical hit. Omission remains unknown.
+    if let Some(namespace) = fields.get("cache_namespace") {
+        if namespace.as_str().is_none_or(|value| {
+            value.trim().is_empty() || value.len() > 256 || value.chars().any(char::is_control)
+        }) {
+            return Err("cache_namespace must be a nonempty, bounded host identifier".into());
         }
     }
     Ok(())

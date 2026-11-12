@@ -237,12 +237,27 @@ fn decode_chat(request: &Value) -> Result<Vec<TextUnit>, String> {
     for (mi, message) in messages.iter().enumerate() {
         fields(
             message,
-            &["role", "content", "tool_calls", "tool_call_id", "name"],
+            &[
+                "role",
+                "content",
+                "tool_calls",
+                "tool_call_id",
+                "name",
+                "reasoning_content",
+            ],
             "Chat message",
         )?;
         let role = text(required(message, "role", "Chat message")?, "Chat role")?;
         if !matches!(role, "system" | "developer" | "user" | "assistant" | "tool") {
             return Err(err("unsupported Chat role"));
+        }
+        if let Some(reasoning) = message.get("reasoning_content") {
+            if role != "assistant" || (!reasoning.is_null() && !reasoning.is_string()) {
+                return Err(err("reasoning_content must be assistant text or null"));
+            }
+            // Preserve provider-native reasoning in the sidecar, not as an
+            // independently editable text unit. Some Chat providers require
+            // it unchanged while continuing a tool-calling turn.
         }
         if calls.difference(&results).next().is_some() && role != "tool" {
             return Err(err(

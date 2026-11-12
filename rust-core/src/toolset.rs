@@ -333,10 +333,28 @@ impl ToolSet {
     /// Advance after one Worker response is complete and evict tools that
     /// have reached the configured idle age. Active and host-fixed tools pin.
     pub fn advance_worker_round(&mut self) -> Result<Vec<String>, String> {
-        self.current_worker_round = self
+        self.advance_worker_round_with_new_expansions(&[])
+    }
+
+    /// An expansion created during this very response starts aging after the
+    /// response, so the model gets fifteen subsequent unused rounds. Repeated
+    /// requests to expand an already-expanded tool do not refresh its age.
+    pub fn advance_worker_round_with_new_expansions(
+        &mut self,
+        newly_expanded: &[String],
+    ) -> Result<Vec<String>, String> {
+        let next_round = self
             .current_worker_round
             .checked_add(1)
             .ok_or_else(|| "Worker round counter exhausted".to_owned())?;
+        for name in newly_expanded {
+            if let Some(state) = self.tools.get_mut(name) {
+                if state.expanded && state.last_touched_round == Some(self.current_worker_round) {
+                    state.last_touched_round = Some(next_round);
+                }
+            }
+        }
+        self.current_worker_round = next_round;
         let mut candidates: Vec<(String, u64)> = self
             .tools
             .iter()
@@ -522,6 +540,7 @@ impl ToolSet {
         Ok(Expansion {
             descriptor: state.descriptor.clone(),
             evicted,
+            newly_expanded: !already_expanded,
         })
     }
 
@@ -569,4 +588,7 @@ impl ToolSet {
 pub struct Expansion {
     pub descriptor: ToolDescriptor,
     pub evicted: Vec<String>,
+    /// Internal response-boundary bookkeeping; not part of the model result.
+    #[serde(skip)]
+    pub newly_expanded: bool,
 }

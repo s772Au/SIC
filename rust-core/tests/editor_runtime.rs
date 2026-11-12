@@ -5,11 +5,13 @@ use sic_core_rust::{
     storage::Store,
 };
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 
 #[derive(Clone, Default)]
 struct Mock {
     calls: Arc<Mutex<Vec<Value>>>,
+    correction_started: Arc<Notify>,
+    correction_release: Arc<Notify>,
 }
 
 async fn completion(State(mock): State<Mock>, Json(body): Json<Value>) -> Json<Value> {
@@ -66,10 +68,413 @@ async fn wrong_tool_then_edit(State(mock): State<Mock>, Json(body): Json<Value>)
         ("sic_edit_blocks", json!({"ops":[],"pvi":{}}))
     };
     Json(
-        json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":"tool_calls",
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":7,"completion_tokens":3},"choices":[{"finish_reason":"tool_calls",
         "message":{"role":"assistant","content":null,"tool_calls":[{"id":format!("call-{}",calls.len()),
         "type":"function","function":{"name":name,"arguments":arguments.to_string()}}]}}]}),
     )
+}
+
+async fn invalid_choice_then_edit(
+    State(mock): State<Mock>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let mut calls = mock.calls.lock().await;
+    calls.push(body);
+    let valid = json!({"finish_reason":"tool_calls","message":{"role":"assistant","content":null,
+        "tool_calls":[{"id":"editor-valid","type":"function","function":{"name":"sic_edit_blocks",
+        "arguments":"{\"ops\":[],\"pvi\":{}}"}}]}});
+    let choices = if calls.len() == 1 {
+        vec![
+            json!({"index":0,"message":{"role":"assistant","content":"synthetic ambiguous choice"}}),
+            valid,
+        ]
+    } else {
+        vec![valid]
+    };
+    Json(
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":7,"completion_tokens":3},"choices":choices}),
+    )
+}
+
+#[tokio::test]
+async fn editor_rejects_multiple_choices_then_uses_bounded_feedback() {
+    let mock = Mock::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/v1/chat/completions", post(invalid_choice_then_edit))
+                .with_state(mock.clone()),
+        )
+        .into_future(),
+    );
+    let p = profile(format!("http://{address}/v1"));
+    let core = Core::with_model_config_and_resolver(
+        Store::memory().await.unwrap(),
+        json!({"roles":{"worker":p,"editor":p}}),
+        Arc::new(|_| Ok("fixture-key".into())),
+    )
+    .unwrap();
+    let mut context = OperationContext {
+        actor: "alice".into(),
+        chain_id: None,
+        allow_write: true,
+        allow_model: true,
+        allow_revoke: false,
+    };
+    context.chain_id = Some(
+        core.operate("chain.create", &context, &json!({}))
+            .await
+            .unwrap()["result"]["chain_id"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+    );
+    let source = core
+        .operate(
+            "source.ingest",
+            &context,
+            &json!({"request":{"messages":[{"role":"user","content":"fixture"}]}}),
+        )
+        .await
+        .unwrap();
+    let job = core
+        .operate(
+            "edit.prepare",
+            &context,
+            &json!({"source_id":source["result"]["source_id"]}),
+        )
+        .await
+        .unwrap();
+    let result = core
+        .operate(
+            "edit.run",
+            &context,
+            &json!({"job_id":job["result"]["job_id"]}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result["result"]["status"], "ready");
+    assert_eq!(result["result"]["attempts"], 2);
+    let calls = mock.calls.lock().await;
+    assert_eq!(calls.len(), 2);
+    let feedback = calls[1]["messages"].as_array().unwrap().last().unwrap()["content"]
+        .as_str()
+        .unwrap();
+    assert!(feedback.contains("exactly one choice"));
+    assert!(!feedback.contains("synthetic ambiguous choice"));
+    let ledger = core
+        .operate("accounting.get", &context, &json!({}))
+        .await
+        .unwrap();
+    assert_eq!(ledger["result"]["known_prompt_tokens"], 14);
+    assert_eq!(ledger["result"]["known_completion_tokens"], 6);
+    server.abort();
+}
+
+async fn gated_editor_correction(State(mock): State<Mock>, Json(body): Json<Value>) -> Json<Value> {
+    let n = {
+        let mut calls = mock.calls.lock().await;
+        calls.push(body);
+        calls.len()
+    };
+    if n == 2 {
+        mock.correction_started.notify_one();
+        mock.correction_release.notified().await;
+    }
+    let arguments = if n == 1 {
+        json!({"ops":[],"pvi":{"P":[{"invalid":"object"}]}})
+    } else {
+        json!({"ops":[],"pvi":{}})
+    };
+    Json(
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":7,"completion_tokens":3},
+        "choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
+            "id":format!("editor-correction-{n}"),"type":"function",
+            "function":{"name":"sic_edit_blocks","arguments":arguments.to_string()}}]}}]}),
+    )
+}
+
+#[tokio::test]
+async fn editor_feedback_retry_is_unknown_until_its_response_arrives() {
+    let mock = Mock::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/v1/chat/completions", post(gated_editor_correction))
+                .with_state(mock.clone()),
+        )
+        .into_future(),
+    );
+    let p = profile(format!("http://{address}/v1"));
+    let core = Core::with_model_config_and_resolver(
+        Store::memory().await.unwrap(),
+        json!({"roles":{"worker":p,"editor":p}}),
+        Arc::new(|_| Ok("fixture-key".into())),
+    )
+    .unwrap();
+    let mut context = OperationContext {
+        actor: "alice".into(),
+        chain_id: None,
+        allow_write: true,
+        allow_model: true,
+        allow_revoke: false,
+    };
+    let chain = core
+        .operate("chain.create", &context, &json!({}))
+        .await
+        .unwrap();
+    context.chain_id = Some(chain["result"]["chain_id"].as_str().unwrap().into());
+    let source = core
+        .operate(
+            "source.ingest",
+            &context,
+            &json!({"request":{"messages":[{"role":"user","content":"retry fixture"}]}}),
+        )
+        .await
+        .unwrap();
+    let job = core
+        .operate(
+            "edit.prepare",
+            &context,
+            &json!({"source_id":source["result"]["source_id"]}),
+        )
+        .await
+        .unwrap();
+    let running_core = core.clone();
+    let running_context = context.clone();
+    let job_id = job["result"]["job_id"].as_str().unwrap().to_owned();
+    let running = tokio::spawn(async move {
+        running_core
+            .operate("edit.run", &running_context, &json!({"job_id":job_id}))
+            .await
+    });
+    mock.correction_started.notified().await;
+    let pending = core
+        .operate("accounting.get", &context, &json!({}))
+        .await
+        .unwrap();
+    let groups: Vec<_> = pending["result"]["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|g| g["role"] == "editor")
+        .collect();
+    assert_eq!(
+        groups
+            .iter()
+            .map(|g| g["attempts"].as_u64().unwrap())
+            .sum::<u64>(),
+        2
+    );
+    assert_eq!(
+        groups
+            .iter()
+            .map(|g| g["prompt_tokens"]["unknown_attempts"].as_u64().unwrap())
+            .sum::<u64>(),
+        1
+    );
+    assert_eq!(pending["result"]["complete"], false);
+    mock.correction_release.notify_one();
+    running.await.unwrap().unwrap();
+    let final_ledger = core
+        .operate("accounting.get", &context, &json!({}))
+        .await
+        .unwrap();
+    let group = &final_ledger["result"]["groups"][0];
+    assert_eq!(group["attempts"], 2);
+    assert_eq!(group["prompt_tokens"]["known_tokens"], 14);
+    assert_eq!(group["completion_tokens"]["known_tokens"], 6);
+    server.abort();
+}
+
+async fn truncated_worker() -> Json<Value> {
+    Json(
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":11,"completion_tokens":9},
+        "choices":[{"finish_reason":"length","message":{"role":"assistant","content":"incomplete"}}]}),
+    )
+}
+
+async fn worker_then_editor(State(mock): State<Mock>, Json(body): Json<Value>) -> Json<Value> {
+    let mut calls = mock.calls.lock().await;
+    calls.push(body);
+    let message = if calls.len() % 2 == 1 {
+        json!({"finish_reason":"stop","message":{"role":"assistant","content":"worker completed"}})
+    } else {
+        json!({"finish_reason":"tool_calls","message":{"role":"assistant","content":null,
+            "tool_calls":[{"id":format!("edit-{}",calls.len()),"type":"function",
+            "function":{"name":"sic_edit_blocks","arguments":"{\"ops\":[],\"pvi\":{}}"}}]}})
+    };
+    Json(
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":3,"completion_tokens":1},"choices":[message]}),
+    )
+}
+
+#[tokio::test]
+async fn shared_prefix_scope_distinguishes_route_and_unknown_cache_from_identical_text() {
+    let mock = Mock::default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/same/chat/completions", post(worker_then_editor))
+                .route("/other/chat/completions", post(worker_then_editor))
+                .with_state(mock),
+        )
+        .into_future(),
+    );
+
+    // All cases use the same model and same logical CB/messages. Only the
+    // host-declared cache scope, provider route, or control differs.
+    for (different_route, declare_namespace, different_controls, scope_matches) in [
+        (false, true, false, true),
+        (true, true, false, false),
+        (false, false, false, false),
+        (false, true, true, false),
+    ] {
+        let mut worker = profile(format!("http://{address}/same"));
+        let mut editor = profile(format!(
+            "http://{address}/{}",
+            if different_route { "other" } else { "same" }
+        ));
+        if declare_namespace {
+            worker["cache_namespace"] = json!("fixture-declared-scope");
+            editor["cache_namespace"] = json!("fixture-declared-scope");
+        }
+        if different_controls {
+            editor["reasoning_effort"] = json!("low");
+        }
+        let core = Core::with_model_config_and_resolver(
+            Store::memory().await.unwrap(),
+            json!({"roles":{"worker":worker,"editor":editor}}),
+            Arc::new(|_| Ok("fixture-key".into())),
+        )
+        .unwrap();
+        let mut context = OperationContext {
+            actor: "alice".into(),
+            chain_id: None,
+            allow_write: true,
+            allow_model: true,
+            allow_revoke: false,
+        };
+        let chain = core
+            .operate("chain.create", &context, &json!({}))
+            .await
+            .unwrap();
+        context.chain_id = Some(chain["result"]["chain_id"].as_str().unwrap().into());
+        let source = core
+            .operate(
+                "source.ingest",
+                &context,
+                &json!({"request":{"messages":[{"role":"user","content":"scope fixture"}]}}),
+            )
+            .await
+            .unwrap();
+        let work = core
+            .operate("worker.run", &context, &json!({}))
+            .await
+            .unwrap();
+        let job = core
+            .operate(
+                "edit.prepare",
+                &context,
+                &json!({"source_id":source["result"]["source_id"]}),
+            )
+            .await
+            .unwrap();
+        let edit = core
+            .operate(
+                "edit.run",
+                &context,
+                &json!({"job_id":job["result"]["job_id"]}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            work["evidence"]["common_prefix_digest"],
+            edit["evidence"]["common_prefix_digest"]
+        );
+        assert_eq!(
+            work["evidence"]["prefix_scope_digest"] == edit["evidence"]["prefix_scope_digest"],
+            scope_matches
+        );
+        assert_eq!(
+            work["evidence"]["cache_namespace_status"],
+            if declare_namespace {
+                "host_declared_unverified"
+            } else {
+                "unknown"
+            }
+        );
+        assert_eq!(edit["evidence"]["physical_cache_hit"], "unknown");
+        assert!(
+            !work["evidence"]
+                .to_string()
+                .contains("fixture-declared-scope")
+        );
+    }
+    server.abort();
+}
+
+#[tokio::test]
+async fn rejected_worker_response_retains_reported_usage_without_adopting_the_answer() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(
+        axum::serve(
+            listener,
+            Router::new().route("/v1/chat/completions", post(truncated_worker)),
+        )
+        .into_future(),
+    );
+    let p = profile(format!("http://{address}/v1"));
+    let core = Core::with_model_config_and_resolver(
+        Store::memory().await.unwrap(),
+        json!({"roles":{"worker":p,"editor":p}}),
+        Arc::new(|_| Ok("fixture-key".into())),
+    )
+    .unwrap();
+    let mut context = OperationContext {
+        actor: "alice".into(),
+        chain_id: None,
+        allow_write: true,
+        allow_model: true,
+        allow_revoke: false,
+    };
+    let created = core
+        .operate("chain.create", &context, &json!({}))
+        .await
+        .unwrap();
+    context.chain_id = Some(created["result"]["chain_id"].as_str().unwrap().into());
+    core.operate(
+        "source.ingest",
+        &context,
+        &json!({"request":{"messages":[{"role":"user","content":"fixture"}]}}),
+    )
+    .await
+    .unwrap();
+    assert!(
+        core.operate("worker.run", &context, &json!({}))
+            .await
+            .is_err()
+    );
+    let usage = core
+        .operate("accounting.get", &context, &json!({}))
+        .await
+        .unwrap();
+    let group = &usage["result"]["groups"][0];
+    assert_eq!(group["role"], "worker");
+    assert_eq!(group["prompt_tokens"]["known_tokens"], 11);
+    assert_eq!(group["completion_tokens"]["known_tokens"], 9);
+    assert_eq!(group["prompt_tokens"]["unknown_attempts"], 0);
+    server.abort();
 }
 
 #[tokio::test]
@@ -140,6 +545,16 @@ async fn editor_recovers_from_wrong_common_tool_with_bounded_feedback() {
             .unwrap()
             .contains("Host validation rejected")
     );
+    drop(requests);
+    let usage = core
+        .operate("accounting.get", &context, &json!({}))
+        .await
+        .unwrap();
+    let group = &usage["result"]["groups"][0];
+    assert_eq!(group["attempts"], 2);
+    assert_eq!(group["prompt_tokens"]["known_tokens"], 14);
+    assert_eq!(group["completion_tokens"]["known_tokens"], 6);
+    assert_eq!(group["prompt_tokens"]["unknown_attempts"], 0);
     server.abort();
 }
 
@@ -246,9 +661,12 @@ async fn editor_invalid_candidate_gets_bounded_feedback_and_publishes_real_secon
     );
     let mut p = profile(format!("http://{address}/v1"));
     p["reasoning_effort"] = json!("low");
+    let mut worker_profile = p.clone();
+    worker_profile["model"] = json!("openai/worker-test-model");
+    worker_profile["expected_returned_models"] = json!(["deepseek-v4.1-flash-eco"]);
     let core = Core::with_model_config_and_resolver(
         Store::memory().await.unwrap(),
-        json!({"roles":{"worker":p,"editor":p}}),
+        json!({"roles":{"worker":worker_profile,"editor":p}}),
         Arc::new(|_| Ok("fixture-key".into())),
     )
     .unwrap();
@@ -377,5 +795,16 @@ async fn editor_invalid_candidate_gets_bounded_feedback_and_publishes_real_secon
     assert_eq!(usage["result"]["attempts"].as_array().unwrap().len(), 3);
     assert_eq!(usage["result"]["complete"], true);
     assert_eq!(usage["result"]["priced_cost"], Value::Null);
+    let groups = usage["result"]["groups"].as_array().unwrap();
+    let editor = groups.iter().find(|g| g["role"] == "editor").unwrap();
+    let worker = groups.iter().find(|g| g["role"] == "worker").unwrap();
+    assert_eq!(editor["requested_model"], "openai/deepseek-v4.1-flash-eco");
+    assert_eq!(editor["attempts"], 2);
+    assert_eq!(editor["prompt_tokens"]["known_tokens"], 20);
+    assert_eq!(worker["requested_model"], "openai/worker-test-model");
+    assert_eq!(worker["attempts"], 1);
+    assert_eq!(worker["completion_tokens"]["known_tokens"], 5);
+    assert_eq!(worker["cached_prompt_tokens"]["unknown_attempts"], 1);
+    assert!(!usage.to_string().contains("TEST_MOCK_KEY"));
     server.abort();
 }

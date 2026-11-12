@@ -42,6 +42,16 @@ impl IpcStore {
         Ok(state)
     }
 
+    /// Read a namespace within an already-authorized Core transaction without
+    /// rewriting its aggregate row. Callers must commit before awaiting work.
+    pub(crate) async fn read_in_transaction(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+    ) -> Result<IpcState> {
+        Self::ensure_schema(tx).await?;
+        self.load_in_transaction(tx).await
+    }
+
     /// Execute a synchronous state-machine operation while holding one write
     /// transaction. Any closure error or serialization failure rolls it back.
     pub async fn transact<T, F>(&self, operation: F) -> Result<T>

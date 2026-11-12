@@ -519,7 +519,7 @@ async fn transition_in_transaction(
     let allowed = match next_state {
         "running" => old_state == "claimed",
         "completed" | "failed" => old_state == "running",
-        "unknown" => old_state == "claimed" || old_state == "running",
+        "unknown" => old_state == "claimed" || old_state == "running" || old_state == "prepared",
         _ => false,
     };
     if !allowed {

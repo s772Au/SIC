@@ -314,3 +314,121 @@ async fn request_body_is_limited_to_sixteen_mib() {
     );
     task.abort();
 }
+
+#[tokio::test]
+async fn ledger_route_requires_bearer_and_returns_host_scoped_accounting() {
+    let (url, task) = start(core().await, auth(true, false, false)).await;
+    let client = loopback_client();
+    let created = post(
+        &client,
+        &url,
+        &envelope("chain.create", ACTOR, None, true, false, false, json!({})),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(created.status(), reqwest::StatusCode::OK);
+    let body: Value = created.json().await.unwrap();
+    let chain_id = body["result"]["chain_id"].as_str().unwrap().to_owned();
+
+    let unauthorized = client
+        .get(format!("{url}/api/v2/chains/{chain_id}/ledger"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let ledger = client
+        .get(format!("{url}/api/v2/chains/{chain_id}/ledger"))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ledger.status(), reqwest::StatusCode::OK);
+    assert_eq!(ledger.headers()[reqwest::header::CACHE_CONTROL], "no-store");
+    let ledger: Value = ledger.json().await.unwrap();
+    assert_eq!(ledger["chain_id"], chain_id);
+    assert_eq!(
+        ledger["accounting"]["resources"]["storage"]["class"],
+        "host_measured"
+    );
+    assert!(ledger["accounting"]["measurements"]["blocks"].is_object());
+    assert!(!ledger.to_string().contains(TOKEN));
+
+    let missing = client
+        .get(format!("{url}/api/v2/chains/chain_missing/ledger"))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap();
+    assert_ne!(missing.status(), reqwest::StatusCode::OK);
+    task.abort();
+}
+
+#[tokio::test]
+async fn ledger_route_does_not_leak_revoked_source_content() {
+    const SECRET: &str = "LEDGER-REVOKED-SECRET";
+    let (url, task) = start(core().await, auth(true, false, true)).await;
+    let client = loopback_client();
+    let created: Value = post(
+        &client,
+        &url,
+        &envelope("chain.create", ACTOR, None, true, false, false, json!({})),
+        Some(TOKEN),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    let chain_id = created["result"]["chain_id"].as_str().unwrap().to_owned();
+    let ingested: Value = post(
+        &client,
+        &url,
+        &envelope(
+            "source.ingest",
+            ACTOR,
+            Some(&chain_id),
+            true,
+            false,
+            false,
+            json!({"request":{"messages":[{"role":"user","content":SECRET}]}}),
+        ),
+        Some(TOKEN),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    let source_id = ingested["result"]["source_id"].as_str().unwrap().to_owned();
+    let revoked = post(
+        &client,
+        &url,
+        &envelope(
+            "security.revoke",
+            ACTOR,
+            Some(&chain_id),
+            true,
+            false,
+            true,
+            json!({"source_id":source_id,"reason":"ledger test"}),
+        ),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(revoked.status(), reqwest::StatusCode::OK);
+
+    let ledger = client
+        .get(format!("{url}/api/v2/chains/{chain_id}/ledger"))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ledger.status(), reqwest::StatusCode::OK);
+    let text = ledger.text().await.unwrap();
+    assert!(!text.contains(SECRET), "{text}");
+    let body: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        body["accounting"]["measurements"]["suppressed"],
+        "revocation"
+    );
+    task.abort();
+}

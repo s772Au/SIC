@@ -142,7 +142,7 @@ async fn gated_completion(State(gate): State<Gate>, Json(body): Json<Value>) -> 
         "recovered result"
     };
     Json(
-        json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":message}}]}),
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":10*n,"completion_tokens":n},"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":message}}]}),
     )
 }
 
@@ -155,7 +155,7 @@ async fn gated_editor_completion(State(gate): State<Gate>, Json(body): Json<Valu
     }
     let arguments = json!({"ops":[],"pvi":{"V":["late editor result"]}}).to_string();
     Json(
-        json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{"id":"editor-late-1","type":"function","function":{"name":"sic_edit_blocks","arguments":arguments}}]}}]}),
+        json!({"model":"deepseek-v4.1-flash-eco","usage":{"prompt_tokens":10*n,"completion_tokens":n},"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{"id":"editor-late-1","type":"function","function":{"name":"sic_edit_blocks","arguments":arguments}}]}}]}),
     )
 }
 
@@ -300,6 +300,8 @@ async fn paused_editor_does_not_adopt_its_late_candidate() {
             .await
     });
     gate.started.notified().await;
+    let blocked_edit = core.operate("decision.update", &alice, &json!({"expected_revision":0,"events":[{"id":"during-editor","kind":"work","text":"concurrent change","evidence":[]}]})).await.unwrap_err();
+    assert_eq!(blocked_edit.code, "conflict");
     call(
         &core,
         &bob,
@@ -339,16 +341,56 @@ async fn host_abandon_allows_new_worker_and_rejects_old_claim_result() {
             .await
     });
     gate.started.notified().await;
+    let blocked_edit = core.operate("decision.update", &alice, &json!({"expected_revision":0,"events":[{"id":"during-worker","kind":"work","text":"concurrent change","evidence":[]}]})).await.unwrap_err();
+    assert_eq!(blocked_edit.code, "conflict");
 
     let abandoned = call(&core, &alice, "runtime.abandon", json!({"kind":"worker"})).await;
     assert!(abandoned["abandoned_claim_id"].is_string());
     let replacement = call(&core, &alice, "worker.run", json!({})).await;
     assert_eq!(replacement["content"], "recovered result");
+    let pending_ledger = call(&core, &alice, "accounting.get", json!({})).await;
+    let worker_groups: Vec<_> = pending_ledger["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|g| g["role"] == "worker")
+        .collect();
+    assert_eq!(
+        worker_groups
+            .iter()
+            .map(|g| g["attempts"].as_u64().unwrap())
+            .sum::<u64>(),
+        2
+    );
+    assert_eq!(
+        worker_groups
+            .iter()
+            .map(|g| g["prompt_tokens"]["unknown_attempts"].as_u64().unwrap())
+            .sum::<u64>(),
+        1
+    );
+    assert_eq!(pending_ledger["complete"], false);
+    assert_eq!(pending_ledger["unresolved_attempts"], 1);
     gate.release.notify_one();
     assert!(
         old.await.unwrap().is_err(),
         "old claim result was accepted after recovery"
     );
+
+    let ledger = call(&core, &alice, "accounting.get", json!({})).await;
+    let worker = ledger["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["role"] == "worker")
+        .unwrap();
+    assert_eq!(
+        worker["attempts"], 2,
+        "both billed calls must remain visible"
+    );
+    assert_eq!(worker["prompt_tokens"]["known_tokens"], 30);
+    assert_eq!(worker["completion_tokens"]["known_tokens"], 3);
+    assert_eq!(ledger["unresolved_attempts"], 0);
 
     let view = call(&core, &alice, "cut.get", json!({})).await;
     let pending_ids = view["pending"].as_array().unwrap();
@@ -374,5 +416,65 @@ async fn host_abandon_allows_new_worker_and_rejects_old_claim_result() {
             .iter()
             .all(|unit| unit["text"] != "late first result")
     );
+    server.abort();
+}
+
+#[tokio::test]
+async fn abandoned_editor_result_is_not_adopted_but_reported_usage_is_recorded() {
+    let gate = Gate::default();
+    let (core, server) = fixture_core(gate.clone(), true).await;
+    let a = chain(&core, "alice").await;
+    let alice = context("alice", Some(&a), true);
+    let source = ingest(&core, &alice, "editor input").await;
+    let job = call(&core, &alice, "edit.prepare", json!({"source_id":source})).await["job_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let running_core = core.clone();
+    let running_context = alice.clone();
+    let running_job = job.clone();
+    let pending = tokio::spawn(async move {
+        running_core
+            .operate("edit.run", &running_context, &json!({"job_id":running_job}))
+            .await
+    });
+    gate.started.notified().await;
+    let abandoned = call(
+        &core,
+        &alice,
+        "runtime.abandon",
+        json!({"kind":"editor","job_id":job}),
+    )
+    .await;
+    assert_eq!(abandoned["abandoned"], true);
+    let pending_ledger = call(&core, &alice, "accounting.get", json!({})).await;
+    let pending_editor = pending_ledger["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["role"] == "editor")
+        .unwrap();
+    assert_eq!(pending_editor["attempts"], 1);
+    assert_eq!(pending_editor["prompt_tokens"]["unknown_attempts"], 1);
+    assert_eq!(pending_ledger["complete"], false);
+    assert_eq!(pending_ledger["unresolved_attempts"], 1);
+    gate.release.notify_one();
+    assert!(
+        pending.await.unwrap().is_err(),
+        "superseded Editor result must not become a candidate"
+    );
+    let candidate = call(&core, &alice, "edit.candidate.get", json!({"job_id":job})).await;
+    assert!(candidate["candidate"].is_null());
+    let ledger = call(&core, &alice, "accounting.get", json!({})).await;
+    let editor = ledger["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["role"] == "editor")
+        .unwrap();
+    assert_eq!(editor["attempts"], 1);
+    assert_eq!(editor["prompt_tokens"]["known_tokens"], 10);
+    assert_eq!(editor["completion_tokens"]["known_tokens"], 1);
+    assert_eq!(ledger["unresolved_attempts"], 0);
     server.abort();
 }

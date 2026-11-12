@@ -1,3 +1,7 @@
+mod model_policy {
+    pub use sic_core_rust::model_policy::*;
+}
+
 #[path = "../src/provider.rs"]
 mod provider;
 
@@ -123,6 +127,27 @@ fn ok_body(with_usage: bool) -> String {
     body.to_string()
 }
 
+#[tokio::test]
+async fn reasoning_efforts_are_forwarded_without_implicit_mapping() {
+    for effort in crate::model_policy::REASONING_EFFORTS {
+        let (base, server) = fixture(response("200 OK", &ok_body(false), "")).await;
+        let p = profile(base);
+        chat_completion(
+            &p,
+            &request(messages(), Some(effort)),
+            CallRole::Worker,
+            &frozen(12),
+            |_| Ok(TEST_KEY.into()),
+        )
+        .await
+        .unwrap();
+        let wire = server.await.unwrap();
+        let body = wire.split_once("\r\n\r\n").unwrap().1;
+        let sent: Value = serde_json::from_str(body).unwrap();
+        assert_eq!(sent["reasoning_effort"], effort);
+    }
+}
+
 #[test]
 fn validates_backend_example_profile_without_reading_credentials() {
     let p = profile("https://provider.invalid/v1".into());
@@ -138,6 +163,53 @@ fn validates_backend_example_profile_without_reading_credentials() {
         configured["credential_origin"],
         "https://amr-link.open-design.ai"
     );
+    assert_eq!(configured["retry_editor_http_5xx"], true);
+    let mut invalid = configured.clone();
+    invalid["retry_editor_http_5xx"] = json!("true");
+    assert!(validate_openai_profile(&invalid).is_err());
+    invalid = configured.clone();
+    invalid["retry_worker_http_5xx"] = json!("true");
+    assert!(validate_openai_profile(&invalid).is_err());
+    invalid["retry_worker_http_5xx"] = json!(true);
+    assert!(validate_openai_profile(&invalid).is_ok());
+}
+
+#[test]
+fn worker_retry_policy_defaults_and_bounds_are_validated() {
+    let base = profile("https://provider.invalid/v1".into());
+    assert_eq!(
+        crate::model_policy::worker_retry_policy(&base).unwrap(),
+        (2, 250),
+        "omitted keys keep the historical one-retry/250 ms policy"
+    );
+    for (key, bad) in [
+        ("worker_retry_max_attempts", json!(0)),
+        ("worker_retry_max_attempts", json!(6)),
+        ("worker_retry_max_attempts", json!("3")),
+        ("worker_retry_backoff_ms", json!(5001)),
+        ("worker_retry_backoff_ms", json!(-1)),
+    ] {
+        let mut candidate = base.clone();
+        candidate[key] = bad;
+        assert!(
+            validate_openai_profile(&candidate).is_err(),
+            "{key} accepted an invalid value"
+        );
+    }
+    for (key, good, expected) in [
+        ("worker_retry_max_attempts", json!(1), (1u32, 250u64)),
+        ("worker_retry_max_attempts", json!(5), (5u32, 250u64)),
+        ("worker_retry_backoff_ms", json!(0), (2u32, 0u64)),
+        ("worker_retry_backoff_ms", json!(5000), (2u32, 5000u64)),
+    ] {
+        let mut candidate = base.clone();
+        candidate[key] = good;
+        assert!(validate_openai_profile(&candidate).is_ok());
+        assert_eq!(
+            crate::model_policy::worker_retry_policy(&candidate).unwrap(),
+            expected
+        );
+    }
 }
 
 #[test]
@@ -308,11 +380,69 @@ async fn editor_tool_response_is_returned_with_original_call_id_and_arguments() 
 }
 
 #[tokio::test]
+async fn completed_parallel_calls_normalize_provider_indexes_but_preserve_raw_response() {
+    let calls = json!([
+        {"index":0,"id":"read-a","type":"function","function":{"name":"sic_source_read","arguments":"{\"source_id\":\"a\"}"}},
+        {"index":0,"id":"read-b","type":"function","function":{"name":"sic_source_read","arguments":"{\"source_id\":\"b\"}"}}
+    ]);
+    let body = json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":"tool_calls",
+        "message":{"role":"assistant","content":null,"tool_calls":calls}}]});
+    let (base, server) = fixture(response("200 OK", &body.to_string(), "")).await;
+    let result = chat_completion(
+        &profile(base),
+        &request(messages(), None),
+        CallRole::Worker,
+        &frozen(12),
+        |_| Ok(TEST_KEY.into()),
+    )
+    .await
+    .unwrap();
+    let _ = server.await.unwrap();
+    let normalized = result.tool_calls.unwrap();
+    assert_eq!(normalized[0]["index"], 0);
+    assert_eq!(normalized[1]["index"], 1);
+    assert_eq!(normalized[1]["id"], "read-b");
+    assert_eq!(
+        normalized[1]["function"]["arguments"],
+        "{\"source_id\":\"b\"}"
+    );
+    assert_eq!(
+        result.raw_response["choices"][0]["message"]["tool_calls"],
+        calls
+    );
+}
+
+#[tokio::test]
+async fn parallel_call_normalization_still_rejects_duplicate_ids_and_invalid_index_types() {
+    let valid = json!({"index":0,"id":"read-a","type":"function",
+        "function":{"name":"sic_source_read","arguments":"{\"source_id\":\"a\"}"}});
+    for bad in [
+        json!({"index":0,"id":"read-a","type":"function","function":{"name":"sic_source_read","arguments":"{}"}}),
+        json!({"index":-1,"id":"read-b","type":"function","function":{"name":"sic_source_read","arguments":"{}"}}),
+        json!({"index":"0","id":"read-b","type":"function","function":{"name":"sic_source_read","arguments":"{}"}}),
+    ] {
+        let body = json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":"tool_calls",
+            "message":{"role":"assistant","content":null,"tool_calls":[valid.clone(),bad]}}]});
+        let (base, server) = fixture(response("200 OK", &body.to_string(), "")).await;
+        let result = chat_completion(
+            &profile(base),
+            &request(messages(), None),
+            CallRole::Worker,
+            &frozen(12),
+            |_| Ok(TEST_KEY.into()),
+        )
+        .await;
+        assert!(result.is_err());
+        let _ = server.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn assistant_tool_call_and_tool_result_keep_native_ids_and_arguments() {
     let call_args = "{\"source_id\":\"src-1\"}";
     let history = json!([
         {"role":"user","content":"Read the source."},
-        {"role":"assistant","content":null,"tool_calls":[{"id":"call_read_01","type":"function","function":{"name":"sic_source_read","arguments":call_args}}]},
+        {"role":"assistant","content":null,"reasoning_content":"opaque synthetic reasoning","tool_calls":[{"id":"call_read_01","type":"function","function":{"name":"sic_source_read","arguments":call_args}}]},
         {"role":"tool","tool_call_id":"call_read_01","name":"sic_source_read","content":"source text"},
         {"role":"user","content":"Now answer."}
     ]);
@@ -340,6 +470,10 @@ async fn assistant_tool_call_and_tool_result_keep_native_ids_and_arguments() {
         call_args
     );
     assert_eq!(sent_json["messages"][2]["tool_call_id"], "call_read_01");
+    assert_eq!(
+        sent_json["messages"][1]["reasoning_content"],
+        "opaque synthetic reasoning"
+    );
 }
 
 #[tokio::test]
@@ -635,7 +769,7 @@ async fn rejects_non_text_messages_and_unknown_reasoning_effort_before_network()
     assert!(
         chat_completion(
             &p,
-            &request(messages(), Some("minimal")),
+            &request(messages(), Some("unrecognized")),
             CallRole::Worker,
             &frozen(12),
             |_| Ok(TEST_KEY.into()),

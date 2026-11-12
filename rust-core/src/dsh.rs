@@ -32,7 +32,6 @@ const REQUEST_FIELDS: [&str; 11] = [
     "n",
     "store",
 ];
-const REASONING_EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DshChatRequest {
@@ -133,7 +132,7 @@ impl DshChatRequest {
             Some(value) => {
                 let effort = value
                     .as_str()
-                    .filter(|effort| REASONING_EFFORTS.contains(effort))
+                    .filter(|effort| crate::model_policy::REASONING_EFFORTS.contains(effort))
                     .ok_or_else(|| "unsupported DSH reasoning_effort".to_string())?;
                 Some(effort.to_owned())
             }
