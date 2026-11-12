@@ -59,5 +59,44 @@ class EmptyCandidate(unittest.TestCase):
                     os.environ[key] = value
 
 
+    def test_direct_and_studio_envelope_resume(self):
+        saved = {key: os.environ.get(key) for key in ('SIC_CORE_URL', 'SIC_CORE_TOKEN', 'SIC_CORE_ACTOR')}
+        try:
+            with tempfile.TemporaryDirectory(prefix='sic-direct-resume-') as directory, OwnedFixture(Path(directory) / 'core.db', editor_keep=True) as fixture:
+                os.environ.update(SIC_CORE_URL=fixture.client.origin, SIC_CORE_TOKEN=fixture.client.token, SIC_CORE_ACTOR='host')
+                client = fixture.client
+                client.call('chain.create', {'creators': []})
+                client.call('source.ingest', {'format': 'openai-chat', 'request': {'messages': [{'role': 'user', 'content': 'Direct and resume body'}]}})
+                client.call('edit.prepare', {'source_id': client.context['source_id']})
+                client.call('edit.run_all', {'job_id': client.context['job_id']})
+                job, chain = client.context['job_id'], client.context['chain_id']
+                graph = builder.compile(checkpointer=InMemorySaver())
+
+                direct = graph.invoke({'chain_id': chain, 'job_id': job, 'form': {
+                    'action': 'revise', 'edit_mode': 'pvi_only', 'expected_revision': 0,
+                    'allow_write': True, 'direct': True, 'persistent': ['Direct GUI P']}},
+                    {'configurable': {'thread_id': 'direct-resume'}})
+                self.assertNotIn('__interrupt__', direct)
+                self.assertTrue(direct['result']['ok'], direct['result'])
+                self.assertEqual(direct['after']['result']['revision'], 1)
+
+                interrupted = graph.invoke({'chain_id': chain, 'job_id': job, 'form': {
+                    'action': 'revise', 'edit_mode': 'pvi_only', 'expected_revision': 1,
+                    'allow_write': True, 'persistent': ['Envelope resume P']}},
+                    {'configurable': {'thread_id': 'envelope-resume'}})
+                self.assertIn('__interrupt__', interrupted)
+                resumed = graph.invoke(Command(resume=interrupted['__interrupt__'][0].value),
+                                       {'configurable': {'thread_id': 'envelope-resume'}})
+                self.assertTrue(resumed['result']['ok'], resumed['result'])
+                self.assertEqual(resumed['after']['result']['revision'], 2)
+                self.assertEqual(resumed['after']['result']['pvi']['P'], ['Envelope resume P'])
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+
 if __name__ == '__main__':
     unittest.main()
