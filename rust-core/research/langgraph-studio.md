@@ -127,6 +127,19 @@ inspection gap, not a claim of a clean nonce round trip.
   skips the pause/resume path; it does **not** satisfy F52's pause/resume
   requirement.
 
+## True Studio GUI pause/resume
+
+- With the candidate form correctly entered, the official Studio interrupt pane
+  exposes a **Resume** button and a raw resume-value editor.
+- The resume editor was filled with the CandidateForm fields (not the whole
+  interrupt envelope); `Resume` then executed
+  `review_versioned_material -> apply_authorized_candidate_action` and reached
+  `applied`.
+- Thread `01a1cfdb-57ec-70ca-a7aa-960895938a70`; Rust Core read candidate
+  revision 1 with `P = "Round 214 pause P"`.
+- Screenshot: `studio-pause-resumed3.png`.
+- This is the real GUI pause/resume path, not the optional `direct` bypass.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;

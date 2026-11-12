@@ -86,7 +86,10 @@ def candidate_review(state):
                         'readonly_original_responses': state['original_responses'],
                         'readonly_context': {'chain_id': state['chain_id'], 'job_id': state['job_id']},
                         'notice': 'Resume with form fields only. Published CB/op and original responses stay immutable. P/V/I are communication, not protocol controls.'})
-    # No arbitrary context/payload passthrough: a resume cannot retarget archives.
+    # Studio sends the whole interrupt value back on Resume. Extract only its
+    # form, then enforce CandidateForm fields; a resume cannot retarget archives.
+    if isinstance(answer, dict) and answer.get('workbench') == 'candidate' and isinstance(answer.get('form'), dict):
+        answer = answer['form']
     if not isinstance(answer, dict) or set(answer) - set(CandidateForm.model_fields):
         raise ValueError('Resume accepts CandidateForm fields only')
     return {'reviewed_form': CandidateForm.model_validate(answer).model_dump()}
