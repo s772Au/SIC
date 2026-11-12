@@ -138,7 +138,15 @@ inspection gap, not a claim of a clean nonce round trip.
 - Thread `01a1cfdb-57ec-70ca-a7aa-960895938a70`; Rust Core read candidate
   revision 1 with `P = "Round 214 pause P"`.
 - Screenshot: `studio-pause-resumed3.png`.
-- This is the real GUI pause/resume path, not the optional `direct` bypass.
+- The same non-direct GUI path then submitted `action=publish` through the
+  Resume editor; thread `01a1cfdd-3b31-7740-a19f-e4e9a244fd92` reached
+  `applied`. Rust Core produced cut
+  `cut_0e91f43909c3431a889f17ecdf30f16a` and CB
+  `cb_6611c95a078d40c1a3805a83d1f0b012` with body
+  `Round 214 pause test\nRound 214 pause P`.
+- Screenshot: `studio-pause-publish.png`.
+- This is the real GUI pause/resume edit **and publish** path, not the optional
+  `direct` bypass.
 
 ## What this does not establish
 
