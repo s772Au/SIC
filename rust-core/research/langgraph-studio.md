@@ -45,6 +45,20 @@ and health without printing the bearer:
 This is now real F52 GUI/thread/form evidence for a read-only graph action, not
 full F52 acceptance.
 
+## Studio candidate read
+
+- Selected graph `sic_candidate` in the same official Studio page.
+- Submitted raw form:
+  `{"chain_id":"chain_12dfed...","job_id":"job_6c8e...","form":{"action":"read"}}`.
+- Studio created thread `01a1cf7f-c449-76dd-a9b2-fa23d584ed22` and completed
+  with status `readonly`; trace ran
+  `load_candidate_and_readonly_provenance → review_versioned_material →
+  apply_authorized_candidate_action`.
+- Screenshot: `studio-candidate-read.png`.
+- A subsequent `revise` resume against the already-published job correctly
+  returned HTTP 409 `candidate is not ready or revision changed`; no edit was
+  claimed.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;
