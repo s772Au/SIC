@@ -118,6 +118,16 @@ The field was prefilled in the flow rather than typed character-by-character,
 but the ingestion itself was executed through the official canvas. This closes
 the GUI-source plumbing, not the full F51 interaction checklist.
 
+## Accounting canvas read
+
+- Uploaded `workbench-accounting.json` as flow
+  `6e5149e3-2896-4c8b-86ec-abe90e2fcac6`.
+- Ran the official **Run component** against the seeded Rust chain; the
+  component completed in ~161 ms.
+- Screenshot: `langflow-accounting.png`.
+- This is a real GUI accounting read, but the chain has no peer/tool billing
+  entries; it does not satisfy F51's peer/tool/billing checklist.
+
 ## What it does not establish
 
 - No frontend GUI interaction (backend-only), no SIC chain/flow editing, no
