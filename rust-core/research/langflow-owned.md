@@ -128,6 +128,16 @@ the GUI-source plumbing, not the full F51 interaction checklist.
 - This is a real GUI accounting read, but the chain has no peer/tool billing
   entries; it does not satisfy F51's peer/tool/billing checklist.
 
+## Board/collaboration read
+
+- Created board `board_444ccada536d4322a5348bfe1a598e00` and task
+  `board_task_059b44c2bb664b68bcacae5ac92d9ef5` through Rust Core.
+- Uploaded `workbench-routes-board.json` as flow
+  `78d5506f-4b5c-42a8-8a5a-4db5a2bf73f1`; the official SICBoard node ran in
+  32 ms against the same chain/board/task.
+- Screenshot: `langflow-board-read.png`.
+- This is a real GUI board read, not a peer collaboration or tool/ledger flow.
+
 ## What it does not establish
 
 - No frontend GUI interaction (backend-only), no SIC chain/flow editing, no

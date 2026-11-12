@@ -30,9 +30,10 @@ the evidence that cannot be produced from this isolated checkout alone.
   LangGraph Agent Server 0.17.1 also reads the same chain through `sic_core`.
   A level-2 CB was formed through Core APIs and GUI `select` changed/restored
   role-view levels and a prefilled source flow created a real Core source
-  through the canvas, and an accounting flow read the seeded chain. Live-typed
-  source ingress, actual peer/tool/billing entries, full higher-order
-  navigation and typed forms remain. The official Studio web UI was loaded; `sic_core` completed a `chain.get` thread and `sic_candidate` completed a GUI read-only thread. The Studio `sic_candidate` graph also completed revise/validate/publish on a fresh job via its API, but mouse-driven typed-form save/reload remains. A one-click status script reports Core/Langflow/LangGraph
+  through the canvas, an accounting flow read the seeded chain, and a board
+  flow read a real Core board/task. Live-typed source ingress, actual
+  peer/tool/billing entries, full higher-order navigation and typed forms
+  remain. The official Studio web UI was loaded; `sic_core` completed a `chain.get` thread and `sic_candidate` completed a GUI read-only thread. The Studio `sic_candidate` graph also completed revise/validate/publish on a fresh job via its API, but mouse-driven typed-form save/reload remains. A one-click status script reports Core/Langflow/LangGraph
   listening/PID/health without printing the bearer.
 - F60/F61/F73: LongMemEval-V2 located; one-question runtime prepared;
   2-trajectory Python-reference SIC memory smoke and a 3-question baseline/SIC
