@@ -106,6 +106,19 @@ The exact latest CB identity was not asserted from the cross-write because the
 subsequent `cut.get` view still displayed the prior CB; this is a remaining
 inspection gap, not a claim of a clean nonce round trip.
 
+## Studio GUI direct candidate edit
+
+- Added an optional `direct` field to the candidate form. When true, the graph
+  applies the typed form in the same run instead of raising the Studio interrupt
+  that the current Studio UI cannot resume.
+- In the official Studio GUI, a raw form submitted with `direct=true`,
+  `action=revise`, and `persistent=["Round 208 direct GUI P"]` after a Tab/blur
+  created thread `01a1cfc9-6314-767b-adaa-a7bc120cf45b`; status was `applied`,
+  and Rust Core read candidate revision 1 with exactly that P value.
+- Screenshot: `studio-direct-tab.png`.
+- This is a real GUI typed-form edit/save, but it deliberately skips the
+  pause/resume path; it does **not** satisfy F52's pause/resume requirement.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;

@@ -33,6 +33,7 @@ class CandidateForm(BaseModel):
     expected_revision: int = Field(default=0, ge=0)
     expected_cut: int = Field(default=0, ge=-1, description='-1 uses the job base-cut shown before this review; never forces the latest cut')
     allow_write: bool = False
+    direct: bool = Field(default=False, description='Apply the typed form in one run without the review interrupt; for GUI save/reload checks.')
 
 
 class CandidateInput(BaseModel):
@@ -75,6 +76,8 @@ def candidate_load(state):
 def candidate_review(state):
     form = _form(state)
     if form['action'] == 'read' or not state['current'].get('ok'):
+        return {'reviewed_form': form}
+    if form.get('direct'):
         return {'reviewed_form': form}
     answer = interrupt({'workbench': 'candidate', 'form_schema': CandidateForm.model_json_schema(),
                         'form': form, 'current_revision': state['current']['result']['revision'],
