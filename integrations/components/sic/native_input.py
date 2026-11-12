@@ -13,7 +13,7 @@ class SICNativeInput(Component):
               StrInput(name="chain_id", display_name="工作路线", value=""),
               DropdownInput(name="input_mode", display_name="输入方式", options=["工作正文", "原生请求（高级）"], value="工作正文"),
               DropdownInput(name="native_format", display_name="原生格式", options=["openai-chat", "openai-responses", "anthropic-messages"], value="openai-chat"),
-              CodeInput(name="working_text", display_name="本次新正文（代码/JSON字符原样）", value="", info="只作为正文读取，不执行代码。"),
+              MultilineInput(name="working_text", display_name="本次新正文（代码/JSON字符原样）", value="", info="只作为正文读取，不执行代码。"),
               MultilineInput(name="protected_text", display_name="宿主保护指令（新路线可选）", value="", info="不是对旧保护前缀的修改入口；冲突由核心拒绝。"),
               CodeInput(name="native_request", display_name="完整原生输入对象（高级）", value="{}", advanced=True),
               BoolInput(name="allow_write", display_name="允许保存本次新来源", value=False)]

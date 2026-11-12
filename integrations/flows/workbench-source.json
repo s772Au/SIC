@@ -93,7 +93,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "from sic_workflow.workbench_component import WorkbenchComponent as Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, MultilineInput, StrInput, Output\nfrom lfx.schema import Data, DataFrame\nfrom sic_workflow.workbench_support import cached, error_rows, object_value, perform, reset, table, text\n\n\nclass SICNativeInput(Component):\n    display_name = \"SIC 新工作材料\"\n    description = \"将新材料送入真实解码器；原始存档随后只读。宿主保护字段不交给Editor编辑。R07–11。\"\n    icon = \"FileInput\"\n    name = \"SICNativeInput\"\n    inputs = [DataInput(name=\"previous\", display_name=\"前一步\", required=False),\n              StrInput(name=\"chain_id\", display_name=\"工作路线\", value=\"\"),\n              DropdownInput(name=\"input_mode\", display_name=\"输入方式\", options=[\"工作正文\", \"原生请求（高级）\"], value=\"工作正文\"),\n              DropdownInput(name=\"native_format\", display_name=\"原生格式\", options=[\"openai-chat\", \"openai-responses\", \"anthropic-messages\"], value=\"openai-chat\"),\n              CodeInput(name=\"working_text\", display_name=\"本次新正文（代码/JSON字符原样）\", value=\"\", info=\"只作为正文读取，不执行代码。\"),\n              MultilineInput(name=\"protected_text\", display_name=\"宿主保护指令（新路线可选）\", value=\"\", info=\"不是对旧保护前缀的修改入口；冲突由核心拒绝。\"),\n              CodeInput(name=\"native_request\", display_name=\"完整原生输入对象（高级）\", value=\"{}\", advanced=True),\n              BoolInput(name=\"allow_write\", display_name=\"允许保存本次新来源\", value=False)]\n    outputs = [Output(name=\"result\", display_name=\"已保存来源与WB身份\", method=\"ingest\", group_outputs=True),\n               Output(name=\"units\", display_name=\"解码后的正文单元\", method=\"units\", group_outputs=True)]\n\n    def _pre_run_setup(self):\n        reset(self)\n\n    def _act(self):\n        if self.input_mode == \"原生请求（高级）\":\n            request = object_value(self.native_request)\n        elif self.native_format == \"openai-responses\":\n            request = {\"input\": [{\"role\": \"user\", \"content\": self.working_text}]}\n            if self.protected_text:\n                request[\"instructions\"] = self.protected_text\n        else:\n            request = {\"messages\": [{\"role\": \"user\", \"content\": self.working_text}]}\n            if self.protected_text:\n                if self.native_format == \"anthropic-messages\":\n                    request[\"system\"] = self.protected_text\n                else:\n                    request[\"messages\"].insert(0, {\"role\": \"system\", \"content\": self.protected_text})\n        return perform(self, \"source.ingest\", {\"format\": self.native_format, \"request\": request})\n\n    def ingest(self) -> Data:\n        return Data(data=cached(self, self._act))\n\n    def units(self) -> DataFrame:\n        envelope = cached(self, self._act)\n        if not envelope.get(\"ok\"):\n            return table(error_rows(envelope))\n        return table([{\"来源WB\": envelope[\"result\"].get(\"source_id\"), \"单元\": unit[\"unit_id\"], \"正文（存档后只读）\": unit[\"text\"],\n                       \"原生位置\": text(unit.get(\"anchor\", {})), \"下一步\": \"检查正文/协议后形成编辑候选\"}\n                      for unit in envelope[\"result\"].get(\"units\", [])])\n",
+                "value": "from sic_workflow.workbench_component import WorkbenchComponent as Component\nfrom lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, MultilineInput, StrInput, Output\nfrom lfx.schema import Data, DataFrame\nfrom sic_workflow.workbench_support import cached, error_rows, object_value, perform, reset, table, text\n\n\nclass SICNativeInput(Component):\n    display_name = \"SIC 新工作材料\"\n    description = \"将新材料送入真实解码器；原始存档随后只读。宿主保护字段不交给Editor编辑。R07–11。\"\n    icon = \"FileInput\"\n    name = \"SICNativeInput\"\n    inputs = [DataInput(name=\"previous\", display_name=\"前一步\", required=False),\n              StrInput(name=\"chain_id\", display_name=\"工作路线\", value=\"\"),\n              DropdownInput(name=\"input_mode\", display_name=\"输入方式\", options=[\"工作正文\", \"原生请求（高级）\"], value=\"工作正文\"),\n              DropdownInput(name=\"native_format\", display_name=\"原生格式\", options=[\"openai-chat\", \"openai-responses\", \"anthropic-messages\"], value=\"openai-chat\"),\n              MultilineInput(name=\"working_text\", display_name=\"本次新正文（代码/JSON字符原样）\", value=\"\", info=\"只作为正文读取，不执行代码。\"),\n              MultilineInput(name=\"protected_text\", display_name=\"宿主保护指令（新路线可选）\", value=\"\", info=\"不是对旧保护前缀的修改入口；冲突由核心拒绝。\"),\n              CodeInput(name=\"native_request\", display_name=\"完整原生输入对象（高级）\", value=\"{}\", advanced=True),\n              BoolInput(name=\"allow_write\", display_name=\"允许保存本次新来源\", value=False)]\n    outputs = [Output(name=\"result\", display_name=\"已保存来源与WB身份\", method=\"ingest\", group_outputs=True),\n               Output(name=\"units\", display_name=\"解码后的正文单元\", method=\"units\", group_outputs=True)]\n\n    def _pre_run_setup(self):\n        reset(self)\n\n    def _act(self):\n        if self.input_mode == \"原生请求（高级）\":\n            request = object_value(self.native_request)\n        elif self.native_format == \"openai-responses\":\n            request = {\"input\": [{\"role\": \"user\", \"content\": self.working_text}]}\n            if self.protected_text:\n                request[\"instructions\"] = self.protected_text\n        else:\n            request = {\"messages\": [{\"role\": \"user\", \"content\": self.working_text}]}\n            if self.protected_text:\n                if self.native_format == \"anthropic-messages\":\n                    request[\"system\"] = self.protected_text\n                else:\n                    request[\"messages\"].insert(0, {\"role\": \"system\", \"content\": self.protected_text})\n        return perform(self, \"source.ingest\", {\"format\": self.native_format, \"request\": request})\n\n    def ingest(self) -> Data:\n        return Data(data=cached(self, self._act))\n\n    def units(self) -> DataFrame:\n        envelope = cached(self, self._act)\n        if not envelope.get(\"ok\"):\n            return table(error_rows(envelope))\n        return table([{\"来源WB\": envelope[\"result\"].get(\"source_id\"), \"单元\": unit[\"unit_id\"], \"正文（存档后只读）\": unit[\"text\"],\n                       \"原生位置\": text(unit.get(\"anchor\", {})), \"下一步\": \"检查正文/协议后形成编辑候选\"}\n                      for unit in envelope[\"result\"].get(\"units\", [])])\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -216,6 +216,10 @@
               "working_text": {
                 "tool_mode": false,
                 "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
                 "list": false,
                 "list_add_label": "Add More",
                 "override_skip": false,
@@ -227,12 +231,17 @@
                 "display_name": "本次新正文（代码/JSON字符原样）",
                 "advanced": false,
                 "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
                 "dynamic": false,
                 "info": "只作为正文读取，不执行代码。",
                 "title_case": false,
                 "track_in_telemetry": false,
-                "type": "code",
-                "_input_type": "CodeInput"
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
               }
             },
             "description": "将新材料送入真实解码器；原始存档随后只读。宿主保护字段不交给Editor编辑。R07–11。",
@@ -295,13 +304,13 @@
             "metadata": {
               "component_class_name": "SICNativeInput",
               "module": "custom_components.sic_",
-              "code_hash": "b31d8bd2a1f0",
+              "code_hash": "f51c6bd158cd",
               "dependencies": {
                 "total_dependencies": 2,
                 "dependencies": [
                   {
                     "name": "sic_workflow",
-                    "version": "9.0.0a3"
+                    "version": null
                   },
                   {
                     "name": "lfx",
@@ -492,7 +501,7 @@
                 "dependencies": [
                   {
                     "name": "sic_workflow",
-                    "version": "9.0.0a3"
+                    "version": null
                   },
                   {
                     "name": "lfx",

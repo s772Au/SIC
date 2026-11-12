@@ -31,9 +31,10 @@ the evidence that cannot be produced from this isolated checkout alone.
   A level-2 CB was formed through Core APIs and GUI `select` changed/restored
   role-view levels and a prefilled source flow created a real Core source
   through the canvas, an accounting flow read the seeded chain, and a board
-  flow read a real Core board/task. Live-typed source ingress, actual
-  peer/tool/billing entries, full higher-order navigation and typed forms
-  remain. The official Studio web UI was loaded; `sic_core` completed a `chain.get` thread and `sic_candidate` completed a GUI read-only thread. The Studio `sic_candidate` graph also completed revise/validate/publish on a fresh job via its API, but mouse-driven typed-form save/reload remains. A one-click status script reports Core/Langflow/LangGraph
+  flow read a real Core board/task. Live-typed source ingress is now covered by
+  a `MultilineInput` source flow that created `source_dc04…` with the typed
+  text. Actual peer/tool/billing entries, full higher-order navigation and
+  typed forms remain. The official Studio web UI was loaded; `sic_core` completed a `chain.get` thread and `sic_candidate` completed a GUI read-only thread. The Studio `sic_candidate` graph also completed revise/validate/publish on a fresh job via its API, but mouse-driven typed-form save/reload remains. A one-click status script reports Core/Langflow/LangGraph
   listening/PID/health without printing the bearer. F53 is accepted: Langflow
   published cut2 / CB `cb_735f…` on the Studio-owned chain, Studio GUI read the
   same cut, Langflow read it back, and the status script was rerun.

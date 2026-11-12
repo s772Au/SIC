@@ -87,8 +87,9 @@ unwrap Rust's `result.candidate`), the regenerated flow
   `langflow-published.png`.
 
 This is a genuine official-canvas → Rust-Core edit/validate/publish round trip.
-It still does not establish a GUI-native source ingestion, peer/tool/billing
-flow, higher-order CB navigation, Studio, or typed-form save/reload.
+It still does not establish the full peer/tool/billing flow, higher-order CB
+navigation, Studio, or typed-form save/reload; GUI-native source ingestion is
+now covered by the live-typed source section below.
 
 ## Hierarchy selection through the official canvas
 
@@ -115,8 +116,23 @@ This is a real GUI → Core hierarchy selection, but the high-order CB
 - Screenshot: `langflow-source-round170.png`.
 
 The field was prefilled in the flow rather than typed character-by-character,
-but the ingestion itself was executed through the official canvas. This closes
-the GUI-source plumbing, not the full F51 interaction checklist.
+but the ingestion itself was executed through the official canvas.
+
+### Live-typed source
+
+- Changed the custom `working_text` input from `CodeInput` to
+  `MultilineInput` so the official canvas exposes a direct text field instead
+  of the unreliable code-editor modal.
+- Regenerated `workbench-source.json`; uploaded flow
+  `1bb33afb-a202-4da1-b1ea-c9e09c088c31`.
+- Typed `Round 204 live typed GUI source` character-by-character into the
+  canvas field, selected the seeded chain, enabled write, and clicked the
+  official **Run component**.
+- Rust Core created `source_dc043c183be5488689e868eb77a3128e`; `source.read`
+  returned unit `u1` with exactly `Round 204 live typed GUI source`.
+- Screenshot: `langflow-source-live204.png`.
+
+This closes the F51 GUI-native source-input step; peer/tool/billing remains.
 
 ## Accounting canvas read
 
