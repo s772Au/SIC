@@ -79,6 +79,16 @@ A fresh chain/job was seeded through Rust Core, then the official Studio
 The edit/validate/publish portion was executed via the Studio graph API, not
 mouse-driven form save/reload; the read-only portion is genuine GUI.
 
+## Studio-published job read from Langflow
+
+- Studio `sic_candidate` graph published fresh chain/job
+  `job_5d6558f512084fb0872084750667f28d` as cut 1 / CB `cb_7c8ebd…`.
+- The isolated Langflow canvas uploaded the candidate flow as
+  `9feb9125-2395-4e8b-abfc-efd4717ff78b`, pointed at the same chain/job,
+  and ran the candidate node in 66 ms; screenshot
+  `langflow-read-studio-candidate.png`.
+- This is a real cross-runtime read of the Studio-published candidate.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;
