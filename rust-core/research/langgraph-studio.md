@@ -116,8 +116,16 @@ inspection gap, not a claim of a clean nonce round trip.
   created thread `01a1cfc9-6314-767b-adaa-a7bc120cf45b`; status was `applied`,
   and Rust Core read candidate revision 1 with exactly that P value.
 - Screenshot: `studio-direct-tab.png`.
-- This is a real GUI typed-form edit/save, but it deliberately skips the
-  pause/resume path; it does **not** satisfy F52's pause/resume requirement.
+- The same direct GUI path then submitted `action=publish` with
+  `expected_revision=1` / `expected_cut=0`; thread
+  `01a1cfd4-7ae7-720c-83c6-08594785b471` reached `applied`. Rust Core produced
+  cut `cut_cff7f25a3759426dbc295b546467e569` and CB
+  `cb_6407fc935c934fae95d2abecba3023ca` with body
+  `Round 207 direct GUI source\nRound 208 direct GUI P`.
+- Screenshot: `studio-direct-publish.png`.
+- This is a real GUI typed-form edit/save **and publish**, but it deliberately
+  skips the pause/resume path; it does **not** satisfy F52's pause/resume
+  requirement.
 
 ## What this does not establish
 
