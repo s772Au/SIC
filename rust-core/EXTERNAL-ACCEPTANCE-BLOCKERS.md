@@ -39,8 +39,9 @@ the evidence that cannot be produced from this isolated checkout alone.
   pilot succeeded (SIC 0/3, all UNKNOWN; base 1/1 and 0/1, one provider
   failure). Full task distribution, Rust Core arm, and independent human rubric
   remain.
-- F31–F33: DSH Headless scripts available; a slow native tool with real Editor
-  trace is still needed.
+- F31–F33: DSH Headless scripts available; an isolated 20-chain peer-DB scan
+  found native `read` intervals but zero tool∩editor overlap, so a run with the
+  required overlap is still needed.
 - F45/F49: CTFy tools/task inventory found; installed task payloads and a
   long-run watcher are not yet confirmed.
 
