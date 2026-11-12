@@ -148,6 +148,16 @@ inspection gap, not a claim of a clean nonce round trip.
 - This is the real GUI pause/resume edit **and publish** path, not the optional
   `direct` bypass.
 
+## Studio hierarchy timeline
+
+- Selected the official `sic_hierarchy` graph and submitted
+  `action=cb_timeline`, `level=2`, chain
+  `chain_12dfed4877b24af689f11bd5b8720a14`.
+- Thread `01a1cfe1-c42c-7110-8a70-56121c10460b` reached `applied` and
+  returned hierarchy `records`.
+- Screenshot: `studio-hierarchy-timeline.png`.
+- This is a GUI high-order timeline read, not the complete F52 B/peer path.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;
