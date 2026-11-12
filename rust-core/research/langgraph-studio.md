@@ -59,6 +59,26 @@ full F52 acceptance.
   returned HTTP 409 `candidate is not ready or revision changed`; no edit was
   claimed.
 
+## Studio graph candidate edit/validate/publish
+
+A fresh chain/job was seeded through Rust Core, then the official Studio
+`sic_candidate` graph executed through its API surface:
+
+- chain `chain_4e68b9da821d42d78b0cf7ec0e408768`
+- job `job_5d6558f512084fb0872084750667f28d`
+- `revise` (pvi_only, `Round 177 Studio P`, allow_write) resumed after the
+  guardrail interrupt and produced candidate revision 1.
+- `validate` returned material body
+  `Round 177 Studio candidate source\nRound 177 Studio P`.
+- `publish` produced cut `cut_359d55c6f9d74373b799ae558150daad` and CB
+  `cb_7c8ebd98f7294462a73f542f8445fe09` (sequence 1).
+- A separate official Studio UI raw-form `read` on this fresh job created
+  thread `01a1cf82-9616-756e-accb-cdc2092e4f6d` and completed `readonly`;
+  screenshot `studio-fresh-read.png`.
+
+The edit/validate/publish portion was executed via the Studio graph API, not
+mouse-driven form save/reload; the read-only portion is genuine GUI.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;
