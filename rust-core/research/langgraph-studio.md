@@ -28,6 +28,23 @@ and health without printing the bearer:
 - LangGraph 12027: listening, health ok
 - exit 0; JSON saved as `D:\SIC-real-evidence-20261112\runtime-status.json`
 
+## Official Studio web UI
+
+- Playwright loaded `https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:12027`.
+- The page displayed the official Studio shell, graph selector, typed raw form,
+  Thread, Interact/Trace tabs, and graph `sic_core`.
+- A raw form submission with
+  `{"actions":[{"operation":"chain.get"}],"context":{"chain_id":"chain_12dfed4877b24af689f11bd5b8720a14"}}`
+  created thread `01a1cf7d-740b-72ea-91b0-3dbb023ed7b7`; the graph ran through
+  `inspect_actual_capabilities → prepare_action → review_authorized_material →
+  peer_chain_and_socket → finish` and reached status `completed`.
+- Screenshot: `studio-chain-get.png`.
+- A persistent LangSmith API key is absent (the page shows the warning), but the
+  local `baseUrl` connection and graph execution worked.
+
+This is now real F52 GUI/thread/form evidence for a read-only graph action, not
+full F52 acceptance.
+
 ## What this does not establish
 
 - The official Studio web UI is `https://smith.langchain.com/studio/?baseUrl=...`;

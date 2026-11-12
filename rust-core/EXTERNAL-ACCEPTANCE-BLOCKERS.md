@@ -32,7 +32,7 @@ the evidence that cannot be produced from this isolated checkout alone.
   role-view levels and a prefilled source flow created a real Core source
   through the canvas, and an accounting flow read the seeded chain. Live-typed
   source ingress, actual peer/tool/billing entries, full higher-order
-  navigation, typed forms, and the official Studio web UI/login remain. A one-click status script reports Core/Langflow/LangGraph
+  navigation and typed forms remain. The official Studio web UI was loaded and a `sic_core` raw form completed a `chain.get` thread; candidate edit/publish and typed-form persistence remain. A one-click status script reports Core/Langflow/LangGraph
   listening/PID/health without printing the bearer.
 - F60/F61/F73: LongMemEval-V2 located; one-question runtime prepared;
   2-trajectory Python-reference SIC memory smoke and a 3-question baseline/SIC
