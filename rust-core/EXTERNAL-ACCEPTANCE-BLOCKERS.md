@@ -24,7 +24,7 @@ the evidence that cannot be produced from this isolated checkout alone.
 
 - F56–F59: skipped by user; remain not_evaluated.
 - F54/F67: skipped; implementation remains access-revoke only.
-- F51–F53: allowed; isolated Langflow 1.13.1 backend/UI report health and the
+- F51–F52: allowed; isolated Langflow 1.13.1 backend/UI report health and the
   official canvas completed a seeded candidate edit → validation → publish
   against Rust Core (CB `cb_cd08…`, cut 1, revision 1). A local official
   LangGraph Agent Server 0.17.1 also reads the same chain through `sic_core`.
@@ -34,7 +34,9 @@ the evidence that cannot be produced from this isolated checkout alone.
   flow read a real Core board/task. Live-typed source ingress, actual
   peer/tool/billing entries, full higher-order navigation and typed forms
   remain. The official Studio web UI was loaded; `sic_core` completed a `chain.get` thread and `sic_candidate` completed a GUI read-only thread. The Studio `sic_candidate` graph also completed revise/validate/publish on a fresh job via its API, but mouse-driven typed-form save/reload remains. A one-click status script reports Core/Langflow/LangGraph
-  listening/PID/health without printing the bearer.
+  listening/PID/health without printing the bearer. F53 is accepted: Langflow
+  published cut2 / CB `cb_735f…` on the Studio-owned chain, Studio GUI read the
+  same cut, Langflow read it back, and the status script was rerun.
 - F60/F61/F73: LongMemEval-V2 located; one-question runtime prepared;
   2-trajectory Python-reference SIC memory smoke and a 3-question baseline/SIC
   pilot succeeded (SIC 0/3, all UNKNOWN; base 1/1 and 0/1, one provider
@@ -77,7 +79,7 @@ cryptographic erasure. Needed: a storage/key-management design with a real
 erasure or key-destruction proof, plus evidence that revoked bytes cannot be
 recovered. Current rows must remain "access revoke only".
 
-## 5. Official Langflow/Studio workbench (F51–F53)
+## 5. Official Langflow/Studio workbench (F51–F52)
 
 The official workbench is not installed in this checkpoint. Needed: an isolated
 official install, a reproducible workflow, and screenshots/logs tying the SIC
