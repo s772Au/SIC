@@ -3,14 +3,34 @@
   "version": "0.1.1",
   "type": "module",
   "main": "index.mjs",
-  "exports": { ".": "./index.mjs", "./client": "./client.js", "./package.json": "./package.json" },
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./legacy": "./index.mjs",
+    "./transparent": "./transparent/cordis-entry.mjs",
+    "./transparent/plugin": "./transparent/plugin.mjs",
+    "./transparent/client": "./transparent/native-client.js",
+    "./package.json": "./package.json",
+    "./transparent/api": "./transparent/index.mjs"
+  },
   "description": "Minimal DSH PiAi provider for the Rust SIC Chat bridge",
   "license": "MIT",
-  "dsh": { "bundle": { "patch": "cordis.patch.yml" }, "client": {
-    "inject": ["@deepseek-ai/dsh-client-connection", "@deepseek-ai/dsh-client-ui-conversation"],
-    "platform": "web"
-  } },
-  "engines": { "dsh": ">=0.2.1-rc.5 <0.3", "node": ">=22.19.0" },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.1-rc.5 <0.3",
+    "node": ">=22.19.0"
+  },
   "dependencies": {
     "@deepseek-ai/dsh-llm-pi-ai": "0.2.1-rc.5",
     "@deepseek-ai/dsh-llm": "0.2.1-rc.5",

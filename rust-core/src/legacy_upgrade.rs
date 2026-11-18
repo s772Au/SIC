@@ -575,6 +575,7 @@ pub async fn upgrade_active_python_agent(
                         name: tool.name.clone(),
                         description: tool.description.clone(),
                         schema: tool.schema.clone(),
+                        program: None,
                     },
                     false,
                 )

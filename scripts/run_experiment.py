@@ -1,4 +1,6 @@
-"""Immutable synthetic baseline/SIC runner. Defaults to owned loopback mocks.
+"""Historical sic-proxy v1 synthetic runner; it does not use Rust v2 Core.
+
+For the current Rust v2 synthetic workflow use run_v2_experiment.py instead.
 
 Real Chat Completions execution needs an explicit endpoint, pinned model, API key
 environment variable and --allow-network. Never resumes previous run directories.

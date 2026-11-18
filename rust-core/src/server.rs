@@ -71,6 +71,7 @@ pub fn router(core: Core, auth: HostAuth) -> Router {
         .route("/health", get(health))
         .route("/api/v2/capabilities", get(capabilities))
         .route("/api/v2/operations", post(operations))
+        .route("/api/v2/harness/turn", post(harness_turn))
         .route("/api/v2/chains/{chain_id}/ledger", get(ledger))
         .with_state(state.clone())
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
@@ -160,6 +161,18 @@ async fn health() -> Response {
 
 async fn capabilities(State(_state): State<AppState>) -> Response {
     (StatusCode::OK, Json(Core::capabilities())).into_response()
+}
+
+/// Trusted host control plane, deliberately absent from Core operations and
+/// model tool registries. The authenticated Harness supplies actual session,
+/// turn and human-source provenance; native tool arguments cannot mint grants.
+async fn harness_turn(State(state):State<AppState>, Json(grant):Json<crate::harness_lifecycle::HarnessGrant>) -> Response {
+    let context=OperationContext {actor:state.auth.actor.clone(),allow_write:state.auth.allow_write,
+        allow_model:false,allow_revoke:false,chain_id:None};
+    match state.core.issue_harness_grant(&context,grant).await {
+        Ok(value)=>(StatusCode::OK,Json(value)).into_response(),
+        Err(error)=>core_error_response(error),
+    }
 }
 
 #[derive(Debug, Deserialize)]

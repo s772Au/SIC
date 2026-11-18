@@ -1,3 +1,11 @@
+# Primary integration: transparent native context layer
+
+New integrations use [`transparent/INSTALL.md`](transparent/INSTALL.md) and the independently installable `sic-transparent-host` package in `transparent/`. It retains the Harness Provider/model/transport and native tool contracts.
+
+The old `index.mjs` below is a deprecated Chat-gateway compatibility path, exported explicitly as `sic-core-rust-dsh/legacy`; it is not the transparent default recommendation. Existing running profiles are not changed automatically.
+
+---
+
 # Rust SIC DSH provider
 
 This isolated DSH bundle registers a PiAi OpenAI Chat Completions provider for the Rust Core `/v1/chat/completions` bridge. It sets `x-sic-bridge-session` from DSH's real session ID, obtains the bearer only from the named process environment variable, and does not retry bridge requests. Rust Core separately supports an explicitly configured, bounded retry of certain Editor HTTP 5xx responses; it never retries an external tool. The host reports matching native tool-result metadata and supplies a SIC conversation view through DSH's connection service; the browser never receives the bearer. Editor and Worker orchestration is performed by Rust Core. See `../DSH-CONTEXT-ANALYSIS.md` for event-recovery, UI, accounting and verification limits; the plugin does not replace the peer supervisor.

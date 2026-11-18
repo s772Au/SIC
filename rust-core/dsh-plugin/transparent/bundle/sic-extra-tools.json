@@ -1,0 +1,72 @@
+[
+  {
+    "name": "sic_edit_blocks",
+    "description": "Deliver one validated SIC edit batch for the currently authorized Editor WB units. Not a host task executor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "ops": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "pvi": {
+          "type": "object",
+          "properties": {
+            "P": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "V": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "I": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ops",
+        "pvi"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sic_source_text_page",
+    "description": "Read exact archived text of an authorized source unit in bounded pages, including full large tool results.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "unit_id": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      },
+      "required": [
+        "source_id",
+        "unit_id"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

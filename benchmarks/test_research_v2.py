@@ -79,7 +79,7 @@ class ExploratoryGatewayBoundaries(unittest.TestCase):
         from scripts import run_compression_research as runner
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);profile=root/'profile.json';profile.write_text(json.dumps(self.profile()));task=root/'task.json';task.write_text(json.dumps({'task_id':'unit','goal':'test','blocks':['test'],'references':{'answer':'test'}}));out=root/'out'
-            argv=['runner','--task',str(task),'--provider-config',str(profile),'--allow-provider','--allow-test-gateway','--engines','unchanged','--output',str(out)]
+            argv=['runner','--backend','python','--task',str(task),'--provider-config',str(profile),'--allow-provider','--allow-test-gateway','--engines','unchanged','--output',str(out)]
             with patch.object(sys,'argv',argv),patch.object(runner,'arm',return_value={'engine':'unchanged','summary':{},'status':'unit-mocked-no-inference'}) as arm:runner.main()
             self.assertTrue(arm.call_args.args[-1]);manifest=json.loads((out/'manifest.json').read_text());config=json.loads((out/'configuration.json').read_text());self.assertEqual(manifest['route_status'],'nonfixed-exploratory');self.assertFalse(manifest['quality_generalization']);self.assertFalse(config['quality_generalization']);self.assertFalse(config['profiles']['model_identity_attested'])
 

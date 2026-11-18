@@ -1,6 +1,9 @@
 mod model_policy {
     pub use sic_core_rust::model_policy::*;
 }
+mod dsh {
+    pub use sic_core_rust::dsh::*;
+}
 
 mod core {
     pub use sic_core_rust::core::*;
@@ -235,11 +238,12 @@ async fn native_events_are_scoped_idempotent_and_reach_matching_tool_continuatio
             .handle("owner", &headers("event-session"), &continuation)
             .await
             .unwrap();
-        let calls = runtime.calls.lock().unwrap();
-        let completion = calls.iter().find(|c| c.0 == "tool.complete").unwrap();
-        assert_eq!(completion.2["succeeded"], expected);
-        assert_eq!(completion.2.get("delivery").is_some(), outcome == "unknown");
-        drop(calls);
+        {
+            let calls = runtime.calls.lock().unwrap();
+            let completion = calls.iter().find(|c| c.0 == "tool.complete").unwrap();
+            assert_eq!(completion.2["succeeded"], expected);
+            assert_eq!(completion.2.get("delivery").is_some(), outcome == "unknown");
+        }
         let after = bridge
             .session_tool_events("owner", "event-session", None, 50)
             .await
@@ -715,18 +719,19 @@ async fn host_task_roundtrip_records_received_output_without_claiming_success() 
         .unwrap();
     assert_eq!(event_page["items"][0]["native_outcome"], "ok");
     assert_eq!(event_page["items"][0]["completion_outcome"], "unknown");
-    let calls = runtime.calls.lock().unwrap();
-    let completions: Vec<_> = calls
-        .iter()
-        .filter(|call| call.0 == "tool.complete")
-        .collect();
-    assert_eq!(completions.len(), 1);
-    assert_eq!(completions[0].2["task_id"], "task-durable-7");
-    assert_eq!(completions[0].2["claim_id"], issued_claim_id);
-    assert!(completions[0].2["succeeded"].is_null());
-    assert_eq!(completions[0].2["delivery"], "received");
-    assert_eq!(completions[0].2["result"], "sunny, 19 C");
-    drop(calls);
+    {
+        let calls = runtime.calls.lock().unwrap();
+        let completions: Vec<_> = calls
+            .iter()
+            .filter(|call| call.0 == "tool.complete")
+            .collect();
+        assert_eq!(completions.len(), 1);
+        assert_eq!(completions[0].2["task_id"], "task-durable-7");
+        assert_eq!(completions[0].2["claim_id"], issued_claim_id);
+        assert!(completions[0].2["succeeded"].is_null());
+        assert_eq!(completions[0].2["delivery"], "received");
+        assert_eq!(completions[0].2["result"], "sunny, 19 C");
+    }
     // Repeating this delivered result request replays its final SSE receipt.
     assert_eq!(
         bridge
@@ -917,7 +922,7 @@ async fn bridge_requires_claim_result_status_to_be_claimed() {
 async fn internal_search_tool_rounds_continue_without_exposing_sic_control_calls_to_dsh() {
     let store = sic_core_rust::storage::Store::memory().await.unwrap();
     let search_call = json!({"id":"internal-search-1","type":"function","function":{
-        "name":"sic_tool_search","arguments":"{\"query\":\"weather\"}"
+        "name":"sic_tool_update","arguments":"{\"query\":\"weather\"}"
     }});
     let runtime = Arc::new(MockRuntime {
         worker_script: Mutex::new(VecDeque::from([
@@ -932,7 +937,7 @@ async fn internal_search_tool_rounds_continue_without_exposing_sic_control_calls
     req["tools"] = harness_tools();
     let sse = String::from_utf8(bridge.handle("actor-search", &h, &req).await.unwrap()).unwrap();
     assert!(sse.contains("Search complete."));
-    assert!(!sse.contains("sic_tool_search"));
+    assert!(!sse.contains("sic_tool_update"));
     assert_eq!(
         runtime
             .calls
@@ -949,7 +954,7 @@ async fn internal_search_tool_rounds_continue_without_exposing_sic_control_calls
 async fn status_projects_last_completed_turn_without_exposing_content() {
     let store = sic_core_rust::storage::Store::memory().await.unwrap();
     let search_call = json!({"id":"search-1","type":"function","function":{
-        "name":"sic_tool_search","arguments":"{\"query\":\"PRIVATE_ARGUMENT_SENTINEL\"}"
+        "name":"sic_tool_update","arguments":"{\"query\":\"PRIVATE_ARGUMENT_SENTINEL\"}"
     }});
     let runtime = Arc::new(MockRuntime {
         worker_script: Mutex::new(VecDeque::from([

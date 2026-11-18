@@ -1,5 +1,29 @@
 # 上下文编辑 prompt 与引擎调研（新机制基线）
 
+> **后端范围（2026-11-14）：**`scripts/run_compression_research.py` 默认使用独立 Rust v2 Core，
+> 支持七种文本对照；历史 Python 参考流程须显式传 `--backend python`。Rust 与 Python 的
+> prompt/请求实现存在差异，结果必须分别标识。Rust Core 尚不支持图片贯穿 Editor/Worker，
+> 因此含图片的 LongMemEval 任务会在运行前停止，不静默转换成文本成绩。
+
+Rust 流程先用 `--plan-only` 生成调用预算；正式执行需指定 `--rust-binary` 和
+`--max-model-calls`。默认使用本地模拟模型；真实 Provider 必须同时指定
+`--provider-config` 和 `--allow-provider`，模型配置只能引用环境凭据且须关闭 Editor HTTP 重试。
+`llmlingua` 使用单独的本地解释器及已锁定权重，可通过 `SIC_LLMLINGUA_PYTHON`、
+`SIC_LLMLINGUA_MODEL_DIR`、`SIC_LLMLINGUA_TOKENIZER_CACHE` 指定整理后的路径。
+`score_compression_research.py` 会校验 Rust 数据库快照、Worker 的 CB 计划和本地模型证据。
+`--worker-call-limit` 限定每次 Worker 输出及内置工具续接的调用次数；`--hierarchy-fanout`
+可指定 2–64 的高阶程序合并批次。可用 `--prices` 提供冻结价格表，按 Provider 报告的用量
+生成宿主估算；缓存拆分或程序/存储成本缺失时保留 unknown，不把估算当成 Provider 账单。
+
+```powershell
+python scripts/run_compression_research.py --plan-only --dataset beam-10m --data-root ./04-testsets `
+  --output ./06-evidence\research-plan-NEW
+python scripts/run_compression_research.py --rust-binary ./03-backend-builds\target-integration\release\sic-core-rust.exe `
+  --engines sic batch structured_summary program_exact langchain_trim unchanged --max-model-calls 40 `
+  --output ./06-evidence\research-fixture-NEW
+python scripts/score_compression_research.py ./06-evidence\research-fixture-NEW
+```
+
 本目录是F73的新研究准备，不含旧E1/E2结果，也不宣称真实质量已测。`sources.lock.json`固定2026-11-08读取的公开上游commit、文件、链接、字节数与SHA256；`profiles-v0.1.json`冻结独立编写的SIC Editor prompt、Worker教学和对照计划。现已补可执行控制包与独立评分/人工标注接口；LLMLingua已完成真实本地权重执行；官方LME媒体接入另行跟踪，不把fixture当研究质量。
 
 ## 已读来源与对本机制的启发
@@ -24,7 +48,7 @@ Editor拿到的是已解析文本单元、只读协议/来源、任务和已有�
 
 ```powershell
 # 默认自有loopback fixture，不连接任何既有Core/网关/真实provider
-.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --output .local/research-v2/NEW_RUN
+.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --backend python --output .local/research-v2/NEW_RUN
 .local/langflow-ui-venv/Scripts/python.exe scripts/score_compression_research.py .local/research-v2/NEW_RUN --output .local/research-v2/NEW_SCORE.json
 # 为各阶候选导出独立人工span/任务rubric标注表；填写后另存并评分
 .local/langflow-ui-venv/Scripts/python.exe scripts/score_compression_research.py .local/research-v2/NEW_RUN --annotation-template .local/research-v2/ANNOTATIONS.json
@@ -70,7 +94,7 @@ uv pip install --python .local/llmlingua-venv/Scripts/python.exe --require-hashe
 # 公开官方固定revision下载，断点保留、Content-Range与最终SHA核验，无需HF token
 .local/langflow-ui-venv/Scripts/python.exe scripts/prepare_llmlingua.py
 # 新Core控制条件；真实本地权重压缩，Worker仍默认自有fixture
-.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --engines llmlingua --output .local/research-v2/NEW_LOCAL_MODEL_RUN
+.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --backend python --engines llmlingua --output .local/research-v2/NEW_LOCAL_MODEL_RUN
 .local/langflow-ui-venv/Scripts/python.exe scripts/score_compression_research.py .local/research-v2/NEW_LOCAL_MODEL_RUN --output .local/research-v2/NEW_LOCAL_MODEL_SCORE.json
 ```
 
@@ -83,8 +107,8 @@ LLMLingua使用2个CPU线程、单批、float32、seed42、rate0.5、保留数�
 ## 新Core媒体研究入口
 
 ```powershell
-.local/langflow-ui-venv/Scripts/python.exe benchmarks/prepare_core_lme.py --tier small --output .local/research-v2/LME_TASK.json
-.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --task .local/research-v2/LME_TASK.json --media-data-root DATA_ROOT/longmemeval-v2 --engines program_exact llmlingua --output .local/research-v2/NEW_MEDIA_RUN
+.local/langflow-ui-venv/Scripts/python.exe benchmarks/prepare_core_lme.py --backend python --tier small --output .local/research-v2/LME_TASK.json
+.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --backend python --task .local/research-v2/LME_TASK.json --media-data-root DATA_ROOT/longmemeval-v2 --engines program_exact llmlingua --output .local/research-v2/NEW_MEDIA_RUN
 ```
 
 第二条是完整所选haystack的真实工作量，不能把极小机械fixture当它的成绩；执行前固定预算，超限拒绝，不丢图或改小常量。研究循环在编辑期间只用通用记忆目标，不让下游问题提前影响材料；同一最终问题及其截图在最终编辑之后才送Worker。参考答案/评估函数不进任何模型请求。LLMLingua只压可编辑文本，图片原始字节/role/tool骨架由Core不可变sidecar保留；独立validator重读最终request核图片SHA。fixture媒体配置只在拥有的loopback端点声明已知gpt4o计数策略，不是调用真实GPT-4o，也不作真实usage/质量证据。
@@ -96,7 +120,7 @@ LLMLingua使用2个CPU线程、单批、float32、seed42、rate0.5、保留数�
 
 ```powershell
 # 仅在已授权网关、私有profile与环境凭据准备后执行；此说明不是已执行证据。
-.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --task .local/research-tasks/diagnostic.json --engines unchanged batch sic --provider-config .local/research-provider.json --allow-provider --allow-test-gateway --output .local/research-v2/NEW_EXPLORATORY_RUN
+.local/langflow-ui-venv/Scripts/python.exe scripts/run_compression_research.py --backend python --task .local/research-tasks/diagnostic.json --engines unchanged batch sic --provider-config .local/research-provider.json --allow-provider --allow-test-gateway --output .local/research-v2/NEW_EXPLORATORY_RUN
 .local/langflow-ui-venv/Scripts/python.exe scripts/score_compression_research.py .local/research-v2/NEW_EXPLORATORY_RUN --output .local/research-v2/NEW_EXPLORATORY_SCORE.json
 ```
 

@@ -3,13 +3,13 @@
 Status: **F53 partial only**. No GUI/F51/F52 acceptance is claimed.
 
 - Langflow version: 1.13.1
-- Venv: `D:\Claude\SIC\.local\langflow-venv`
+- Venv: `./.local\langflow-venv`
 - Python: 3.12.16
 - Dependency repair: isolated `grpcio==1.74.0` overlay at
-  `D:\SIC-real-evidence-20261112\langflow-overlay`; a no-proxy wrapper
+  `./evidence/real-run-20261112/langflow-overlay`; a no-proxy wrapper
   (`langflow_no_proxy.py`) removes the broken `NO_PROXY=[::1]` parsing path.
-- Isolated DB: `D:\SIC-real-evidence-20261112\langflow-owned\langflow.db`
-- Config dir: `D:\SIC-real-evidence-20261112\langflow-owned`
+- Isolated DB: `./evidence/real-run-20261112/langflow-owned\langflow.db`
+- Config dir: `./evidence/real-run-20261112/langflow-owned`
 - Host/port: `127.0.0.1:7865`
 - Backend-only mode; no user Langflow instance, DB, or proxy was touched.
 - PID recorded in `langflow-owned\pid.txt`; startup log in `server.err`.
@@ -24,15 +24,15 @@ Status: **F53 partial only**. No GUI/F51/F52 acceptance is claimed.
 ## Official frontend and SIC flow
 
 - Separate isolated full Langflow instance: `127.0.0.1:7866` (PID 20708),
-  private DB `D:\SIC-real-evidence-20261112\langflow-ui-owned\langflow.db`.
+  private DB `./evidence/real-run-20261112/langflow-ui-owned\langflow.db`.
 - Frontend `GET /` returned HTTP 200 and `<title>Langflow</title>`; screenshot:
-  `D:\SIC-real-evidence-20261112\langflow-ui.png`.
+  `./evidence/real-run-20261112/langflow-ui.png`.
 - Auto-login API returned an access token; the prebuilt
-  `D:\Claude\SIC\integrations\flows\workbench-candidate.json` was uploaded
+  `./integrations\flows\workbench-candidate.json` was uploaded
   through the official API and persisted as flow
   `5fac4d59-0833-468c-ab21-08ce7b5db2de`.
 - The official canvas renders the two SIC nodes and their typed fields:
-  `D:\SIC-real-evidence-20261112\langflow-sic-candidate.png`.
+  `./evidence/real-run-20261112/langflow-sic-candidate.png`.
 - The flow was read back through the official API and persisted:
   `langflow-sic-flow-persisted.json`, SHA256
   `fc1f394f43ceadc30e490019d17d8f89e469b1c94177cc43a749e421cad47570`,

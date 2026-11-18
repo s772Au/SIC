@@ -6,7 +6,8 @@ from sic_workflow.workbench_component import WorkbenchComponent as Component
 from lfx.io import BoolInput, CodeInput, DataInput, DropdownInput, StrInput, Output
 from lfx.schema import Data, DataFrame
 from sic_workflow.workbench_support import cached, context_of, error_rows, object_value, perform, reset, table, text
-from sic_workflow.accounting_scope import ledger_payload,ledger_tables
+from sic_workflow.accounting_scope import ledger_payload,ledger_tables,read_available_ledger
+from sic_workflow.v2_client import CoreClient
 
 
 class SICAccounting(Component):
@@ -50,6 +51,10 @@ class SICAccounting(Component):
 
     def _act(self):
         context = context_of(self)
+        previous = self.previous.data if getattr(self, "previous", None) else {}
+        if previous.get("ok") is False:
+            return {"ok": False, "operation": "accounting.get", "context": context,
+                    "error": {"code": "upstream_failed", "message": "Previous stage failed; this stage was not executed."}}
         if self.action == "读取独立核验实验":
             import sic_workflow
             project = Path(sic_workflow.__file__).resolve().parents[2]
@@ -90,7 +95,9 @@ class SICAccounting(Component):
             saved = perform(self, "resource.record", record, context=context)
             if not saved.get("ok"):
                 return saved
-        return perform(self, "ledger.export", payload, context=context)
+        result = read_available_ledger(CoreClient(), context, payload)
+        self.status = result
+        return result
 
     def run_accounting(self) -> Data:
         return Data(data=cached(self, self._act))
@@ -106,6 +113,11 @@ class SICAccounting(Component):
         if not envelope.get("ok"):
             return table(error_rows(envelope))
         rows = []
+        if envelope.get("operation") == "accounting.get":
+            body = envelope["result"]
+            for kind in ("attempts", "groups"):
+                rows.extend({"类别": kind, "Core 原始记录": text(item)} for item in body.get(kind, []))
+            return table(rows, ["类别", "Core 原始记录"])
         for arm, summary in self._summaries(envelope["result"]):
             for item in summary.get("rows", []) + summary.get("resource_rows", []):
                 rows.append({"工作流": arm, "调用/测量": item.get("call_id") or item.get("record_id"), "角色/资源": item.get("role") or item.get("resource"),
@@ -117,12 +129,18 @@ class SICAccounting(Component):
     def scope_details(self) -> DataFrame:
         envelope=cached(self,self._act)
         if not envelope.get('ok'):return table(error_rows(envelope))
+        if envelope.get('operation') == 'accounting.get':
+            body = envelope['result']
+            return table([{'分组': key, 'Core 原始统计': text(body.get(key, {}))}
+                          for key in ('stats', 'measurements', 'resources')])
         detail=ledger_tables(envelope['result']);rows=[]
         for kind in ('scope_rows','price_rows','context_rows'):rows.extend({'分组':kind,**item} for item in detail[kind])
         return table(rows)
 
     def timing_details(self) -> DataFrame:
         envelope=cached(self,self._act)
+        if envelope.get('ok') and envelope.get('operation') == 'accounting.get':
+            return table([{'范围': '当前路线', 'Core 实测时间': text(envelope['result'].get('resources', {}).get('timing', {}))}])
         return table(ledger_tables(envelope['result'])['timing_rows']) if envelope.get('ok') else table(error_rows(envelope))
 
     def unknowns(self) -> DataFrame:
@@ -130,6 +148,11 @@ class SICAccounting(Component):
         if not envelope.get("ok"):
             return table(error_rows(envelope))
         result = envelope["result"]
+        if envelope.get("operation") == "accounting.get":
+            rows = [{"工作流": "current", "项目": "总账", "内容": text({key: result.get(key) for key in ("complete", "priced_cost", "currency", "physical_cache_hit")})}]
+            rows.extend({"工作流": "current", "项目": "未定项（不是0）", "内容": text(item)}
+                        for item in result.get("stats", {}).get("unknowns", []))
+            return table(rows)
         rows = []
         for arm, summary in self._summaries(result):
             rows.append({"工作流": arm, "项目": "总账", "内容": text({key: summary.get(key) for key in ("complete_cost", "total_cost", "currency", "totals_by_currency", "call_count")})})

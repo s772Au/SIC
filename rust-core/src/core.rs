@@ -1,5 +1,14 @@
 //! Transactional SIC content lifecycle. The initial profile has one Editor;
 //! unsupported capabilities are rejected instead of being reported as done.
+#[path = "host_editor.rs"]
+mod host_editor;
+#[path = "adoption_lineage.rs"]
+mod adoption_lineage;
+#[path = "host_origins.rs"]
+mod host_origins;
+pub(crate) use adoption_lineage::{query_collection_p_lineage,verify_collection_p_lineage};
+#[path = "higher_volatile.rs"]
+mod higher_volatile;
 use crate::{
     accounting,
     board::{BoardAcl, BoardActor, BoardService, TaskStatus},
@@ -14,6 +23,7 @@ use crate::{
     toolset::{ExecutionLease, ToolAcl, ToolDescriptor},
 };
 use serde::{Deserialize, Serialize};
+use crate::native_opaque;
 use serde_json::{Map, Value, json};
 use sqlx::{Row, Sqlite, SqliteConnection, Transaction};
 use std::collections::{BTreeMap, BTreeSet};
@@ -105,6 +115,8 @@ struct Job {
     frozen_editor_config: Value,
     #[serde(default)]
     claim_id: Option<String>,
+    #[serde(default)]
+    host_editor: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +149,11 @@ struct Agent {
     /// scheduler only consumes permits; the host sets the budget.
     #[serde(default)]
     interleave: BTreeMap<String, Value>,
+    /// F30: host-declared wait windows. These are predictions the host made,
+    /// kept apart from measured tool intervals so a sleep-like declaration can
+    /// never be mistaken for a real tool execution.
+    #[serde(default)]
+    declared_waits: BTreeMap<String, Value>,
 }
 
 impl Agent {
@@ -165,7 +182,7 @@ impl Agent {
             current_cut: None,
             cut_seq: 0,
             run_state: "running".into(),
-            config: json!({"prefix_layout":"shared_i","schedule_policy":"wait","tool_result_preview_chars":DEFAULT_TOOL_RESULT_PREVIEW_CHARS,
+            config: json!({"prefix_layout":"shared_i","schedule_policy":"wait","interleave_budget":0,"tool_result_preview_chars":DEFAULT_TOOL_RESULT_PREVIEW_CHARS,
                 "tool_result_total_preview_chars":DEFAULT_TOOL_RESULT_TOTAL_PREVIEW_CHARS,
                 "editor_feedback":{"max_corrections":2,"feedback_chars":8192}}),
             decision: decision::empty(),
@@ -175,6 +192,7 @@ impl Agent {
             input_epoch: 0,
             events: Vec::new(),
             interleave: BTreeMap::new(),
+            declared_waits: BTreeMap::new(),
         }
     }
     fn level(&self, ctx: &str, level: u32) -> Result<&Level> {
@@ -182,6 +200,12 @@ impl Agent {
             .get(ctx)
             .and_then(|c| c.levels.get(&level))
             .ok_or_else(|| CoreError::invalid("context or level not found"))
+    }
+    fn current_instant(&self, ctx: &str, fallback_level: u32) -> Result<&Map<String, Value>> {
+        let level = self.role_views.get("worker")
+            .filter(|view| view.context_id == ctx && self.contexts.get(ctx).is_some_and(|context| context.owner_editor.is_none()))
+            .map(|view| view.level).unwrap_or(fallback_level);
+        Ok(&self.level(ctx, level)?.instant)
     }
     fn level_mut(&mut self, ctx: &str, level: u32) -> Result<&mut Level> {
         if level == 0 {
@@ -244,6 +268,16 @@ async fn late_host_tool_observations(
 }
 
 const OPERATIONS: &[(&str, bool, bool)] = &[
+    ("harness.call", false, false),
+    ("harness.get", false, false),
+    ("harness.observe", true, false),
+    ("native.begin", true, false),
+    ("native.get", false, false),
+    ("native.history", false, false),
+    ("native.commit", true, false),
+    ("native.publish", true, false),
+    ("native.preview", false, false),
+    ("native.refresh_i", true, false),
     ("chain.create", true, false),
     ("chain.list", false, false),
     ("chain.get", false, false),
@@ -291,6 +325,11 @@ const OPERATIONS: &[(&str, bool, bool)] = &[
     ("source.text", false, false),
     ("wb.form", true, false),
     ("edit.prepare", true, false),
+    ("edit.host.prepare", true, false),
+    ("edit.host.get", false, false),
+    ("edit.host.claim", true, false),
+    ("edit.host.submit", true, false),
+    ("edit.host.fail", true, false),
     ("edit.program", true, false),
     ("edit.submit", true, false),
     ("edit.run", true, true),
@@ -302,6 +341,7 @@ const OPERATIONS: &[(&str, bool, bool)] = &[
     ("runtime.discard_unpublished", true, false),
     ("runtime.schedule", true, false),
     ("runtime.budget", true, false),
+    ("runtime.wait", true, false),
     ("experiment.pack", false, false),
     ("experiment.verify", false, false),
     ("accounting.get", false, false),
@@ -328,6 +368,18 @@ const OPERATIONS: &[(&str, bool, bool)] = &[
     ("config.update", true, false),
     ("security.revoke", true, false),
     ("security.classify", true, false),
+    ("signal.spawn", true, false),
+    ("signal.pause", true, false),
+    ("signal.stop", true, false),
+    ("signal.sleep", true, false),
+    ("signal.source_policy", true, false),
+    ("signal.admin_grant", true, false),
+    ("signal.admin_revoke", true, false),
+    ("signal.source.register", true, false),
+    ("signal.arrive", true, false),
+    ("signal.drain", true, false),
+    ("signal.status", true, false),
+    ("signal.broadcast", true, false),
 ];
 
 fn required_str<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
@@ -491,6 +543,51 @@ async fn load_agent(conn: &mut SqliteConnection, id: &str, actor: &str) -> Resul
 async fn save_agent(conn: &mut SqliteConnection, agent: &Agent) -> Result<()> {
     storage::save_chain(conn, &as_value(agent)?).await
 }
+
+fn native_open_calls(format: &str, request: &Value) -> Vec<String> {
+    let mut open = BTreeSet::new();
+    let rows = match format {
+        "openai-responses" => request["input"].as_array(),
+        _ => request["messages"].as_array(),
+    };
+    for row in rows.into_iter().flatten() {
+        if format == "openai-chat" {
+            for call in row["tool_calls"].as_array().into_iter().flatten() {
+                if let Some(id) = call["id"].as_str() { open.insert(id.to_owned()); }
+            }
+            if row["role"] == "tool" {
+                if let Some(id) = row["tool_call_id"].as_str() { open.remove(id); }
+            }
+        } else if format == "openai-responses" {
+            if let Some(id) = row["call_id"].as_str() {
+                if row["type"] == "function_call" { open.insert(id.to_owned()); }
+                if row["type"] == "function_call_output" { open.remove(id); }
+            }
+        } else if format == "dsh-messages" {
+            if row["role"]=="assistant" {
+                for block in row["content"].as_array().into_iter().flatten() {
+                    if block["type"]=="tool-call" {
+                        let id=block["id"].as_str().or_else(||block["toolCallId"].as_str()).unwrap_or("unknown-sdk-tool-call");
+                        if !open.insert(id.to_owned()) {open.insert(format!("ambiguous-sdk-tool-call:{id}"));}
+                    }
+                }
+            }
+            if row["role"]=="tool" {
+                if let Some(id)=row["toolCallId"].as_str() {open.remove(id);}
+            }
+        } else if format == "anthropic-messages" {
+            for block in row["content"].as_array().into_iter().flatten() {
+                if block["type"] == "tool_use" {
+                    if let Some(id) = block["id"].as_str() { open.insert(id.to_owned()); }
+                }
+                if block["type"] == "tool_result" {
+                    if let Some(id) = block["tool_use_id"].as_str() { open.remove(id); }
+                }
+            }
+        }
+    }
+    open.into_iter().collect()
+}
 async fn check_dependencies(conn: &mut SqliteConnection, agent: &Agent) -> Result<()> {
     for sources in agent.groups.values() {
         for id in sources {
@@ -498,6 +595,45 @@ async fn check_dependencies(conn: &mut SqliteConnection, agent: &Agent) -> Resul
         }
     }
     Ok(())
+}
+
+fn native_editable_ids(context: &crate::transparent::NativeContext,p: &Value,required: bool) -> Result<Vec<String>> {
+    if p.get("editable_unit_ids").is_some() && p.get("editable_anchors").is_some() {
+        return Err(CoreError::invalid("use editable_unit_ids or editable_anchors, not both"));
+    }
+    let ids = match (p.get("editable_unit_ids"),p.get("editable_anchors")) {
+        (Some(ids),_) => ids.as_array().ok_or_else(||CoreError::invalid("editable_unit_ids must be an array"))?.iter()
+            .map(|id|id.as_str().map(str::to_owned).ok_or_else(||CoreError::invalid("editable unit ID must be text"))).collect::<Result<Vec<_>>>()?,
+        (None,Some(anchors)) => anchors.as_array().ok_or_else(||CoreError::invalid("editable_anchors must be an array"))?.iter()
+            .map(|anchor|context.units().iter().find(|unit|&unit.anchor == anchor).map(|unit|unit.unit_id.clone())
+                .ok_or_else(||CoreError::forbidden("anchor is not an editable native text leaf"))).collect::<Result<Vec<_>>>()?,
+        (None,None) if required => return Err(CoreError::forbidden("existing chain context requires an explicit host editable scope")),
+        (None,None) => context.units().iter().map(|unit|unit.unit_id.clone()).collect(),
+    };
+    let mut seen = BTreeSet::new();
+    if ids.iter().any(|id|!seen.insert(id.clone()) || !context.units().iter().any(|unit|&unit.unit_id == id)) {
+        return Err(CoreError::invalid("editable IDs must be distinct existing native text units"));
+    }
+    Ok(context.units().iter().filter(|unit|ids.contains(&unit.unit_id)).map(|unit|unit.unit_id.clone()).collect())
+}
+
+fn native_host_origins(context:&crate::transparent::NativeContext,p:&Value)->Result<Value> {
+    let origins=p.get("host_message_origins").cloned().unwrap_or_else(||json!([]));
+    let origins=origins.as_array().ok_or_else(||CoreError::invalid("host_message_origins must be an array"))?;
+    let mut seen_origins=BTreeSet::new();
+    let mut seen_units=BTreeSet::new();
+    let mut output=Vec::new();
+    for origin in origins {
+        let message=required_str(origin,"message_id")?;
+        let block=field_u64(origin,"block_index")?;
+        let unit=context.units().iter().find(|unit|unit.anchor==origin["native_anchor"])
+            .ok_or_else(||CoreError::forbidden("host origin does not map to a real native text leaf"))?;
+        if !seen_origins.insert((message.to_owned(),block)) || !seen_units.insert(unit.unit_id.clone()) {
+            return Err(CoreError::forbidden("host message origins and native leaves must map one-to-one"));
+        }
+        output.push(json!({"message_id":message,"block_index":block,"native_anchor":unit.anchor,"unit_id":unit.unit_id}));
+    }
+    Ok(json!(output))
 }
 
 /// True when any source on this chain has an immutable revocation record.
@@ -556,6 +692,43 @@ fn redact_agent_view(value: &mut Value) {
         *decision = json!({"redacted":"revocation","revision":revision});
     }
 }
+async fn ids_for_view_snapshot(conn:&mut SqliteConnection,agent:&Agent,context_id:&str,level:u32)->Result<Vec<String>> {
+        let context = agent
+            .contexts
+            .get(context_id)
+            .ok_or_else(|| CoreError::invalid("selected context missing"))?;
+        if !context.shared_contexts.is_empty() {
+            return Err(CoreError::new(
+                "unsupported",
+                "shared internal-context projection is not implemented",
+                501,
+            ));
+        }
+        let mut ids = context
+            .levels
+            .get(&1)
+            .ok_or_else(|| CoreError::invalid("base level missing"))?
+            .cbs
+            .clone();
+        for number in 2..=level {
+            if let Some(level) = context.levels.get(&number) {
+                for cid in &level.cbs {
+                    let cb = storage::get_object(conn, cid, Some("cb")).await?;
+                    let members: Vec<String> = serde_json::from_value(cb["members"].clone())?;
+                    if members.is_empty() {
+                        ids.push(cid.clone());
+                        continue;
+                    }
+                    if let Some(start) = ids.iter().position(|id| id == &members[0]) {
+                        if ids.get(start..start + members.len()) == Some(members.as_slice()) {
+                            ids.splice(start..start + members.len(), [cid.clone()]);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(ids)
+    }
 async fn source_snapshot(
     conn: &mut SqliteConnection,
     agent: &Agent,
@@ -591,7 +764,8 @@ async fn source_snapshot(
         // fragment; earlier open calls may already have been closed.
         open = part["open_calls"].as_array().cloned().unwrap_or_default();
     }
-    Ok(json!({"units":units,"source_ids":selected,"open_calls":open}))
+    let opaque_blocks=native_opaque::from_sources(conn,selected).await?;
+    Ok(json!({"units":units,"source_ids":selected,"open_calls":open,"opaque_blocks":opaque_blocks}))
 }
 async fn register_wb(
     conn: &mut SqliteConnection,
@@ -690,7 +864,42 @@ fn deterministic_ops(source: &Value, rules: &Value) -> Result<Vec<Value>> {
     Ok(operations)
 }
 
+
+/// Count the DSH user turns the host bridge has claimed for one chain.
+///
+/// The bridge owns the user-turn boundary: a turn is a claim it recorded under
+/// this chain, whether delivered, failed or still running. Returning `None`
+/// keeps `turns` null for chains no bridge ever touched, so a missing counter
+/// never becomes a zero.
+async fn bridge_turn_count(
+    conn: &mut SqliteConnection,
+    chain_id: &str,
+) -> Result<Option<u64>> {
+    let table: Option<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='dsh_bridge_turns'",
+    )
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|_| CoreError::storage())?;
+    if table.is_none() {
+        return Ok(None);
+    }
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM dsh_bridge_turns t JOIN dsh_bridge_sessions s ON s.actor=t.actor AND s.session_key=t.session_key WHERE s.chain_id=?",
+    )
+    .bind(chain_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|_| CoreError::storage())?;
+    Ok(Some(count.max(0) as u64))
+}
+
 impl Core {
+    /// Trusted host entry; no model-callable grant RPC exists.
+    pub async fn issue_harness_grant(&self, context: &OperationContext,
+        grant: crate::harness_lifecycle::HarnessGrant) -> Result<Value> {
+        crate::harness_lifecycle::issue(&self.store, context, grant).await
+    }
     pub fn new(store: Store) -> Self {
         Self {
             store,
@@ -730,7 +939,21 @@ impl Core {
         })
     }
     pub fn capabilities() -> Value {
-        json!({"api_version":"2","implementation":"sic-rust-core-development","operations":OPERATIONS.iter().map(|(op,write,model)|json!({"operation":op,"write":write,"model":model})).collect::<Vec<_>>(),
+        // Each operation reports the payload it accepts. The alternative was a
+        // host that discovers field names only by making a call that fails, and
+        // the failure says "invalid" whether the caller said nothing or the
+        // wrong thing -- so "optional" and "required" looked identical from the
+        // outside. `payload` removes that ambiguity without changing any handler.
+        let operations: Vec<Value> = OPERATIONS
+            .iter()
+            .map(|(op, write, model)| {
+                let payload = crate::capability_schema::operation_payload(op)
+                    .map(crate::capability_schema::payload_json)
+                    .unwrap_or(Value::Null);
+                json!({"operation":op,"write":write,"model":model,"payload":payload})
+            })
+            .collect();
+        json!({"api_version":"2","implementation":"sic-rust-core-development","operations":operations,
                "feature_scope":"single Editor; implemented operations only; not complete contract acceptance","physical_cache_hit":"unknown"})
     }
     /// Return the canonical fixed SIC tool names for adapters that must reserve
@@ -824,6 +1047,15 @@ impl Core {
                 "separate revocation authorization required",
                 403,
             ));
+        }
+        if matches!(operation, "harness.call" | "harness.get" | "harness.observe") {
+            return crate::harness_lifecycle::operate(&self.store, operation, context, payload).await;
+        }
+        if operation == "native.history" {
+            return crate::native_history::read(self, context, payload).await;
+        }
+        if matches!(operation, "native.begin" | "native.get" | "native.commit" | "native.publish" | "native.preview" | "native.refresh_i") {
+            return crate::native_transactions::operate(self, operation, context, payload).await;
         }
         if operation == "edit.run" {
             return self.run_editor(context, payload).await;
@@ -952,6 +1184,22 @@ impl Core {
                 .filter(|v| !v.is_empty())
                 .ok_or_else(|| CoreError::invalid("chain_id required"))?;
             let mut agent = load_agent(&mut tx, id, &context.actor).await?;
+            let raw_source_id=if operation=="source.read" {payload["source_id"].as_str()}
+                else if operation=="memory.page" && payload["kind"]=="source" {payload["object_id"].as_str()} else {None};
+            let raw_sources:Vec<String>=if let Some(id)=raw_source_id {
+                match agent.groups.values().find(|group|group.iter().any(|source|source==id)) {
+                    Some(group) if operation=="source.read" && payload["group"]==true => group.clone(),
+                    Some(_) => vec![id.to_owned()],
+                    None => Vec::new(),
+                }
+            } else {Vec::new()};
+            for id in raw_sources {
+                let source=storage::get_object(&mut tx,&id,Some("source")).await?;
+                if let Some(board)=source["native_i_board_id"].as_str() {
+                    if agent.board_id.as_deref()!=Some(board) {return Err(CoreError::forbidden("archived native I board access is no longer bound"));}
+                    self.check_board_access(&mut tx,&agent).await?;
+                }
+            }
             let status_only = [
                 "security.revoke",
                 "security.classify",
@@ -983,6 +1231,10 @@ impl Core {
                     "edit.validate",
                     "edit.candidate.get",
                     "edit.candidate.update",
+                    "edit.host.get",
+                    "edit.host.claim",
+                    "edit.host.submit",
+                    "edit.host.fail",
                     "cut.publish",
                 ];
                 let mut checked_job = false;
@@ -1025,7 +1277,11 @@ impl Core {
             {
                 self.check_board_access(&mut tx, &agent).await?;
             }
-            let result = if operation == "chain.checkpoint" || operation.starts_with("socket.") {
+            let result = if operation.starts_with("edit.host.") {
+                self.dispatch_host_editor(&mut tx,&mut agent,context,operation,payload,&mut replayed).await?
+            } else if operation.starts_with("signal.") {
+                self.dispatch_signal(&mut tx, &mut agent, context, operation, payload).await?
+            } else if operation == "chain.checkpoint" || operation.starts_with("socket.") {
                 self.dispatch_ipc(
                     &mut tx,
                     &mut agent,
@@ -1077,6 +1333,349 @@ impl Core {
         )
     }
 
+    /// Signal control-plane dispatch. Every handler is transactional with the
+    /// caller's own Agent state so a Signal and its status change commit
+    /// together or not at all.
+    async fn dispatch_signal(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        agent: &mut Agent,
+        context: &OperationContext,
+        operation: &str,
+        p: &Value,
+    ) -> Result<Value> {
+        let principal = Principal::new(&context.actor, &agent.chain_id).map_err(signal_error)?;
+        let store = crate::signal::SignalStore::new(self.store.clone(), "sic-signal-a")?;
+        // Autoregister the calling route so a first Signal does not need a
+        // separate bootstrap step.
+        store
+            .transact_in_transaction(tx, |state| {
+                if state.node(&agent.chain_id).is_none() {
+                    let spec = crate::signal::SpawnSpec {
+                        child_route_id: agent.chain_id.clone(),
+                        co_parents: agent
+                            .creators
+                            .iter()
+                            .filter(|creator| creator.as_str() != agent.chain_id)
+                            .cloned()
+                            .collect(),
+                        origin_route_id: None,
+                        prefix_cb_ids: Vec::new(),
+                        origin_cut_id: None,
+                        limits: None,
+                        initial_policy: None,
+                    };
+                    state.spawn(&principal, spec)?;
+                }
+                Ok(())
+            })
+            .await?;
+        match operation {
+            "signal.status" => {
+                let fallback = agent.chain_id.clone();
+                let target_owned = p
+                    .get("target_route_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| fallback.clone());
+                let target = target_owned.as_str();
+                store
+                    .transact_in_transaction(tx, |state| state.status(target))
+                    .await
+            }
+            "signal.broadcast" => {
+                let fallback = agent.chain_id.clone();
+                let target_owned = p
+                    .get("target_route_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| fallback.clone());
+                let target = target_owned.as_str();
+                let limit = p.get("log_limit").and_then(Value::as_u64).unwrap_or(16) as usize;
+                store
+                    .transact_in_transaction(tx, |state| {
+                        Ok(state.i_broadcast(target, limit))
+                    })
+                    .await
+            }
+            "signal.source.register" => {
+                let source_id = required_str(p, "source_id")?;
+                let kind = crate::signal::SourceKind::parse(required_str(p, "kind")?)
+                    .map_err(CoreError::invalid)?;
+                let owner = p.get("owner").and_then(Value::as_str).map(str::to_owned);
+                store
+                    .transact_in_transaction(tx, |state| {
+                        state.register_source(&principal, source_id, kind, owner)
+                    })
+                    .await
+            }
+            "signal.spawn" => {
+                let co_parents = string_list(p, "co_parents")?;
+                for route in &co_parents {
+                    self.ensure_signal_node(tx, route, &context.actor).await?;
+                }
+                let spec = crate::signal::SpawnSpec {
+                    child_route_id: required_str(p, "child_route_id")?.to_owned(),
+                    co_parents,
+                    origin_route_id: p
+                        .get("origin_route_id")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned),
+                    prefix_cb_ids: string_list(p, "prefix_cb_ids")?,
+                    origin_cut_id: p
+                        .get("origin_cut_id")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned),
+                    limits: match p.get("limits") {
+                        Some(value) => Some(serde_json::from_value(value.clone())?),
+                        None => None,
+                    },
+                    initial_policy: match p.get("initial_policy") {
+                        Some(value) => Some(serde_json::from_value(value.clone())?),
+                        None => None,
+                    },
+                };
+                store
+                    .transact_in_transaction(tx, |state| state.spawn(&principal, spec))
+                    .await
+            }
+            "signal.pause" => {
+                let target = required_str(p, "target_route_id")?.to_owned();
+                let mode = crate::signal::ApplyMode::parse(
+                    p.get("mode").and_then(Value::as_str).unwrap_or("now"),
+                )
+                .map_err(CoreError::invalid)?;
+                let reason = p.get("wake_reason").and_then(Value::as_str).map(str::to_owned);
+                let value = store
+                    .transact_in_transaction(tx, |state| {
+                        state.pause(&principal, &target, mode, reason)
+                    })
+                    .await?;
+                self.apply_control_state(tx, agent, &target, &value).await?;
+                Ok(value)
+            }
+            "signal.stop" => {
+                let target = required_str(p, "target_route_id")?.to_owned();
+                let mode = crate::signal::ApplyMode::parse(
+                    p.get("mode").and_then(Value::as_str).unwrap_or("now"),
+                )
+                .map_err(CoreError::invalid)?;
+                let wake: BTreeSet<String> = string_list(p, "wake_sources")?.into_iter().collect();
+                let value = store
+                    .transact_in_transaction(tx, |state| {
+                        state.stop(&principal, &target, mode, wake)
+                    })
+                    .await?;
+                self.apply_control_state(tx, agent, &target, &value).await?;
+                Ok(value)
+            }
+            "signal.sleep" => {
+                let timeout = p.get("timeout_s").and_then(Value::as_u64);
+                let reason = p.get("reason").and_then(Value::as_str).map(str::to_owned);
+                let value = store
+                    .transact_in_transaction(tx, |state| {
+                        state.sleep(&principal, timeout, reason)
+                    })
+                    .await?;
+                let target = agent.chain_id.clone();
+                self.apply_control_state(tx, agent, &target, &value).await?;
+                Ok(value)
+            }
+            "signal.source_policy" => {
+                let target = required_str(p, "target_route_id")?.to_owned();
+                let kinds: BTreeSet<crate::signal::SourceKind> = string_list(p, "kinds")?
+                    .into_iter()
+                    .map(|value| crate::signal::SourceKind::parse(&value))
+                    .collect::<std::result::Result<_, _>>()
+                    .map_err(CoreError::invalid)?;
+                let ids: BTreeSet<String> = string_list(p, "source_ids")?.into_iter().collect();
+                store
+                    .transact_in_transaction(tx, |state| {
+                        state.set_source_policy(&principal, &target, kinds, ids)
+                    })
+                    .await
+            }
+            "signal.admin_grant" => {
+                let target = required_str(p, "target_route_id")?;
+                let holder = required_str(p, "holder_route_id")?;
+                let rights: BTreeSet<crate::signal::ControlRight> = string_list(p, "rights")?
+                    .into_iter()
+                    .map(|value| crate::signal::ControlRight::parse(&value))
+                    .collect::<std::result::Result<_, _>>()
+                    .map_err(CoreError::invalid)?;
+                self.ensure_signal_node(tx, holder, &context.actor).await?;
+                store
+                    .transact_in_transaction(tx, |state| {
+                        state.grant(&principal, target, holder, rights)
+                    })
+                    .await
+            }
+            "signal.admin_revoke" => {
+                let target = required_str(p, "target_route_id")?;
+                let holder = required_str(p, "holder_route_id")?;
+                store
+                    .transact_in_transaction(tx, |state| {
+                        state.revoke(&principal, target, holder)
+                    })
+                    .await
+            }
+            "signal.arrive" => {
+                let source_id = required_str(p, "source_id")?;
+                let target = required_str(p, "target_route_id")?;
+                let payload = p.get("payload").cloned().unwrap_or(Value::Null);
+                let in_target = principal.route_id == target;
+                let value = store
+                    .transact_in_transaction(tx, |state| {
+                        if !in_target
+                            && !state
+                                .held(&principal, target)
+                                .contains(&crate::signal::ControlRight::Wake)
+                        {
+                            return Err(CoreError::forbidden(
+                                "delivering to a suspended Agent requires the wake right",
+                            ));
+                        }
+                        state.arrive(source_id, target, payload)
+                    })
+                    .await?;
+                self.apply_control_state(tx, agent, target, &value).await?;
+                Ok(value)
+            }
+            "signal.drain" => {
+                let fallback = agent.chain_id.clone();
+                let target_owned = p
+                    .get("target_route_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| fallback.clone());
+                let target = target_owned.as_str();
+                let limit = p.get("limit").and_then(Value::as_u64).unwrap_or(64) as usize;
+                let value = store
+                    .transact_in_transaction(tx, |state| state.drain_admitted(target, limit))
+                    .await?;
+                self.apply_control_state(tx, agent, target, &value).await?;
+                Ok(value)
+            }
+            other => Err(CoreError::new(
+                "unsupported",
+                format!("Signal operation {other} is not implemented"),
+                501,
+            )),
+        }
+    }
+
+    /// Materialize a Signal node for a referenced route so co-parents and
+    /// grantees do not need a prior Signal call of their own. The route must
+    /// exist as an Agent chain owned by the caller.
+    async fn ensure_signal_node(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        route_id: &str,
+        actor: &str,
+    ) -> Result<()> {
+        let store = crate::signal::SignalStore::new(self.store.clone(), "sic-signal-a")?;
+        let present = store
+            .transact_in_transaction(tx, |state| Ok(state.node(route_id).is_some()))
+            .await?;
+        if present {
+            return Ok(());
+        }
+        // Existence only: a referenced route may belong to another actor.
+        let known: Option<i64> = sqlx::query_scalar("SELECT 1 FROM chains WHERE id=?")
+            .bind(route_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+        if known.is_none() {
+            return Err(CoreError::invalid("referenced Agent route does not exist"));
+        }
+        let principal = Principal::new(actor, route_id).map_err(signal_error)?;
+        store
+            .transact_in_transaction(tx, |state| {
+                let spec = crate::signal::SpawnSpec {
+                    child_route_id: route_id.to_owned(),
+                    ..Default::default()
+                };
+                state.spawn(&principal, spec)?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// The Signal I-region broadcast: current state, child Agent states and
+    /// the timestamped management log. It is post-prefix I material, never
+    /// part of the shared common prefix.
+    async fn signal_broadcast_i(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        chain_id: &str,
+        log_limit: usize,
+    ) -> Result<Option<Value>> {
+        let store = crate::signal::SignalStore::new(self.store.clone(), "sic-signal-a")?;
+        let present = store
+            .transact_in_transaction(tx, |state| Ok(state.node(chain_id).is_some()))
+            .await?;
+        if !present {
+            return Ok(None);
+        }
+        let broadcast = store
+            .transact_in_transaction(tx, |state| Ok(state.i_broadcast(chain_id, log_limit)))
+            .await?;
+        Ok(Some(broadcast))
+    }
+
+    /// Mirror a Signal state change onto the Agent so the existing run_state
+    /// guards (prepare, publish, edit.run) obey it without being rewritten.
+    async fn apply_control_state(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        agent: &mut Agent,
+        target: &str,
+        value: &Value,
+    ) -> Result<()> {
+        if target != agent.chain_id {
+            return Ok(());
+        }
+        let Some(state) = value.get("state").and_then(|state| state.get("state")) else {
+            return Ok(());
+        };
+        let Some(name) = state.as_str() else {
+            return Ok(());
+        };
+        // A pending Pause/Stop is an *after output* Signal: it must not bump
+        // control_epoch, or the completion that is already arriving would be
+        // discarded exactly when the caller asked to keep it. Only a settled
+        // state takes authority away from an in-flight attempt.
+        let settled = matches!(name, "paused" | "stopped");
+        agent.run_state = name.to_owned();
+        if settled {
+            agent.control_epoch = agent.control_epoch.saturating_add(1);
+        }
+        save_agent(tx, agent).await?;
+        Ok(())
+    }
+
+    /// Settle a pending pause or stop at the model output boundary. The
+    /// Worker path calls this after it records the attempt.
+    async fn settle_signal_after_output(
+        &self,
+        tx: &mut Transaction<'_, Sqlite>,
+        agent: &mut Agent,
+    ) -> Result<()> {
+        let store = crate::signal::SignalStore::new(self.store.clone(), "sic-signal-a")?;
+        let chain = agent.chain_id.clone();
+        let settled = store
+            .transact_in_transaction(tx, |state| {
+                Ok(state.settle_after_output(&chain))
+            })
+            .await?;
+        if let Some(state) = settled {
+            agent.run_state = state.name().to_owned();
+            agent.control_epoch = agent.control_epoch.saturating_add(1);
+            save_agent(tx, agent).await?;
+        }
+        Ok(())
+    }
+
     async fn dispatch(
         &self,
         conn: &mut SqliteConnection,
@@ -1098,6 +1697,7 @@ impl Core {
             "runtime.abandon" => self.abandon_inflight(conn, agent, p).await,
             "runtime.discard_unpublished" => self.discard_unpublished(conn, agent, p).await,
             "runtime.budget" => self.interleave_budget(agent, p),
+            "runtime.wait" => self.declare_wait(agent, p),
             "experiment.pack" => self.experiment_pack(conn, agent).await,
             "experiment.verify" => self.experiment_verify(conn, agent, p).await,
             "chain.list" => Ok(
@@ -1139,7 +1739,10 @@ impl Core {
                 self.prepare(conn, agent, p, operation == "edit.program")
                     .await
             }
-            "edit.submit" => self.submit(conn, agent, p).await,
+            "edit.submit" => {
+                if job(agent,p)?.host_editor.is_object() {return Err(CoreError::forbidden("host Editor jobs require their authenticated claim submission"));}
+                self.submit(conn, agent, p).await
+            },
             "edit.validate" => {
                 let job = job(agent, p)?;
                 let material = combined_material(conn, agent, job).await?;
@@ -1521,6 +2124,17 @@ impl Core {
         p: &Value,
         program: bool,
     ) -> Result<Value> {
+        self.prepare_with_profiles(conn,agent,p,program,true).await
+    }
+
+    async fn prepare_with_profiles(
+        &self,
+        conn: &mut SqliteConnection,
+        agent: &mut Agent,
+        p: &Value,
+        program: bool,
+        freeze_model_profiles: bool,
+    ) -> Result<Value> {
         if agent.run_state != "running" {
             return Err(CoreError::conflict("Agent is paused or stopped"));
         }
@@ -1605,12 +2219,12 @@ impl Core {
         let mut editor_profiles = BTreeMap::new();
         for row in array {
             let name = required_str(row, "editor")?.to_owned();
-            let profile = self
+            let profile = if freeze_model_profiles { self
                 .model_config
                 .as_ref()
                 .map(|config| model_policy::resolve_editor_profile(config, level, &name))
                 .transpose()
-                .map_err(err)?;
+                .map_err(err)? } else { None };
             if let Some(profile) = profile {
                 editor_profiles.insert(name, profile);
             }
@@ -1647,6 +2261,7 @@ impl Core {
             editor_claims: BTreeMap::new(),
             frozen_editor_config: agent.config.clone(),
             claim_id: None,
+            host_editor: Value::Null,
         };
         if program {
             let rules = p
@@ -1898,19 +2513,6 @@ fn job_responses(job: &Job) -> Result<Value> {
     Ok(json!({editor: candidate}))
 }
 
-fn job_material(job: &Job) -> Result<Value> {
-    if job.status != "ready" {
-        return Err(CoreError::conflict("Editor candidate not ready"));
-    }
-    editing::materialize(
-        &job.source_snapshot,
-        &job.assignments,
-        &job_responses(job)?,
-        job.context_id == "main" && job.level == 1,
-    )
-    .map_err(err)
-}
-
 /// Stable per-Editor provenance for a published CB. Job/scope metadata is kept
 /// out of the shared prompt or body; it is recorded on the immutable object.
 fn editor_records(job: &Job) -> Value {
@@ -2003,6 +2605,339 @@ async fn combined_material(conn: &mut SqliteConnection, agent: &Agent, job: &Job
 }
 
 impl Core {
+    /// Archive the original native carrier as an ordinary SIC source. Its text
+    /// anchors, rather than a Chat conversion, become the first-order WB units.
+    pub(crate) async fn register_native_source(
+        &self, tx: &mut Transaction<'_, Sqlite>, auth: &OperationContext,
+        format: &str, context: &crate::transparent::NativeContext, p: &Value,
+    ) -> Result<Value> {
+        let host_origins=native_host_origins(context,p)?;
+        let opaque_blocks=native_opaque::bind_origins(native_opaque::describe(format,context.source_request())?,p)?;
+        let Some(chain) = auth.chain_id.as_deref() else {
+            let ids = native_editable_ids(context,p,false)?;
+            if p.get("adopted_i").is_some() || ["protected_cb_bindings","volatile_source_bindings"].iter().any(|key|p.get(key).is_some_and(|value|value.as_array().is_none_or(|rows|!rows.is_empty()))) {
+                return Err(CoreError::forbidden("CB and volatile bindings require an authenticated chain context"));
+            }
+            return Ok(json!({"core_source_id":null,"editable_unit_ids":ids,"protected_cb_bindings":[],"host_message_origins":host_origins,"opaque_blocks":opaque_blocks}));
+        };
+        let open_calls = native_open_calls(format,context.source_request());
+        let mut agent = load_agent(tx, chain, &auth.actor).await?;
+        check_dependencies(tx,&agent).await?;
+        self.check_board_access(tx,&agent).await?;
+        let editable = native_editable_ids(context,p,!agent.groups.is_empty())?;
+        let selected = self.selected_ids(tx,&agent,"worker").await?;
+        let protected = self.verify_native_cb_bindings(tx,context,p,&editable,&selected).await?;
+        let volatile = self.verify_native_volatile_bindings(tx,&agent,context,p,&editable).await?;
+        let adopted_i = self.verify_native_i_binding(tx,&agent,context,p,&editable).await?;
+        if editable.is_empty() {
+            return Ok(json!({"core_source_id":null,"editable_unit_ids":[],"protected_cb_bindings":protected,"volatile_source_bindings":[],"adopted_i":adopted_i,"host_message_origins":host_origins,"opaque_blocks":opaque_blocks}));
+        }
+        if !open_calls.is_empty() {
+            return Err(CoreError::new("tool_group_open","freeze a chain-bound native candidate only at a closed tool-group boundary; stage open material with a read-only scope",409));
+        }
+        let units: Vec<Value> = context.units().iter().filter(|unit|editable.contains(&unit.unit_id)).map(|unit|json!({
+            "unit_id":unit.unit_id,"text":unit.text,"anchor":{"native_path":unit.anchor,"volatile_origin":volatile["origins"][&unit.unit_id],
+                "host_origin":host_origins.as_array().into_iter().flatten().find(|origin|origin["unit_id"]==unit.unit_id)},"kind":"text"
+        })).collect();
+        let source = storage::uid("source");
+        storage::put_object(tx,"source",&source,&json!({"format":format,"sidecar":context.source_request(),
+            "units":units,"protected":[],"cb_dependencies":selected,"dependencies":volatile["source_ids"],"open_calls":open_calls,
+            "opaque_blocks":opaque_blocks,"native_i_board_id":adopted_i["board_id"],"native_i_cut_id":adopted_i["cut_id"]})).await?;
+        let consumed = volatile["source_ids"].as_array().map_or(0,Vec::len);
+        agent.level_mut("main",1)?.pending.drain(0..consumed);
+        agent.groups.insert(source.clone(),vec![source.clone()]);
+        agent.level_mut("main",1)?.pending.push(source.clone());
+        agent.input_epoch = agent.input_epoch.checked_add(1).ok_or_else(||CoreError::conflict("input revision exhausted"))?;
+        agent.events.push(json!({"type":"native_source_ingested","source_id":source,"format":format,"time":now()}));
+        save_agent(tx,&agent).await?;
+        Ok(json!({"core_source_id":source,"editable_unit_ids":editable,"protected_cb_bindings":protected,"volatile_source_bindings":volatile["bindings"],"adopted_i":adopted_i,"host_message_origins":host_origins,"opaque_blocks":opaque_blocks}))
+    }
+
+    async fn verify_native_i_binding(
+        &self,tx:&mut Transaction<'_,Sqlite>,agent:&Agent,context:&crate::transparent::NativeContext,p:&Value,editable:&[String],
+    ) -> Result<Value> {
+        let Some(proof)=p.get("adopted_i") else {return Ok(Value::Null);};
+        let snapshot=self.get_cut(tx,agent).await?;
+        if proof["cut_id"]!=snapshot["cut_id"] || proof["view_digest"]!=snapshot["instant_view_digest"] {
+            return Err(CoreError::conflict("host I activation does not match the current authorized cut view"));
+        }
+        let expected=format!("sic:instant-views\n{}",required_str(&snapshot,"instant_view_text")?);
+        if proof["section_text"].as_str()!=Some(expected.as_str()) {
+            return Err(CoreError::conflict("host I section differs from the exact Core view text"));
+        }
+        let unit=context.units().iter().find(|unit|unit.anchor==proof["native_anchor"])
+            .ok_or_else(||CoreError::forbidden("I activation must bind an actual supported native text leaf"))?;
+        let overlaps_cb=p["protected_cb_bindings"].as_array().into_iter().flatten().any(|binding|
+            binding["unit_ids"].as_array().is_some_and(|ids|ids.iter().any(|id|id==&unit.unit_id)) ||
+            binding["native_anchors"].as_array().is_some_and(|anchors|anchors.contains(&unit.anchor)));
+        if editable.contains(&unit.unit_id) || overlaps_cb || unit.text!=expected {
+            return Err(CoreError::forbidden("I activation must occupy its own read-only native text leaf"));
+        }
+        Ok(json!({"cut_id":snapshot["cut_id"],"view_digest":snapshot["instant_view_digest"],"native_anchor":unit.anchor,
+            "section_sha256":storage::sha256(expected.as_bytes()),"board_id":snapshot["instant_scope"]["board_id"]}))
+    }
+
+    pub(crate) async fn authorize_native_projection(
+        &self,tx:&mut Transaction<'_,Sqlite>,auth:&OperationContext,source:&Value,
+    ) -> Result<()> {
+        if let Some(board)=source["adopted_i"]["board_id"].as_str() {
+            let chain=auth.chain_id.as_deref().ok_or_else(||CoreError::forbidden("I board projection requires its chain"))?;
+            let agent=load_agent(tx,chain,&auth.actor).await?;
+            if agent.board_id.as_deref()!=Some(board) {return Err(CoreError::forbidden("the archived I board is no longer bound"));}
+            self.check_board_access(tx,&agent).await?;
+        }
+        Ok(())
+    }
+
+    async fn verify_native_volatile_bindings(
+        &self,tx:&mut Transaction<'_,Sqlite>,agent:&Agent,context:&crate::transparent::NativeContext,
+        p:&Value,editable:&[String],
+    ) -> Result<Value> {
+        let bindings=p.get("volatile_source_bindings").cloned().unwrap_or_else(||json!([]));
+        let bindings=bindings.as_array().ok_or_else(||CoreError::invalid("volatile_source_bindings must be an array"))?;
+        let mut sources=Vec::<String>::new();
+        let mut used=BTreeSet::new();
+        let mut origins=Map::new();
+        let mut verified=Vec::new();
+        for binding in bindings {
+            let sid=required_str(binding,"source_id")?;
+            if sources.iter().any(|source|source==sid) { return Err(CoreError::invalid("duplicate volatile source binding")); }
+            sources.push(sid.into());
+            let source=storage::get_object(tx,sid,Some("source")).await?;
+            if source["origin"]["kind"]!="volatile-continuation" {
+                return Err(CoreError::forbidden("binding is not a published volatile continuation"));
+            }
+            let cb=storage::get_object(tx,required_str(&source["origin"],"cb_id")?,Some("cb")).await?;
+            if cb["chain_id"]!=agent.chain_id { return Err(CoreError::forbidden("volatile continuation belongs to another chain")); }
+            let mut scope=json!({});
+            if let Some(ids)=binding.get("unit_ids") {scope["editable_unit_ids"]=ids.clone();}
+            if let Some(anchors)=binding.get("native_anchors") {scope["editable_anchors"]=anchors.clone();}
+            let ids=native_editable_ids(context,&scope,true)?;
+            let previous=source["units"].as_array().ok_or_else(||CoreError::invalid("volatile source units missing"))?;
+            if ids.len()!=previous.len() || ids.iter().any(|id|!editable.contains(id) || !used.insert(id.clone())) {
+                return Err(CoreError::forbidden("volatile material must bind distinct new authorized native leaves"));
+            }
+            for (id,old) in ids.iter().zip(previous) {
+                let unit=context.units().iter().find(|unit|&unit.unit_id==id).expect("validated native unit");
+                if old["text"].as_str()!=Some(unit.text.as_str()) {return Err(CoreError::conflict("native volatile material differs from published continuation"));}
+                origins.insert(id.clone(),json!({"source_id":sid,"unit_id":old["unit_id"]}));
+            }
+            verified.push(json!({"source_id":sid,"unit_ids":ids,"cb_id":source["origin"]["cb_id"]}));
+        }
+        if !agent.level("main",1)?.pending.starts_with(&sources) {
+            return Err(CoreError::conflict("volatile bindings must consume earliest pending sources in order"));
+        }
+        if !editable.is_empty() {
+            if let Some(next) = agent.level("main",1)?.pending.get(sources.len()) {
+                let source=storage::get_object(tx,next,Some("source")).await?;
+                if source["origin"]["kind"]=="volatile-continuation" {
+                    return Err(CoreError::conflict("pending volatile material requires a trusted native append binding"));
+                }
+            }
+        }
+        Ok(json!({"source_ids":sources,"origins":origins,"bindings":verified}))
+    }
+
+    async fn verify_native_cb_bindings(
+        &self,tx: &mut Transaction<'_,Sqlite>,context: &crate::transparent::NativeContext,p: &Value,
+        editable: &[String],selected: &[String],
+    ) -> Result<Value> {
+        let bindings = p.get("protected_cb_bindings").cloned().unwrap_or_else(||json!([]));
+        let bindings = bindings.as_array().ok_or_else(||CoreError::invalid("protected_cb_bindings must be an array"))?;
+        let mut seen_cbs = BTreeSet::new();
+        let mut seen_units = BTreeSet::new();
+        let mut protected = Vec::new();
+        for binding in bindings {
+            let cb_id = required_str(binding,"cb_id")?;
+            if !selected.iter().any(|selected|selected == cb_id) || !seen_cbs.insert(cb_id.to_owned()) {
+                return Err(CoreError::forbidden("protected CB is not in the current host-selected view"));
+            }
+            let cb = storage::get_object(tx,cb_id,Some("cb")).await?;
+            let mut scope = json!({});
+            if let Some(ids) = binding.get("unit_ids") { scope["editable_unit_ids"] = ids.clone(); }
+            if let Some(anchors) = binding.get("native_anchors") { scope["editable_anchors"] = anchors.clone(); }
+            let ids = native_editable_ids(context,&scope,true)?;
+            if ids.is_empty() || ids.iter().any(|id|editable.contains(id) || !seen_units.insert(id.clone())) {
+                return Err(CoreError::forbidden("CB anchors must be distinct read-only native units"));
+            }
+            let texts: Vec<String> = ids.iter().map(|id|context.units().iter().find(|unit|&unit.unit_id == id).expect("validated unit").text.clone()).collect();
+            let mut representation = "cb_body";
+            if texts.join("\n") != cb["body"].as_str().unwrap_or("") {
+                let publication: Option<String> = sqlx::query_scalar("SELECT id FROM objects WHERE kind='native_publication' AND json_extract(data,'$.cb_id')=? LIMIT 1")
+                    .bind(cb_id).fetch_optional(&mut **tx).await?;
+                let publication = publication.ok_or_else(||CoreError::conflict("native CB projection does not match the published body"))?;
+                let publication = storage::get_object(tx,&publication,Some("native_publication")).await?;
+                let prior = storage::get_object(tx,required_str(&publication,"source_id")?,Some("native_source")).await?;
+                let prior_context = crate::transparent::NativeContext::restore(required_str(&prior,"format")?,&prior["request"],&publication["request"],field_u64(&publication,"version")?).map_err(err)?;
+                let prior_ids: Vec<String> = match prior.get("editable_unit_ids") {
+                    Some(ids) => serde_json::from_value(ids.clone())?,
+                    None => prior_context.units().iter().map(|unit|unit.unit_id.clone()).collect(),
+                };
+                let prior_texts: Vec<String> = prior_ids.iter().map(|id|prior_context.units().iter().find(|unit|&unit.unit_id == id).map(|unit|unit.text.clone()).ok_or_else(||CoreError::invalid("published native anchor missing"))).collect::<Result<_>>()?;
+                if prior_texts != texts { return Err(CoreError::conflict("CB native projection text changed")); }
+                representation = "native_publication";
+            }
+            protected.push(json!({"cb_id":cb_id,"unit_ids":ids,"representation":representation}));
+        }
+        if seen_cbs.len() != selected.len() { return Err(CoreError::forbidden("every selected prior CB requires a trusted read-only native binding")); }
+        Ok(json!(protected))
+    }
+
+    pub(crate) async fn plan_native_i_projection(
+        &self,tx:&mut Transaction<'_,Sqlite>,auth:&OperationContext,source:&Value,current:&crate::transparent::NativeContext,
+        p:&Value,publication:&Value,previous:Option<&Value>,
+    )->Result<Value> {
+        if field_u64(p,"expected_version")?!=current.version() {return Err(CoreError::conflict("native I candidate version conflict"));}
+        let chain=auth.chain_id.as_deref().ok_or_else(||CoreError::forbidden("I projection requires its chain"))?;
+        let agent=load_agent(tx,chain,&auth.actor).await?;
+        check_dependencies(tx,&agent).await?;
+        self.check_board_access(tx,&agent).await?;
+        let snapshot=self.get_cut(tx,&agent).await?;
+        if p["cut_id"]!=snapshot["cut_id"] {return Err(CoreError::conflict("I projection cut is stale"));}
+        let registered=&source["adopted_i"];
+        if !registered.is_object() {return Err(CoreError::new("native_i_projection_unavailable","source has no registered independent host I leaf",501));}
+        let anchor=&registered["native_anchor"];
+        let baseline=current.request().map_err(err)?;
+        let base=previous.map(|record|record["request"].clone()).unwrap_or_else(||baseline.clone());
+        let restored=crate::transparent::NativeContext::restore(required_str(source,"format")?,&baseline,&base,current.version()).map_err(err)?;
+        if current.units().iter().zip(restored.units()).any(|(original,unit)|unit.anchor!=*anchor && original.text!=unit.text) {
+            return Err(CoreError::conflict("stored I projection changed non-I context"));
+        }
+        let old=restored.units().iter().find(|unit|unit.anchor==*anchor).ok_or_else(||CoreError::forbidden("registered I leaf no longer exists"))?;
+        let expected_hash=previous.map(|record|&record["adopted_i"]["section_sha256"]).unwrap_or(&registered["section_sha256"]);
+        if *expected_hash!=storage::sha256(old.text.as_bytes()) {return Err(CoreError::conflict("registered I section changed outside the host projection"));}
+        let section=format!("sic:instant-views\n{}",required_str(&snapshot,"instant_view_text")?);
+        let mut decoded=protocol::decode_host_owned(required_str(source,"format")?,&base).map_err(err)?;
+        decoded.units.iter_mut().find(|unit|unit.anchor==*anchor).ok_or_else(||CoreError::forbidden("I leaf missing"))?.text=section.clone();
+        let request=protocol::encode(&decoded).map_err(err)?;
+        let origin=source["host_message_origins"].as_array().into_iter().flatten().find(|origin|origin["native_anchor"]==*anchor).cloned().unwrap_or(Value::Null);
+        Ok(json!({"source_id":p["source_id"],"publication_id":publication["publication_id"],"candidate_version":current.version(),
+            "cut_id":snapshot["cut_id"],"view_digest":snapshot["instant_view_digest"],"request":request,"host_origin":origin,
+            "edits":[{"unit_id":old.unit_id,"native_anchor":anchor,"expected_text":old.text,"replacement":section}],
+            "adopted_i":{"cut_id":snapshot["cut_id"],"view_digest":snapshot["instant_view_digest"],"native_anchor":anchor,
+                "section_sha256":storage::sha256(section.as_bytes()),"board_id":snapshot["instant_scope"]["board_id"]},
+            "origin":"host-program-I-projection","cb_mutated":false,"candidate_version_mutated":false}))
+    }
+
+    pub(crate) async fn preview_native_candidate(
+        &self,tx:&mut Transaction<'_,Sqlite>,auth:&OperationContext,source:&Value,current:&crate::transparent::NativeContext,p:&Value,
+    )->Result<Value> {
+        if required_str(p,"expected_source_digest")?!=current.source_digest() || field_u64(p,"expected_version")?!=current.version() {
+            return Err(CoreError::conflict("native preview source or version conflict"));
+        }
+        let original=crate::transparent::NativeContext::new(required_str(source,"format")?,&source["request"]).map_err(err)?;
+        let editable:Vec<String>=serde_json::from_value(source["editable_unit_ids"].clone())?;
+        if let Some(chain)=auth.chain_id.as_deref() {
+            let agent=load_agent(tx,chain,&auth.actor).await?;
+            check_dependencies(tx,&agent).await?;
+            self.check_board_access(tx,&agent).await?;
+            let selected=self.selected_ids(tx,&agent,"worker").await?;
+            self.verify_native_cb_bindings(tx,&original,&json!({"protected_cb_bindings":source["protected_cb_bindings"]}),&editable,&selected).await?;
+        }
+        let projected=crate::native_material::project(&original,&editable,&p["ops"],&p["pvi"])?;
+        let edits:Vec<crate::transparent::TextEdit>=current.units().iter().filter(|unit|editable.contains(&unit.unit_id))
+            .filter_map(|unit|projected["texts"][&unit.unit_id].as_str().filter(|text|*text!=unit.text).map(|text|
+                crate::transparent::TextEdit{unit_id:unit.unit_id.clone(),expected_text:unit.text.clone(),replacement:text.into()})).collect();
+        let mut candidate=crate::transparent::NativeContext::restore(required_str(source,"format")?,&source["request"],&current.request().map_err(err)?,current.version()).map_err(err)?;
+        candidate.commit(current.source_digest(),current.version(),&edits).map_err(err)?;
+        let edits:Vec<Value>=edits.iter().map(|edit|json!({"unit_id":edit.unit_id,"expected_text":edit.expected_text,"replacement":edit.replacement})).collect();
+        Ok(json!({"preview_only":true,"source_id":p["source_id"],"source_digest":current.source_digest(),"version":current.version(),
+            "edits":edits,"request":candidate.request().map_err(err)?,"material":projected["material"],
+            "proposed_delivery":{"ops":p["ops"],"pvi":p["pvi"]},"native_leaf_projection":projected["movement"]}))
+    }
+
+    /// Commit a native candidate through the existing WB/edit/CB/cut lifecycle.
+    /// The initial projection supports stable text leaves; structural native
+    /// edits require an explicit protocol insertion/removal mapping.
+    pub(crate) async fn publish_native_candidate(
+        &self, tx: &mut Transaction<'_, Sqlite>, auth: &OperationContext,
+        source: &Value, candidate: &crate::transparent::NativeContext, p: &Value,
+    ) -> Result<Value> {
+        let chain = auth.chain_id.as_deref().ok_or_else(||CoreError::conflict(
+            "unbound native candidate cannot publish; begin a new candidate with a chain context"))?;
+        let sid = source["core_source_id"].as_str().ok_or_else(||CoreError::conflict(
+            "legacy unbound candidate cannot be attached implicitly; begin a new chain-bound candidate"))?;
+        if source["chain_id"].as_str() != Some(chain) {
+            return Err(CoreError::forbidden("native candidate belongs to another chain"));
+        }
+        if required_str(p,"expected_source_digest")? != candidate.source_digest()
+            || field_u64(p,"expected_version")? != candidate.version() {
+            return Err(CoreError::conflict("native source or version conflict"));
+        }
+        let mut agent = load_agent(tx,chain,&auth.actor).await?;
+        check_dependencies(tx,&agent).await?;
+        self.check_board_access(tx,&agent).await?;
+        if field_u64(p,"expected_cut")? != agent.cut_seq {
+            return Err(CoreError::conflict("stale publication cut"));
+        }
+        if agent.worker_claim.is_some() || agent.jobs.values().any(|job|job.status == "inflight" || !job.editor_claims.is_empty()) {
+            return Err(CoreError::conflict("finish active model calls before native publication"));
+        }
+        let original = crate::transparent::NativeContext::new(required_str(source,"format")?,&source["request"]).map_err(err)?;
+        for proof in crate::native_transactions::collection_proofs(source) {
+            crate::native_transactions::validate_collection_provenance(tx,auth,&original,source,proof).await?;
+        }
+        let editable: Vec<String> = serde_json::from_value(source.get("editable_unit_ids").cloned()
+            .ok_or_else(||CoreError::conflict("legacy unscoped native candidate cannot publish; begin a scoped candidate"))?)?;
+        let selected = self.selected_ids(tx,&agent,"worker").await?;
+        self.verify_native_cb_bindings(tx,&original,&json!({"protected_cb_bindings":source["protected_cb_bindings"]}),&editable,&selected).await?;
+        if original.units().iter().zip(candidate.units()).any(|(before,after)|
+            !editable.contains(&before.unit_id) && before.text != after.text) {
+            return Err(CoreError::forbidden("read-only native context or prior CB text changed"));
+        }
+        let ops = match p.get("ops") {
+            Some(ops) => ops.as_array().cloned().ok_or_else(||CoreError::invalid("ops must be an array"))?,
+            None => original.units().iter().zip(candidate.units()).filter_map(|(before,after)| {
+                (editable.contains(&before.unit_id) && before.text != after.text).then(||json!({"op":"REPLACE","target":before.unit_id,"content":after.text,
+                    "reason":"native anchored text transaction"}))
+            }).collect(),
+        };
+        let pvi = p.get("pvi").cloned().unwrap_or_else(||json!({}));
+        let projection = crate::native_material::project(&original,&editable,&json!(ops),&pvi)?;
+        if candidate.units().iter().filter(|unit|editable.contains(&unit.unit_id)).any(|unit|projection["texts"][&unit.unit_id].as_str() != Some(unit.text.as_str())) {
+            return Err(CoreError::conflict("SIC operations do not reproduce the adopted native candidate"));
+        }
+        self.form_first_order_wb(tx,&mut agent,&json!({"source_ids":[sid],"reason":"native-publication"})).await?;
+        let prepared = self.prepare_with_profiles(tx,&mut agent,&json!({"source_id":sid}),false,false).await?;
+        let job_id = required_str(&prepared,"job_id")?;
+        self.submit(tx,&mut agent,&json!({"job_id":job_id,"editor":"editor-1","ops":ops,"pvi":pvi})).await?;
+        let material = combined_material(tx,&agent,job(&agent,&json!({"job_id":job_id}))?).await?;
+        let mut replayed = false;
+        let published = self.publish_with_ipc(tx,&mut agent,&json!({"job_id":job_id,"expected_cut":p["expected_cut"],
+            "idempotency_key":required_str(p,"idempotency_key")?,"expected_candidate_revision":0}),&mut replayed).await?;
+        let cb = storage::get_object(tx,required_str(&published,"cb_id")?,Some("cb")).await?;
+        if cb["body"] != material["body"] {
+            return Err(CoreError::conflict("pending communication needs a native projection before publication"));
+        }
+        save_agent(tx,&agent).await?;
+        let mut result = published;
+        result["job_id"] = json!(job_id);
+        result["core_source_id"] = json!(sid);
+        result["native_source_id"] = p["source_id"].clone();
+        result["native_version"] = json!(candidate.version());
+        result["native_leaf_projection"] = projection["movement"].clone();
+        result["native_generated_append"] = projection["generated_append"].clone();
+        let mut adoptions=Vec::new();
+        for provenance in crate::native_transactions::collection_proofs(source) {
+            let ids=provenance["unit_ids"].as_array().ok_or_else(||CoreError::invalid("collection scope missing"))?;
+            let active:Vec<Value>=projection["movement"].as_array().into_iter().flatten().filter(|movement|
+                ids.contains(&movement["source_unit_id"]) && candidate.units().iter().any(|unit|
+                    Some(unit.unit_id.as_str())==movement["native_unit_id"].as_str() && !unit.text.is_empty())).cloned().collect();
+            adoptions.push(json!({"lifecycle_object_id":provenance["lifecycle_object_id"],"collection_receipt_id":provenance["collection_receipt_id"],
+                "collection_digest":provenance["collection_digest"],"eligible_current_p":!active.is_empty(),"active_native_projection":active}));
+        }
+        result["collection_adoption"]=if adoptions.len()==1 {adoptions[0].clone()}else{Value::Null};
+        result["collection_adoptions"]=json!(adoptions);
+        result["instant_views"] = json!(agent.level("main",1)?.instant);
+        result["instant_view_digest"] = json!(storage::digest(&result["instant_views"])?);
+        result["instant_views_status"] = json!("Core cut updated; host native activation is required before claiming model adoption");
+        result["next_working_material"] = if let Some(sid) = result["volatile_source_id"].as_str() {
+            let source = storage::get_object(tx,sid,Some("source")).await?;
+            json!({"source_id":sid,"units":source["units"],"requires_host_native_append":true})
+        } else { Value::Null };
+        Ok(result)
+    }
+
     async fn update_decision(
         &self,
         conn: &mut SqliteConnection,
@@ -2038,6 +2973,8 @@ impl Core {
         let allowed = [
             "prefix_layout",
             "schedule_policy",
+            "interleave_budget",
+            "editor_estimate_ms",
             "task_goal",
             "task_constraints",
             "editor_prompt",
@@ -2052,17 +2989,68 @@ impl Core {
                 501,
             ));
         }
-        if changes
-            .get("prefix_layout")
-            .is_some_and(|v| v.as_str() != Some("shared_i"))
-        {
-            return Err(CoreError::invalid("lean profile requires shared_i prefix"));
+        // Layout decision 2026-11-13: shared_i is the mainline. The separate
+        // layout is retained only as the legacy route in the Python core; this
+        // Rust core builds a single shared request path, so accepting
+        // "separate" silently would build a shared prefix while reporting
+        // otherwise. Rejecting it with 501 keeps the retained route honest.
+        if let Some(layout) = changes.get("prefix_layout") {
+            let layout = layout
+                .as_str()
+                .ok_or_else(|| CoreError::invalid("prefix_layout must be a string"))?;
+            if layout == "separate" {
+                return Err(CoreError::new(
+                    "not_implemented",
+                    "separate layout is retained as the legacy Python route; this core implements shared_i only",
+                    501,
+                ));
+            }
+            if layout != "shared_i" {
+                return Err(CoreError::invalid(
+                    "prefix_layout must be shared_i or separate",
+                ));
+            }
         }
-        if changes
-            .get("schedule_policy")
-            .is_some_and(|v| v.as_str() != Some("wait"))
-        {
-            return Err(CoreError::invalid("lean Worker must wait for Editor"));
+        // F30/F32/F33: §2.4's scheduling space has three advances, so the host
+        // may choose wait, a bounded overtaking advance, or adaptive. The old
+        // lean lock ("Worker must wait") stays available as the default, but
+        // it is no longer the only accepted value: refusing the others would
+        // make the interleave budget and its receipts unreachable.
+        if let Some(policy) = changes.get("schedule_policy") {
+            let policy = policy
+                .as_str()
+                .ok_or_else(|| CoreError::invalid("schedule_policy must be a string"))?;
+            if !matches!(policy, "wait" | "advance" | "adaptive") {
+                return Err(CoreError::invalid(
+                    "schedule_policy must be wait, advance, or adaptive",
+                ));
+            }
+            // An overtaking policy must be paid for. There is no free advance.
+            if policy != "wait" {
+                let budget = changes.get("interleave_budget").and_then(Value::as_u64);
+                let existing = agent.config.get("interleave_budget").and_then(Value::as_u64);
+                if budget.or(existing).is_none_or(|value| value == 0) {
+                    return Err(CoreError::invalid(
+                        "advance or adaptive schedule policy requires a positive interleave_budget",
+                    ));
+                }
+            }
+        }
+        if let Some(budget) = changes.get("interleave_budget") {
+            let budget = budget
+                .as_u64()
+                .filter(|value| (1..=64).contains(value))
+                .ok_or_else(|| CoreError::invalid("interleave_budget must be 1..64"))?;
+            agent.config["interleave_budget"] = json!(budget);
+        }
+        // F30: an estimate is host-declared, never core-invented. Zero means
+        // "no estimate", which the scheduler reports as null.
+        if let Some(value) = changes.get("editor_estimate_ms") {
+            let value = value
+                .as_u64()
+                .filter(|value| *value <= 3_600_000)
+                .ok_or_else(|| CoreError::invalid("editor_estimate_ms must be 0..3600000"))?;
+            agent.config["editor_estimate_ms"] = json!(value);
         }
         if changes.get("task_goal").is_some_and(|v| !v.is_string())
             || changes.get("editor_prompt").is_some_and(|v| !v.is_string())
@@ -2182,6 +3170,7 @@ impl Core {
         if job.base_cut != agent.cut_seq {
             return Err(CoreError::conflict("Editor background is stale"));
         }
+        if job.host_editor.is_object() && !host_editor::fresh(agent,&job) {return Err(CoreError::conflict("host Editor publication snapshot is stale"));}
         if let Some(revision) = p.get("expected_candidate_revision") {
             if revision.as_u64() != Some(job.candidate_revision) {
                 return Err(CoreError::conflict("candidate changed before publication"));
@@ -2231,10 +3220,11 @@ impl Core {
                         .push(json!({"op":"ADD","content":item.message.text,"origin":"persistent-communication",
                                     "message_id":item.message.message_id,"receipt_id":item.receive_receipt_id}));
                 }
-                Lifecycle::Volatile => material["volatile"]
-                    .as_array_mut()
-                    .ok_or_else(|| CoreError::invalid("volatile content missing"))?
-                    .push(json!(item.message.text)),
+                Lifecycle::Volatile => {
+                    let position=material["volatile"].as_array().ok_or_else(||CoreError::invalid("volatile content missing"))?.len();
+                    material["volatile_index"].as_array_mut().ok_or_else(||CoreError::invalid("volatile index missing"))?.push(json!({"position":position,"origin":"ipc-V","message_id":item.message.message_id,"receipt_id":item.receive_receipt_id,"source_unit_ids":[],"source_anchors":[],"text_ranges":if item.message.text.is_empty(){vec![]}else{vec![json!({"utf8_start":0,"utf8_end":item.message.text.len()})]}}));
+                    material["volatile"].as_array_mut().expect("validated volatile").push(json!(item.message.text));
+                },
             }
         }
         if job.context_id == "main" && job.level == 1 {
@@ -2254,12 +3244,19 @@ impl Core {
         let cb_id = storage::uid("cb");
         let cb = json!({"cb_id":cb_id,"chain_id":agent.chain_id,"context_id":job.context_id,"level":job.level,"sequence":sequence,
                       "source_id":job.source_id,"source_ids":current["source_ids"],"wb_id":job.wb_id,"members":wb["members"],
-                      "body":material["body"],"ops":material["ops"],"index":material["index"],"job_id":id,
+                      "body":material["body"],"ops":material["ops"],"index":material["index"],"volatile_index":material["volatile_index"],"job_id":id,
                       "original_response_id":job.response_id,"candidate_revision":job.candidate_revision,
                       "candidate_revision_id":job.candidate_revision_id,"editors":editor_records(&job),
                       "editor_source_snapshot_ids":material["editor_source_snapshot_ids"],
                       "program_kept_after_snapshot":material["program_kept_after_snapshot"],"communication":communication});
         storage::put_object(conn, "cb", &cb_id, &cb).await?;
+        let shared_before = agent.role_views.get("worker").cloned().filter(|view|
+            view.context_id == job.context_id
+                && agent.contexts.get(&job.context_id).is_some_and(|context| context.owner_editor.is_none()));
+        let previous_instant = match &shared_before {
+            Some(view) => Some(agent.level(&view.context_id, view.level)?.instant.clone()),
+            None => None,
+        };
         {
             let level = agent.level_mut(&job.context_id, job.level)?;
             level.cbs.push(cb_id.clone());
@@ -2275,6 +3272,28 @@ impl Core {
                     level.instant.insert(key.clone(), value.clone());
                 }
             }
+        }
+        // A published higher representation becomes the common active view in
+        // this same transaction/cut. Every new role request therefore sees one
+        // revision; already-dispatched plans remain immutable. Publication is
+        // already fenced against an in-flight Worker. Private Editor context
+        // selection remains private background, outside this shared view.
+        let mut shared_representation = Value::Null;
+        if let Some(previous) = shared_before {
+            let level = previous.level.max(job.level);
+            let view = View { context_id: job.context_id.clone(), level };
+            let mut instant = previous_instant.unwrap_or_default();
+            for (key, value) in material["instant"].as_object().ok_or_else(|| CoreError::invalid("invalid instantaneous state"))? {
+                if value.is_null() { instant.remove(key); }
+                else { instant.insert(key.clone(), value.clone()); }
+            }
+            agent.level_mut(&job.context_id, level)?.instant = instant;
+            agent.role_views.insert("worker".into(), view.clone());
+            agent.role_views.insert("editor".into(), view);
+            let selected = self.ids_for_view(conn, agent, &job.context_id, level).await?;
+            shared_representation = json!({"context_id":job.context_id,"level":level,
+                "previous_level":previous.level,"automatic_promotion":level>previous.level,
+                "roles":["worker","editor"],"selected_cb_ids":selected});
         }
         for context in agent.contexts.values_mut() {
             for level in context.levels.values_mut() {
@@ -2294,7 +3313,47 @@ impl Core {
                 .iter()
                 .map(|text| json!({"role":"user","content":text}))
                 .collect();
-            let value = decode_source("openai-chat", &json!({"messages":messages}))?;
+            let mut value = decode_source("openai-chat", &json!({"messages":messages}))?;
+            value["origin"] = json!({"kind":"volatile-continuation","cb_id":cb_id,"job_id":id});
+            value["volatile_derivations"]=higher_volatile::make_derivations(&value,&material["volatile_index"],&cb_id)?;
+            if let Some(units)=value["units"].as_array_mut(){for unit in units {unit["anchor"]["volatile_unit_id"]=unit["unit_id"].clone();}}
+            value["dependencies"] = current["source_ids"].clone();
+            value["cb_dependencies"] = json!([cb_id]);
+            if let Some(native_id)=sqlx::query_scalar::<_,String>("SELECT id FROM objects WHERE kind='native_source' AND json_extract(data,'$.core_source_id')=? LIMIT 1")
+                .bind(&job.source_id).fetch_optional(&mut *conn).await? {
+                let native=storage::get_object(conn,&native_id,Some("native_source")).await?;
+                let mut inherited=Vec::new();
+                for original_proof in crate::native_transactions::collection_proofs(&native) {
+                    let ids=original_proof["unit_ids"].as_array().ok_or_else(||CoreError::invalid("collection scope missing"))?;
+                    let mut vindex=0;
+                    let mut derived=Vec::new();
+                    let responses=job_responses(&job)?;
+                    for row in job.assignments.as_array().into_iter().flatten() {
+                        let response=&responses[required_str(row,"editor")?];
+                        for operation in response["ops"].as_array().into_iter().flatten() {
+                            if operation["lifecycle"]!="V" {continue;}
+                            let target=operation.get("target").or_else(||operation.get("anchor").and_then(|anchor|anchor.get("target")));
+                            if target.is_some_and(|target|ids.contains(target)) {
+                                derived.push(json!(format!("u{}",vindex+1)));
+                            }
+                            vindex+=1;
+                        }
+                        vindex+=response["pvi"]["V"].as_array().map_or(0,Vec::len);
+                    }
+                    if !derived.is_empty() {
+                        let mut proof=original_proof.clone();
+                        proof.as_object_mut().expect("object proof").remove("text_ranges");
+                        proof["unit_ids"]=json!(derived);
+                        proof["origin_native_source_id"]=json!(native_id);
+                        inherited.push(proof);
+                    }
+                }
+                if !inherited.is_empty() {
+                    value["collection_provenance"]=if inherited.len()==1 {inherited[0].clone()}else{Value::Null};
+                    value["collection_provenances"]=json!(inherited);
+                    value["native_source_dependencies"]=json!([native_id]);
+                }
+            }
             let sid = storage::uid("source");
             storage::put_object(conn, "source", &sid, &value).await?;
             agent.groups.insert(sid.clone(), vec![sid.clone()]);
@@ -2313,7 +3372,8 @@ impl Core {
         let cut = json!({"cut_id":cut_id,"chain_id":agent.chain_id,"sequence":next,"previous_cut":agent.current_cut,
                        "published_level":job.level,"published_context":job.context_id,"contexts":agent.contexts,
                        "role_views":agent.role_views,"groups":agent.groups,"protected":agent.protected,"config":agent.config,"decision":agent.decision,
-                       "input_epoch":agent.input_epoch,"control_epoch":agent.control_epoch,"board_id":agent.board_id});
+                       "input_epoch":agent.input_epoch,"control_epoch":agent.control_epoch,"board_id":agent.board_id,
+                       "shared_representation":shared_representation});
         let cut_digest = storage::digest(&cut)?;
         let mut fixed = cut;
         fixed["digest"] = json!(cut_digest);
@@ -2337,8 +3397,13 @@ impl Core {
         agent
             .events
             .push(json!({"type":"cut_published","cut_id":cut_id,"cb_id":cb_id,"time":now()}));
+        if shared_representation["automatic_promotion"] == true {
+            agent.events.push(json!({"type":"shared_representation_adopted","cut_id":cut_id,
+                "sequence":next,"representation":shared_representation,"time":now()}));
+        }
         let result = json!({"cut_id":cut_id,"cb_id":cb_id,"sequence":next,"digest":cut_digest,"volatile_source_id":volatile_id,
-                          "source_ids":current["source_ids"],"level":job.level,"context_id":job.context_id,"wb_id":job.wb_id});
+                          "source_ids":current["source_ids"],"level":job.level,"context_id":job.context_id,"wb_id":job.wb_id,
+                          "shared_representation":shared_representation});
         sqlx::query("INSERT INTO receipts(key,fingerprint,result) VALUES(?,?,?)")
             .bind(receipt_key)
             .bind(fingerprint)
@@ -2434,9 +3499,10 @@ impl Core {
                     .ok_or_else(|| CoreError::invalid("invalid CB id"))
             })
             .collect::<Result<_>>()?;
-        if members.is_empty() || members.iter().collect::<BTreeSet<_>>().len() != members.len() {
-            return Err(CoreError::invalid("unique ordered CB members required"));
-        }
+        let volatile_ids:Vec<String>=match p.get("volatile_source_ids") {Some(value)=>serde_json::from_value(value.clone())?,None=>Vec::new()};
+        if members.iter().collect::<BTreeSet<_>>().len()!=members.len() || (members.is_empty()&&volatile_ids.is_empty()) {return Err(CoreError::invalid("unique CB members or actual volatile sources required"));}
+        let legacy=self.validate_higher_volatile(conn,agent,ctx,number,&volatile_ids).await?;
+        if !members.is_empty() {
         let lower = agent.level(ctx, number - 1)?.cbs.clone();
         let start = lower
             .iter()
@@ -2476,6 +3542,7 @@ impl Core {
                 }
             }
         }
+        }
         let mut messages = Vec::new();
         let mut dependencies = Vec::new();
         for id in &members {
@@ -2496,6 +3563,7 @@ impl Core {
         }
         let mut source = decode_source("openai-chat", &json!({"messages":messages}))?;
         source["dependencies"] = json!(dependencies);
+        source["cb_dependencies"] = json!(members);
         source["members"] = json!(members);
         source["level"] = json!(number);
         if let Some(units) = source["units"].as_array_mut() {
@@ -2504,23 +3572,19 @@ impl Core {
                 unit["anchor"]["level"] = json!(number - 1);
             }
         }
-        let sid = storage::uid("source");
-        storage::put_object(conn, "source", &sid, &source).await?;
-        agent.groups.insert(sid.clone(), vec![sid.clone()]);
-        agent.level_mut(ctx, number)?.pending.push(sid.clone());
-        let wid = register_wb(
-            conn,
-            agent,
-            ctx,
-            number,
-            &sid,
-            members.clone(),
-            "ordered-lower-CB-interval",
-        )
-        .await?;
-        Ok(
-            json!({"chain_id":agent.chain_id,"context_id":ctx,"level":number,"source_id":sid,"wb_id":wid,"members":members}),
-        )
+        let appended=if members.is_empty(){None}else{
+            let sid=storage::uid("source");storage::put_object(conn,"source",&sid,&source).await?;agent.groups.insert(sid.clone(),vec![sid.clone()]);Some(sid)
+        };
+        let mut actual=volatile_ids.clone();if let Some(sid)=&appended{actual.push(sid.clone());}
+        let root=actual[0].clone();
+        agent.groups.insert(root.clone(),actual.clone());
+        agent.level_mut(ctx,number)?.pending.drain(0..volatile_ids.len());
+        agent.level_mut(ctx,number)?.pending.push(root.clone());
+        let wid=if legacy.is_empty(){register_wb(conn,agent,ctx,number,&root,members.clone(),"ordered-lower-CB-interval").await?}
+            else{create_wb(conn,agent,ctx,number,&root,members.clone(),"ordered-lower-CB-interval",legacy.first().map(String::as_str)).await?};
+        for old in &legacy{agent.level_mut(ctx,number)?.superseded_wbs.insert(old.clone(),wid.clone());}
+        Ok(json!({"chain_id":agent.chain_id,"context_id":ctx,"level":number,"source_id":root,"source_ids":actual,"wb_id":wid,"members":members,
+            "volatile_source_ids":volatile_ids,"superseded_wbs":legacy,"volatile_binding":"core-same-level-source-group-v1"}))
     }
 
     async fn timeline(
@@ -2567,7 +3631,7 @@ impl Core {
             };
             rows.push(json!({"id":id,"context_id":ctx,"level":number,"membership_index":index,"predecessor":if index>0{Some(&ids[index-1])}else{None},
                               "successor":ids.get(index+1),"wb_id":wb,"cb_id":cb,"source_id":value["source_id"],"members":value["members"],
-                              "superseded_by":if kind == "wb" {level.superseded_wbs.get(id)} else {None}}));
+                              "reason":value["reason"],"superseded_by":if kind == "wb" {level.superseded_wbs.get(id)} else {None}}));
         }
         let end = offset.saturating_add(rows.len());
         Ok(
@@ -2662,41 +3726,7 @@ impl Core {
         context_id: &str,
         level: u32,
     ) -> Result<Vec<String>> {
-        let context = agent
-            .contexts
-            .get(context_id)
-            .ok_or_else(|| CoreError::invalid("selected context missing"))?;
-        if !context.shared_contexts.is_empty() {
-            return Err(CoreError::new(
-                "unsupported",
-                "shared internal-context projection is not implemented",
-                501,
-            ));
-        }
-        let mut ids = context
-            .levels
-            .get(&1)
-            .ok_or_else(|| CoreError::invalid("base level missing"))?
-            .cbs
-            .clone();
-        for number in 2..=level {
-            if let Some(level) = context.levels.get(&number) {
-                for cid in &level.cbs {
-                    let cb = storage::get_object(conn, cid, Some("cb")).await?;
-                    let members: Vec<String> = serde_json::from_value(cb["members"].clone())?;
-                    if members.is_empty() {
-                        ids.push(cid.clone());
-                        continue;
-                    }
-                    if let Some(start) = ids.iter().position(|id| id == &members[0]) {
-                        if ids.get(start..start + members.len()) == Some(members.as_slice()) {
-                            ids.splice(start..start + members.len(), [cid.clone()]);
-                        }
-                    }
-                }
-            }
-        }
-        Ok(ids)
+        ids_for_view_snapshot(conn,agent,context_id,level).await
     }
 
     async fn select(
@@ -2758,9 +3788,18 @@ impl Core {
             }
             validated.push(role.to_owned());
         }
+        // Rust's shared_i route has one public prefix. Selecting just one
+        // public role cannot silently split subsequent Worker/Editor requests.
+        if owner.is_none() && validated.iter().any(|role| role == "worker" || role == "editor") {
+            for role in ["worker", "editor"] {
+                if !validated.iter().any(|existing| existing == role) { validated.push(role.into()); }
+            }
+        }
         if agent.level(ctx, level)?.cbs.is_empty() {
             return Err(CoreError::invalid("selected level has no CB"));
         }
+        let changed = validated.iter().any(|role| agent.role_views.get(role)
+            .is_none_or(|view| view.context_id != ctx || view.level != level));
         for role in validated {
             agent.role_views.insert(
                 role,
@@ -2771,7 +3810,7 @@ impl Core {
             );
         }
         let previous = agent.current_cut.clone();
-        if previous.is_some() {
+        if previous.is_some() && changed {
             let id = storage::uid("cut");
             let sequence = agent.cut_seq + 1;
             let mut cut = json!({"cut_id":id,"chain_id":agent.chain_id,"sequence":sequence,"previous_cut":previous,
@@ -2790,7 +3829,7 @@ impl Core {
             );
         }
         Ok(
-            json!({"role_views":agent.role_views,"selected_cb_ids":selected,"cut_id":agent.current_cut,"sequence":agent.cut_seq,"archive_mutated":false}),
+            json!({"role_views":agent.role_views,"selected_cb_ids":selected,"cut_id":agent.current_cut,"sequence":agent.cut_seq,"archive_mutated":false,"changed":changed}),
         )
     }
 
@@ -2814,7 +3853,13 @@ impl Core {
         };
         let ids = self.selected_ids(conn, agent, "worker").await?;
         let mut cbs = Vec::new();
+        let mut origin_bindings = Vec::new();
+        let mut opaque_context_bindings = Vec::new();
         for id in ids {
+            origin_bindings.push(host_origins::bindings(conn, agent, &id).await?);
+            let cb=storage::get_object(conn,&id,Some("cb")).await?;
+            let source_ids:Vec<String>=serde_json::from_value(cb["source_ids"].clone())?;
+            opaque_context_bindings.push(json!({"cb_id":id,"blocks":native_opaque::from_sources(conn,&source_ids).await?,"representation":"immutable-native","editable_by_pvi":false,"scope":"historical-native-reference"}));
             cbs.push(storage::get_object(conn, &id, Some("cb")).await?);
         }
         let view = agent
@@ -2822,9 +3867,14 @@ impl Core {
             .get("worker")
             .ok_or_else(|| CoreError::invalid("Worker view missing"))?;
         let level = agent.level(&view.context_id, view.level)?;
+        let instant_views=json!(level.instant);
+        let instant_view_digest=storage::digest(&instant_views)?;
+        let instant_view_text=storage::json_text(&json!({"cut_id":agent.current_cut,"views":instant_views}))?;
         Ok(
             json!({"cut":cut,"cut_id":agent.current_cut,"sequence":agent.cut_seq,
-                  "view":{"protected":agent.protected,"cbs":cbs,"instant":level.instant},"pending":level.pending}),
+                  "instant_views":instant_views,"instant_view_digest":instant_view_digest,"instant_view_text":instant_view_text,
+                  "instant_scope":{"context_id":view.context_id,"level":view.level,"board_id":agent.board_id},
+                  "view":{"protected":agent.protected,"cbs":cbs,"instant":level.instant,"cb_origin_bindings":origin_bindings,"opaque_context_bindings":opaque_context_bindings},"pending":level.pending}),
         )
     }
 
@@ -4624,9 +5674,25 @@ impl Core {
                              .into_iter()
                              .map(|(name,(count,seconds))| (name,json!({"completed":count,"execution_seconds":seconds})))
                              .collect::<serde_json::Map<_,_>>()},
+                // The turn boundary is owned by the host bridge. Stats project the
+                // chain-scoped count when the bridge table exists; this entry
+                // reports the adapter surface itself as absent, not the count.
                 "adapter":{"class":"not_available",
-                           "reason":"bridge turns are not chain-scoped"}
+                           "reason":"the host bridge adapter is not installed on this chain"}
             },
+            "stats":crate::stats::project(crate::stats::Observation{
+                attempts:&attempts,
+                intervals:&intervals,
+                // Capacity comes from the host-installed model profile, not from
+                // a request body; absent model configuration stays null.
+                context_window:self.model_config.as_ref()
+                    .and_then(|config| model_policy::resolve_worker_profile(config).ok())
+                    .and_then(|profile| profile["context_window"].as_u64()),
+                // A user turn boundary belongs to the host bridge. It counts only
+                // turns the bridge actually claimed for this chain, so a session
+                // that never ran through the bridge reports null rather than 0.
+                turns:bridge_turn_count(conn, &agent.chain_id).await?,
+            }),
             "measurements":measurements}),
         )
     }
@@ -4894,6 +5960,128 @@ impl Core {
                     &json!({"socket_id":required_str(args,"target")?,
                     "signal_id":unique,"action":required_str(args,"signal")?}),
                     &mut ignored,
+                )
+                .await
+            }
+            // Signal control plane as model-facing tools. The model supplies
+            // only the action, mode and already-registered identities; every
+            // authority check stays inside dispatch_signal.
+            "sic_signal_status" => {
+                if !fields.is_empty() {
+                    return Err(CoreError::invalid("Signal status accepts no arguments"));
+                }
+                self.dispatch_signal(
+                    tx,
+                    agent,
+                    context,
+                    "signal.status",
+                    &json!({}),
+                )
+                .await
+            }
+            "sic_signal_broadcast" => {
+                if fields.keys().any(|key| key != "log_limit") {
+                    return Err(CoreError::invalid("unknown Signal broadcast argument"));
+                }
+                let limit = args.get("log_limit").cloned().unwrap_or(json!(16));
+                self.dispatch_signal(
+                    tx,
+                    agent,
+                    context,
+                    "signal.broadcast",
+                    &json!({"log_limit":limit}),
+                )
+                .await
+            }
+            "sic_signal_pause" => {
+                if fields
+                    .keys()
+                    .any(|key| !["target", "mode", "wake_reason"].contains(&key.as_str()))
+                {
+                    return Err(CoreError::invalid("unknown Signal pause argument"));
+                }
+                let target = required_str(args, "target")?;
+                let mode = args
+                    .get("mode")
+                    .and_then(Value::as_str)
+                    .unwrap_or("now")
+                    .to_owned();
+                self.dispatch_signal(
+                    tx,
+                    agent,
+                    context,
+                    "signal.pause",
+                    &json!({"target_route_id":target,"mode":mode,"wake_reason":args["wake_reason"]}),
+                )
+                .await
+            }
+            "sic_signal_sleep" => {
+                if fields
+                    .keys()
+                    .any(|key| !["timeout_s", "reason"].contains(&key.as_str()))
+                {
+                    return Err(CoreError::invalid("unknown Signal sleep argument"));
+                }
+                self.dispatch_signal(
+                    tx,
+                    agent,
+                    context,
+                    "signal.sleep",
+                    &json!({"timeout_s":args["timeout_s"],"reason":args["reason"]}),
+                )
+                .await
+            }
+            "sic_signal_drain" => {
+                if fields
+                    .keys()
+                    .any(|key| !["target", "limit"].contains(&key.as_str()))
+                {
+                    return Err(CoreError::invalid("unknown Signal drain argument"));
+                }
+                let target = required_str(args, "target")?;
+                self.dispatch_signal(
+                    tx,
+                    agent,
+                    context,
+                    "signal.drain",
+                    &json!({"target_route_id":target,"limit":args["limit"]}),
+                )
+                .await
+            }
+            "sic_signal_register" => {
+                if fields
+                    .keys()
+                    .any(|key| !["source_id", "kind", "owner"].contains(&key.as_str()))
+                {
+                    return Err(CoreError::invalid("unknown Signal source registration"));
+                }
+                let source = required_str(args, "source_id")?;
+                let kind = required_str(args, "kind")?;
+                self.dispatch_signal(
+                    tx,
+                    agent,
+                    context,
+                    "signal.source.register",
+                    &json!({"source_id":source,"kind":kind,"owner":args["owner"]}),
+                )
+                .await
+            }
+            "sic_signal_arrive" => {
+                if fields
+                    .keys()
+                    .any(|key| !["source_id", "target", "payload"].contains(&key.as_str()))
+                {
+                    return Err(CoreError::invalid("unknown Signal arrival"));
+                }
+                let source = required_str(args, "source_id")?;
+                let target = required_str(args, "target")?;
+                self.dispatch_signal(
+                    tx,
+                    agent,
+                    context,
+                    "signal.arrive",
+                    &json!({"source_id":source,"target_route_id":target,
+                        "payload":args.get("payload").cloned().unwrap_or(Value::Null)}),
                 )
                 .await
             }
@@ -6042,6 +7230,15 @@ impl Core {
         let chain = &agent.chain_id;
         let actor = &context.actor;
         ToolStore::initialize_in_transaction(tx).await?;
+        if matches!(operation,"tool.claim"|"tool.observe"|"tool.complete") {
+            if let Some(task_id)=p["task_id"].as_str() {
+                let encoded:Option<String>=sqlx::query_scalar("SELECT state FROM host_tool_tasks WHERE id=?").bind(task_id).fetch_optional(&mut **tx).await?;
+                if let Some(encoded)=encoded {
+                    let task:Value=serde_json::from_str(&encoded)?;
+                    if task["domain"]=="harness_launch" {return Err(CoreError::forbidden("Harness launch tasks require their scoped lifecycle protocol"));}
+                }
+            }
+        }
         match operation {
             "tools.configure" | "tools.sync" => {
                 let acl: ToolAcl = serde_json::from_value(
@@ -6146,7 +7343,7 @@ impl Core {
                 for row in rows {
                     let encoded: String = row.try_get("state")?;
                     let task: Value = serde_json::from_str(&encoded)?;
-                    if task["chain_id"] == *chain && task["actor"] == *actor {
+                    if task["chain_id"] == *chain && task["actor"] == *actor && task["domain"] != "harness_launch" {
                         if revoked {
                             tasks.push(json!({"task_id":task["task_id"],"status":task["status"],"revoked":true}));
                         } else {
@@ -6178,6 +7375,7 @@ impl Core {
                     .ok_or_else(|| CoreError::new("not_found", "host tool task not found", 404))?;
                 let encoded: String = row.try_get("state")?;
                 let mut state: Value = serde_json::from_str(&encoded)?;
+                if state["domain"]=="harness_launch" {return Err(CoreError::forbidden("Harness launch tasks use their own scoped lifecycle claims"));}
                 if state["chain_id"] != *chain || state["actor"] != *actor {
                     return Err(CoreError::forbidden("host tool task is outside this chain"));
                 }
@@ -6739,6 +7937,70 @@ impl Core {
     /// Per-WB interleave budget: the host sets a finite budget and the
     /// scheduler consumes idempotent permits. A replayed permit returns the
     /// prior receipt without charging again.
+    /// F30: record a *declared* wait. A declaration is a host prediction, so it
+    /// is stored next to the real tool lifecycle instead of merged into it:
+    /// declaring a sleep never makes a tool look started, and completing a
+    /// declaration never invents a tool result.
+    fn declare_wait(&self, agent: &mut Agent, p: &Value) -> Result<Value> {
+        obj(p)?;
+        let action = required_str(p, "action")?;
+        match action {
+            "declare" => {
+                let wait_id = required_str(p, "wait_id")?;
+                if wait_id.len() > 128 || wait_id.chars().any(char::is_control) {
+                    return Err(CoreError::invalid("wait_id must be bounded nonempty text"));
+                }
+                let seconds = p
+                    .get("seconds")
+                    .and_then(Value::as_u64)
+                    .filter(|value| *value <= 86_400)
+                    .ok_or_else(|| CoreError::invalid("wait seconds must be 0..86400"))?;
+                if agent.declared_waits.contains_key(wait_id) {
+                    return Err(CoreError::conflict("wait declaration already exists"));
+                }
+                if agent.declared_waits.len() >= 64 {
+                    return Err(CoreError::conflict("wait declaration limit reached"));
+                }
+                let record = json!({"wait_id":wait_id,"seconds":seconds,
+                    "context_id":p.get("context_id").and_then(Value::as_str).unwrap_or("main"),
+                    "level":p.get("level").and_then(Value::as_u64).unwrap_or(1),
+                    "status":"declared","declared_at":now(),
+                    // A declaration predicts work; it never asserts that a tool
+                    // has started or that the Editor has finished.
+                    "predicts_tool_start":false});
+                agent
+                    .declared_waits
+                    .insert(wait_id.to_owned(), record.clone());
+                agent.events.push(json!({"type":"wait_declared","wait_id":wait_id,
+                    "seconds":seconds,"time":now()}));
+                Ok(json!({"wait":record}))
+            }
+            "complete" | "cancel" => {
+                let wait_id = required_str(p, "wait_id")?;
+                let entry = agent
+                    .declared_waits
+                    .get_mut(wait_id)
+                    .ok_or_else(|| CoreError::new("not_found", "wait declaration not found", 404))?;
+                if entry["status"].as_str() != Some("declared") {
+                    return Err(CoreError::conflict("wait declaration is already closed"));
+                }
+                entry["status"] = json!(if action == "complete" {
+                    "completed"
+                } else {
+                    "cancelled"
+                });
+                entry["closed_at"] = json!(now());
+                let record = entry.clone();
+                agent.events.push(json!({"type": if action == "complete" {"wait_completed"} else {"wait_cancelled"},
+                    "wait_id":wait_id,"time":now()}));
+                Ok(json!({"wait":record}))
+            }
+            other => Err(CoreError::invalid(format!(
+                "unknown wait action: {other}"
+            ))),
+        }
+    }
+
     fn interleave_budget(&self, agent: &mut Agent, p: &Value) -> Result<Value> {
         let fields = obj(p)?;
         let wb = required_str(p, "wb_source_id")?;
@@ -7243,7 +8505,8 @@ impl Core {
             .role_views
             .get("worker")
             .ok_or_else(|| CoreError::invalid("Worker view missing"))?;
-        let eligible = job.context_id == worker.context_id && job.level <= worker.level;
+        let eligible = job.context_id == worker.context_id
+            && agent.contexts.get(&job.context_id).is_some_and(|context| context.owner_editor.is_none());
         let board_i = if let Some(id) = &agent.board_id {
             let principal = BoardActor::from_authenticated_host(&agent.chain_id)?;
             Some(BoardService::read_latest_i_in_transaction(tx, &principal, id).await?)
@@ -7300,7 +8563,17 @@ impl Core {
     async fn run_worker(&self, context: &OperationContext, p: &Value) -> Result<Value> {
         let fields = obj(p)?;
         if fields.keys().any(|key| key != "retry_after_attempt") {
-            return Err(CoreError::invalid("unknown Worker run argument"));
+            // A Worker chooses its own material from the view the host already
+            // set. Saying only "unknown argument" reads like a field name was
+            // misspelled, so callers keep guessing at `source_id`, `context_id`,
+            // `job_id` and similar. Name the rule instead, and name what is
+            // actually accepted.
+            let offered: Vec<&str> = fields.keys().map(String::as_str).collect();
+            return Err(CoreError::invalid(format!(
+                "worker.run accepts no payload: the Worker reads its own view. \
+                 Only retry_after_attempt is accepted, and only to resume a persisted \
+                 attempt. Received: {offered:?}"
+            )));
         }
         let retry_after = match p.get("retry_after_attempt") {
             None => None,
@@ -7385,7 +8658,10 @@ impl Core {
                 .clone()
                 .unwrap_or_else(|| format!("genesis:{chain_id}"));
             let (provider_id, cache_namespace) = prefix_provider_scope(&profile, "worker")?;
-            let plan = prefix::PrefixPlan::freeze_with_instructions(
+            let native_tools = ToolStore::native_schemas_in_transaction(
+                &mut tx, chain_id, &context.actor,
+            ).await?;
+            let plan = prefix::PrefixPlan::freeze_with_native_tools(
                 prefix::PrefixPlanSpec {
                     model: required_str(&profile, "model")?.into(),
                     provider_id,
@@ -7401,6 +8677,7 @@ impl Core {
                     tool_version: prefix::COMMON_TOOL_VERSION.into(),
                 },
                 agent.protected.clone(),
+                native_tools,
             )
             .map_err(err)?;
             let prefix_scope_digest = plan.digest().to_owned();
@@ -7423,20 +8700,33 @@ impl Core {
             } else {
                 vec![]
             };
-            let catalog = if tool_configured {
-                ToolStore::search_descriptions_in_transaction(&mut tx, chain_id, &context.actor, "")
-                    .await?
+            let discoverable_tools = if tool_configured {
+                let programs =
+                    ToolStore::program_directory_in_transaction(&mut tx, chain_id, &context.actor)
+                        .await?;
+                let total_tools: usize = programs.iter().map(|entry| entry.tools.len()).sum();
+                let programs_payload = programs
+                    .iter()
+                    .map(|entry| {
+                        json!({
+                            "program": if entry.program.is_empty() { Value::Null } else { json!(entry.program) },
+                            "overview": entry.overview,
+                            "expanded": entry.expanded,
+                            "tools": entry.tools.iter().map(|tool| json!({
+                                "name": tool.name,
+                                "expanded": tool.expanded
+                            })).collect::<Vec<_>>()
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                json!({
+                    "programs": programs_payload,
+                    "total_programs": programs.iter().filter(|entry| !entry.program.is_empty()).count(),
+                    "total_tools": total_tools
+                })
             } else {
-                vec![]
+                json!({"programs": [], "total_programs": 0, "total_tools": 0})
             };
-            let discoverable_tools = json!({
-                "tools":catalog.iter().take(20).map(|tool| json!({
-                    "name":tool.name,
-                    "expanded":tool.expanded
-                })).collect::<Vec<_>>(),
-                "total":catalog.len(),
-                "has_more":catalog.len() > 20
-            });
             let visible = tools
                 .iter()
                 .filter_map(|tool| tool["function"]["name"].as_str().map(str::to_owned))
@@ -7449,6 +8739,13 @@ impl Core {
                 "sic_message_read",
                 "sic_signal_send",
                 "sic_signal_wait",
+                "sic_signal_status",
+                "sic_signal_broadcast",
+                "sic_signal_pause",
+                "sic_signal_sleep",
+                "sic_signal_drain",
+                "sic_signal_register",
+                "sic_signal_arrive",
                 "sic_decision_read",
                 "sic_decision_write",
                 "sic_board_read",
@@ -7468,15 +8765,11 @@ impl Core {
             .collect();
             if tool_configured {
                 activated.extend(
-                    [
-                        "sic_tool_search",
-                        "sic_tool_expand",
-                        "sic_tool_reclaim",
-                        "sic_tool_call",
-                    ]
-                    .iter()
-                    .map(|name| name.to_string()),
+                    ["sic_tool_update", "sic_tool_call"]
+                        .iter()
+                        .map(|name| name.to_string()),
                 );
+                activated.extend(directory.iter().map(|tool| tool.name.clone()));
             }
             let auth = prefix::HostAuthorization::from_host(prefix::HostAuthorizationSpec {
                 plan_digest: plan.digest().into(),
@@ -7496,12 +8789,18 @@ impl Core {
             .map_err(err)?;
             let mut views = json!({"current":agent.level(&view.context_id,view.level)?.instant,"decision_tree":agent.decision,
                 "task_goal":agent.config["task_goal"],"task_constraints":agent.config["task_constraints"],
-                "dynamic_tool_directory":directory,"discoverable_tools":discoverable_tools,
-                "availability":if tool_configured {"Use activated Socket, Signal, Message, decision and dynamic tools only under host ACL. Search tool descriptions with sic_tool_search and expand schemas individually."}else{"Use activated Socket, Signal, Message and decision tools only under host ACL. No external tool catalog is configured."}});
+                "dynamic_tool_directory":directory,"tool_directory":discoverable_tools,
+                "availability":if tool_configured {"Use activated Socket, Signal, Message, decision and dynamic tools only under host ACL. The tool_directory lists host-declared programs, their overviews and their tools. Select what you need with sic_tool_update; optionally fold what you are done with. If the window cannot hold your selection, the host folds least-recently-used tools and names them in the result."}else{"Use activated Socket, Signal, Message and decision tools only under host ACL. No external tool catalog is configured."}});
             if let Some(observations) =
                 late_host_tool_observations(&mut tx, chain_id, &context.actor).await?
             {
                 views["late_host_tool_observations"] = observations;
+            }
+            // Signal management state rides the I region, refreshed at every CB
+            // overwrite: current lifecycle, child Agent states and the
+            // timestamped management log.
+            if let Some(broadcast) = self.signal_broadcast_i(&mut tx, chain_id, 16).await? {
+                views["signal"] = broadcast;
             }
             // Uncommitted WB is part of the Worker context. In particular V
             // messages must be visible before their next compression; merely
@@ -7816,7 +9115,13 @@ impl Core {
             Ok(()) => self.check_board_access(&mut tx, &agent).await.err(),
         };
         let stale = agent.cut_seq != base_seq;
-        let interrupted = agent.run_state != "running" || agent.control_epoch != control_epoch;
+        // A pending Pause/Stop is an *after output* Signal: the completion that
+        // is arriving right now must still be adopted, and only the next input
+        // is gated once settle_signal_after_output runs below. A settled
+        // paused/stopped state, or any other epoch bump, does interrupt this
+        // attempt.
+        let gating = matches!(agent.run_state.as_str(), "paused" | "stopped");
+        let interrupted = gating || agent.control_epoch != control_epoch;
         let input_changed = agent.input_epoch != input_epoch;
         let aid = storage::uid("worker_attempt");
         agent.worker_claim = None;
@@ -7868,16 +9173,14 @@ impl Core {
                         let name = required_str(&call["function"], "name")?;
                         let args: Value =
                             serde_json::from_str(required_str(&call["function"], "arguments")?)?;
-                        let dynamic = [
-                            "sic_tool_search",
-                            "sic_tool_expand",
-                            "sic_tool_reclaim",
-                            "sic_tool_call",
-                        ]
-                        .contains(&name);
-                        let immediate = if agent.run_state != "running"
-                            || agent.control_epoch != control_epoch
-                        {
+                        let builtin = prefix::common_tool_registry().iter().any(|tool|
+                            tool["function"]["name"].as_str() == Some(name));
+                        let dynamic = ["sic_tool_update", "sic_tool_call"].contains(&name) || !builtin;
+                        // A pending Pause/Stop still permits the tool calls of
+                        // the completion that is already in flight; only a
+                        // settled state or an epoch bump stops dispatch.
+                        let settled = matches!(agent.run_state.as_str(), "paused" | "stopped");
+                        let immediate = if settled || agent.control_epoch != control_epoch {
                             Some(
                                 json!({"ok":false,"code":"agent_interrupted","message":"Remaining tool calls were not dispatched after Agent state changed."}),
                             )
@@ -7926,21 +9229,9 @@ impl Core {
                                 Err(CoreError::forbidden("tool is not activated by the host"))
                             };
                             match outcome {
-                                Ok(ToolDispatch::Search {
-                                    tools,
-                                    offset,
-                                    total,
-                                    next_offset,
-                                }) => Some(json!({"ok":true,"tools":tools,"offset":offset,
-                                        "total":total,"next_offset":next_offset})),
-                                Ok(ToolDispatch::Expanded { expansion }) => {
-                                    if expansion.newly_expanded {
-                                        newly_expanded.push(expansion.descriptor.name.clone());
-                                    }
-                                    Some(json!({"ok":true,"expansion":expansion}))
-                                }
-                                Ok(ToolDispatch::Reclaimed { reclaimed }) => {
-                                    Some(json!({"ok":true,"reclaimed":reclaimed}))
+                                Ok(ToolDispatch::Updated { update }) => {
+                                    newly_expanded.extend(update.added.iter().cloned());
+                                    Some(json!({"ok":true,"update":update}))
                                 }
                                 Ok(ToolDispatch::HostExecutionRequired {
                                     lease,
@@ -8014,6 +9305,10 @@ impl Core {
             "dependencies_revoked":dependency_error.is_some(),"cut_seq":agent.cut_seq,
             "result_input_epoch":agent.input_epoch,"result_control_epoch":agent.control_epoch,
             "finished":now()})).await?;
+        // A pending Pause/Stop settles at this model output boundary: the
+        // completion that already arrived is kept, and only the next input is
+        // gated. This is the only Signal write in the Worker path.
+        self.settle_signal_after_output(&mut tx, &mut agent).await?;
         save_agent(&mut tx, &agent).await?;
         tx.commit().await?;
         // Model-side Signal sends and other built-in tool actions commit here,
@@ -8133,6 +9428,7 @@ impl Core {
                 .get(&id)
                 .cloned()
                 .ok_or_else(|| CoreError::invalid("job not found"))?;
+            if job.host_editor.is_object() {return Err(CoreError::forbidden("host Editor jobs use the original Harness route, not Core Provider execution"));}
             if job.status != "open" || job.base_cut != agent.cut_seq {
                 return Err(CoreError::conflict(
                     "Editor job is not open at its frozen cut",
@@ -8213,7 +9509,10 @@ impl Core {
                 .clone()
                 .unwrap_or_else(|| format!("genesis:{chain_id}"));
             let (provider_id, cache_namespace) = prefix_provider_scope(&profile, "editor")?;
-            let plan = prefix::PrefixPlan::freeze_with_instructions(
+            let native_tools = ToolStore::native_schemas_in_transaction(
+                &mut tx, chain_id, &context.actor,
+            ).await?;
+            let plan = prefix::PrefixPlan::freeze_with_native_tools(
                 prefix::PrefixPlanSpec {
                     model: required_str(&profile, "model")?.to_owned(),
                     provider_id,
@@ -8229,6 +9528,7 @@ impl Core {
                     tool_version: prefix::COMMON_TOOL_VERSION.into(),
                 },
                 agent.protected.clone(),
+                native_tools,
             )
             .map_err(err)?;
             let prefix_scope_digest = plan.digest().to_owned();
@@ -8293,7 +9593,7 @@ impl Core {
                 }),
             })
             .map_err(err)?;
-            let mut i_views = json!({"current":agent.level(&job.context_id,job.level)?.instant,"decision_tree":agent.decision,
+            let mut i_views = json!({"current":agent.current_instant(&job.context_id,job.level)?,"decision_tree":agent.decision,
                 "task_goal":job.frozen_editor_config["task_goal"],"task_constraints":job.frozen_editor_config["task_constraints"],
                 "editor_instruction":job.frozen_editor_config["editor_prompt"],
                 "edit_contract":"Return exactly one sic_edit_blocks call with ops array and pvi object. Unmentioned units default to KEEP. Operations are KEEP, DELETE, FLAG, REORDER, COMPRESS, REPLACE, ADD; use only listed unit IDs. REPLACE/COMPRESS require target and content, ADD requires content. P persists in CB, V becomes later WB, I is a replaceable named view. Preserve facts and tool outcomes."});
@@ -8308,6 +9608,10 @@ impl Core {
                 late_host_tool_observations(&mut tx, chain_id, &context.actor).await?
             {
                 i_views["late_host_tool_observations"] = observations;
+            }
+            // The Editor sees the same Signal management state in its trusted I.
+            if let Some(broadcast) = self.signal_broadcast_i(&mut tx, chain_id, 16).await? {
+                i_views["signal"] = broadcast;
             }
             // F71: an Editor-selected private representation is read-only
             // background in the trusted I only. It never enters the shared
@@ -8717,5 +10021,44 @@ impl Core {
             "Editor did not complete",
             502,
         ))
+    }
+}
+
+
+fn signal_error(message: String) -> CoreError {
+    CoreError::invalid(message)
+}
+
+fn string_list(value: &Value, key: &str) -> Result<Vec<String>> {
+    match value.get(key) {
+        None => Ok(Vec::new()),
+        Some(Value::Array(rows)) => {
+            let mut out = Vec::with_capacity(rows.len());
+            for row in rows {
+                let text = row
+                    .as_str()
+                    .filter(|text| !text.is_empty())
+                    .ok_or_else(|| CoreError::invalid(format!("{key} entries must be nonempty strings")))?;
+                out.push(text.to_owned());
+            }
+            Ok(out)
+        }
+        Some(Value::String(text)) if !text.is_empty() => Ok(vec![text.clone()]),
+        Some(_) => Err(CoreError::invalid(format!("{key} must be a list of strings"))),
+    }
+}
+
+impl Agent {
+    /// Whether Signal currently admits new model input on this route.
+    ///
+    /// The existing `run_state != "running"` guards already refuse a settled
+    /// `paused` or `stopped` route. This helper exists for host-side callers
+    /// that need the same distinction without re-deriving it from strings.
+    #[allow(dead_code)] // host-side admission check; Core guards use run_state directly
+    pub fn signal_accepts_input(&self) -> bool {
+        matches!(
+            self.run_state.as_str(),
+            "running" | "pause_pending" | "stop_pending"
+        )
     }
 }

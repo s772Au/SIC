@@ -40,6 +40,7 @@ fn descriptor(name: impl Into<String>) -> ToolDescriptor {
         description: format!("Persistent test description for {name}"),
         schema: json!({"type":"object","properties":{"value":{"type":"string"}}}),
         name,
+        program: None,
     }
 }
 

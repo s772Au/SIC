@@ -211,3 +211,103 @@ async fn per_wb_budget_permits_one_early_block_and_then_waits() {
     );
     assert_eq!(exhausted["wait"]["code"], "interleave_budget_exhausted");
 }
+
+
+#[tokio::test]
+async fn a_permit_spent_on_one_wb_does_not_authorize_another() {
+    // F34's negative case is explicit: a global counter must not stand in for
+    // a per-WB ledger. Two WBs each need their own budget, and spending one
+    // permit must leave the other untouched rather than moving a chain total.
+    let store = Store::memory().await.unwrap();
+    let core = Core::new(store.clone());
+    let chain = call(&core, &context("owner", None), "chain.create", json!({})).await["chain_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let ctx = context("owner", Some(&chain));
+
+    let first_root = {
+        ingest(&core, &ctx, "first wb material").await;
+        pending_root(&core, &ctx).await
+    };
+    call(
+        &core,
+        &ctx,
+        "runtime.budget",
+        json!({"wb_source_id":first_root,"budget":1}),
+    )
+    .await;
+
+    let second_root = {
+        ingest(&core, &ctx, "second wb material").await;
+        // The first WB is still pending, so pending_root answers level 1's
+        // head. The new source is the tail; take it from the pending list.
+        let pending = call(&core, &ctx, "chain.get", json!({})).await["contexts"]["main"]["levels"]
+            ["1"]["pending"]
+            .as_array()
+            .unwrap()
+            .clone();
+        pending.last().unwrap().as_str().unwrap().to_owned()
+    };
+
+    // Spend the first WB's only permit.
+    let spent = call(
+        &core,
+        &ctx,
+        "runtime.budget",
+        json!({"wb_source_id":first_root,"permit_id":"only-1","cost":1}),
+    )
+    .await;
+    assert_eq!(spent["consumed"], true);
+    assert_eq!(spent["remaining"], 0);
+
+    // The second WB has no budget of its own: a permit there must be refused
+    // rather than drawing on the first WB's ledger or a chain-level total.
+    let borrowed = core
+        .operate(
+            "runtime.budget",
+            &ctx,
+            &json!({"wb_source_id":second_root,"permit_id":"only-2","cost":1}),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(borrowed.code, "budget_missing");
+
+    // Granting it explicitly then works, and it does not revive the first WB.
+    call(
+        &core,
+        &ctx,
+        "runtime.budget",
+        json!({"wb_source_id":second_root,"budget":1}),
+    )
+    .await;
+    let now = call(
+        &core,
+        &ctx,
+        "runtime.budget",
+        json!({"wb_source_id":second_root,"permit_id":"only-2","cost":1}),
+    )
+    .await;
+    assert_eq!(now["consumed"], true);
+    assert_eq!(now["remaining"], 0);
+
+    // Re-reading each ledger proves they were two accounts all along, not one
+    // chain total that both permits drew from.
+    let first_ledger = call(
+        &core,
+        &ctx,
+        "runtime.budget",
+        json!({"wb_source_id":first_root,"budget":1}),
+    )
+    .await;
+    assert_eq!(first_ledger["remaining"], 0, "the first WB stays spent");
+    let second_ledger = call(
+        &core,
+        &ctx,
+        "runtime.budget",
+        json!({"wb_source_id":second_root,"budget":1}),
+    )
+    .await;
+    assert_eq!(second_ledger["remaining"], 0, "the second WB stays spent");
+    store.close().await;
+}

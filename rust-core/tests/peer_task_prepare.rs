@@ -125,6 +125,8 @@ fn policy(max_level: u32, max_model_calls: usize, max_actions: usize) -> Schedul
         max_units_per_wb: 64,
         level_batch_sizes,
         max_level,
+        min_level: 1,
+        protected_prefix_blocks: 0,
         flush: true,
         max_actions,
         max_model_calls,

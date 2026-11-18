@@ -8,7 +8,7 @@ from verify_v2_experiment import validate_run, read
 def score_run(directory):
     verified = validate_run(directory)
     manifest = read(Path(directory) / "manifest.json")
-    if manifest.get("mode") == "owned_http_fixture":
+    if manifest.get("mode") in {"owned_http_fixture", "owned_fixture"}:
         return {"schema": "sic-new-score-v1", "quality": {"status": "not_evaluated", "score": None,
                 "reason": "Deterministic transport fixture is not a model/task quality experiment"},
                 "artifact_validation": verified, "scorer": "fixture-no-quality-v1", "model_calls": 0}

@@ -1,5 +1,54 @@
 # 真实文本数据的可复现实验入口
 
+## Rust v2 当前入口（2026-11-14）
+
+`scripts/dataset_runner.py` 默认使用 `--backend rust-v2`。它在新结果目录中启动独立的
+`sic-core-rust` 和 SQLite 数据库；每个案例、问题、实验臂各用一条新链。`baseline` 将完整历史
+作为未编辑的 pending sources 交给 Rust Worker；`sic` 对每个完整分块执行
+`source.ingest → wb.form → edit.prepare → edit.run → cut.publish`，最后单独加入问题并调用
+`worker.run`。两臂使用同一冻结 Worker 配置。baseline 的消息分块经过 Rust 适配，**不是**原始
+官方单请求 baseline；不把它报告为官方分数。问题答案只进入独立评分器，不进入 Core。
+
+`--worker-call-limit` 设置每次答题最多允许的 Worker 调用数，包括 Core 内置工具结果的续接；
+计划按上限计算预算，遇到需要外部宿主执行的工具会明确停止。`--hierarchy-fanout 2` 至 `64`
+可在 SIC 发布后按完整批次构建高阶 CB，使用 `deduplicate_exact` 程序规则并保留高阶来源；
+它不额外调用模型，也不保证语义压缩率。
+
+先生成计划并核验所选源文件的 SHA-256（不启动 Core、不调用模型）：
+
+```powershell
+$env:SIC_DATA_ROOT = './04-testsets'
+python scripts/dataset_runner.py --dataset beam-10m --limit-cases 1 --question-limit 1 `
+  --verify-sources --out ./06-evidence\beam-plan-NEW
+```
+
+可选 `beam-10m`、`babilong-qa3-sample`、`babilong-qa1`–`qa5` 和 CorpusQA 两集。
+CorpusQA 不在 `04-testsets` 下时，使用 `SIC_SOURCE_OVERRIDES` 显式挂载其源文件。
+执行前须检查计划中的完整分块数和模型调用预算；不自动截断或重试。先用本地 fixture
+联调（仍会完整读取并处理选定历史，可能耗时和占用较大磁盘）：
+
+```powershell
+python scripts/dataset_runner.py --dataset babilong-qa3-sample --data-root ./04-testsets `
+  --execute --provider mock --rust-binary ./03-backend-builds\target-integration\release\sic-core-rust.exe `
+  --max-model-calls 300 --out ./06-evidence\babilong-mock-NEW
+python scripts/verify_dataset_run.py ./06-evidence\babilong-mock-NEW
+```
+
+真实模型运行需要 `--execute --provider chat-completions --allow-network`、`--rust-binary`、
+`--model-config`、与 Worker profile 一致的 `--endpoint` 和 `--model`、凭据环境变量名以及明确的
+`--max-model-calls`；BEAM/CorpusQA 还需要 `--judge-model`。模型配置只引用环境变量，禁止内嵌凭据，
+并须关闭 `retry_editor_http_5xx` 以执行本地调用次数上限。Core 的 Worker/Editor 输出上限在模型
+profile 中设置；`--max-output-tokens` 在 Rust 流程中控制独立 judge。Provider 内部隐藏重试和账单
+仍然未知。Rust HTTP 请求体上限为 16 MiB，分块及完整模型上下文准入均不得靠静默裁剪解决。
+
+结果包含冻结代码、模型配置和二进制哈希、每臂 Core pack 及其验证结果、计量、评分和 SQLite
+在线快照；`verify_dataset_run.py` 还会重新核对快照中的 source/CB 摘要。工件包含测试材料和答案，
+应留在私有 `06-evidence`。fixture 分数只是连线检查，真实成绩也需遵守各数据集评分范围。
+
+以下是原 `sic-proxy` v1 实验历史；其命令需显式 `--backend legacy-v1`，不能作为 Rust v2 测试。
+
+---
+
 本轮实现真实数据逐案适配、只读计划、固定 provider 调度和评分接线。已使用 **完整** CorpusQA-4M、BEAM-10M、BABILong-qa3-10M 样本各一条运行离线 Mock，不是把真实材料裁成两条玩具问题。没有真实模型推理或质量提升结论；8341 是非固定测试路由，排除正式实验，本工具不向它发送请求。
 
 ## 安装与数据
@@ -29,7 +78,7 @@ PATH/babilong/data/qa1/10M.json
 ## 只读计划
 
 ```powershell
-python scripts/dataset_runner.py --dataset corpusqa-4m --dataset beam-10m --dataset babilong-qa3-sample --out OUTPUT_ROOT/new-text-plan
+python scripts/dataset_runner.py --backend legacy-v1 --dataset corpusqa-4m --dataset beam-10m --dataset babilong-qa3-sample --out OUTPUT_ROOT/new-text-plan
 ```
 
 默认每个数据集取前 1 条完整历史，BEAM 每条取前 2 个 probe；`--limit-cases N` 修改历史数量，`--question-limit 0` 取 BEAM 全部 probe。案例顺序固定为 dataset 参数顺序、源文件顺序、记录顺序；不随机抽样。
@@ -43,7 +92,7 @@ CorpusQA baseline 保留原始 system prompt，并能将 context + tail 精确�
 ## 完整材料的离线 E2E
 
 ```powershell
-python scripts/dataset_runner.py --dataset corpusqa-4m --dataset beam-10m --dataset babilong-qa3-sample --execute --provider mock --max-model-calls 300 --out OUTPUT_ROOT/new-real-text-mock
+python scripts/dataset_runner.py --backend legacy-v1 --dataset corpusqa-4m --dataset beam-10m --dataset babilong-qa3-sample --execute --provider mock --max-model-calls 300 --out OUTPUT_ROOT/new-real-text-mock
 python scripts/verify_dataset_run.py OUTPUT_ROOT/new-real-text-mock
 ```
 
@@ -55,7 +104,7 @@ python scripts/verify_dataset_run.py OUTPUT_ROOT/new-real-text-mock
 
 ```powershell
 $env:SIC_EXPERIMENT_API_KEY = '从私有环境加载'
-python scripts/dataset_runner.py --dataset corpusqa-4m --dataset beam-10m --dataset babilong-qa3-sample --execute --provider chat-completions --endpoint https://YOUR-HOST/v1/chat/completions --model PINNED-ANSWER-COMPRESSOR --judge-model PINNED-JUDGE --allow-network --max-model-calls 300 --out OUTPUT_ROOT/new-provider-text-run
+python scripts/dataset_runner.py --backend legacy-v1 --dataset corpusqa-4m --dataset beam-10m --dataset babilong-qa3-sample --execute --provider chat-completions --endpoint https://YOUR-HOST/v1/chat/completions --model PINNED-ANSWER-COMPRESSOR --judge-model PINNED-JUDGE --allow-network --max-model-calls 300 --out OUTPUT_ROOT/new-provider-text-run
 python scripts/verify_dataset_run.py OUTPUT_ROOT/new-provider-text-run
 ```
 

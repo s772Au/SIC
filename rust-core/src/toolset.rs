@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const DEFAULT_IDLE_ROUNDS: u64 = 15;
 pub const DEFAULT_MAX_EXPANDED: usize = 128;
@@ -55,6 +55,18 @@ pub struct ToolDescriptor {
     pub name: String,
     pub description: String,
     pub schema: Value,
+    /// Host-declared program/software this tool belongs to. None means the tool
+    /// is not grouped and always listed on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<ProgramInfoField>,
+}
+
+/// Host-declared program identity attached to each grouped tool. Repeated per
+/// tool so a single catalog sync cannot leave a program with mixed overviews.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProgramInfoField {
+    pub name: String,
+    pub overview: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -62,6 +74,80 @@ pub struct ToolSummary {
     pub name: String,
     pub description: String,
     pub expanded: bool,
+    /// Host-declared program/software this tool belongs to, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<String>,
+}
+
+/// Host-declared two-level grouping unit: one program/software with a short
+/// overview and a set of tools. The overview is host-authored prose only; it
+/// never grants capability and is never derived from the model.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProgramInfo {
+    pub name: String,
+    pub overview: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpdateRejection {
+    pub name: String,
+    /// Stable machine code, e.g. unknown_tool, expansion_denied, window_full.
+    pub reason: String,
+    pub message: String,
+}
+
+/// Result of one model-issued tool update. Every field is an attested fact
+/// about what actually changed; the message never claims tools the caller
+/// did not select and never says automatic without naming the cause.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ToolUpdate {
+    pub added: Vec<String>,
+    pub already_expanded: Vec<String>,
+    /// Folded because the caller asked for it in the same request.
+    pub folded: Vec<String>,
+    /// Folded by host policy to make room; always named in the message.
+    pub evicted: Vec<String>,
+    /// Requests that were refused, with the reason. No state changed for these.
+    pub rejected: Vec<UpdateRejection>,
+    pub message: String,
+}
+
+impl ToolUpdate {
+    fn render_message(&self, idle_rounds: u64) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if !self.added.is_empty() {
+            parts.push(format!("Added {}.", self.added.join(", ")));
+        }
+        if !self.already_expanded.is_empty() {
+            parts.push(format!(
+                "Already expanded: {}.",
+                self.already_expanded.join(", ")
+            ));
+        }
+        if !self.folded.is_empty() {
+            parts.push(format!(
+                "Folded {} as you requested.",
+                self.folded.join(", ")
+            ));
+        }
+        if !self.evicted.is_empty() {
+            parts.push(format!(
+                "Also folded {} to make room ({} idle rounds unused).",
+                self.evicted.join(", "),
+                idle_rounds
+            ));
+        }
+        for rejection in &self.rejected {
+            parts.push(format!(
+                "{} not changed: {}.",
+                rejection.name, rejection.message
+            ));
+        }
+        if parts.is_empty() {
+            parts.push("No tool change was requested.".to_owned());
+        }
+        parts.join(" ")
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -196,13 +282,18 @@ impl ToolSet {
                 name: state.descriptor.name.clone(),
                 description: state.descriptor.description.clone(),
                 expanded: state.expanded,
+                program: state
+                    .descriptor
+                    .program
+                    .as_ref()
+                    .map(|program| program.name.clone()),
             })
             .collect()
     }
 
     /// Full schemas of currently expanded tools visible under current ACL.
-    /// This directory is injected after the shared prefix, never in the
-    /// common top-level registry.
+    /// The host can freeze these at their original top-level names; directory
+    /// summaries and expansion state also remain available in I material.
     pub fn expanded_descriptors(&self) -> Vec<ToolDescriptor> {
         self.tools
             .iter()
@@ -214,6 +305,143 @@ impl ToolSet {
             })
             .map(|(_, state)| state.descriptor.clone())
             .collect()
+    }
+
+    /// Two-level directory for I material: one entry per host-declared
+    /// program/software plus ungrouped tools listed individually. A program with
+    /// no expanded tools carries the host overview; as soon as at least one of
+    /// its tools is expanded the overview is dropped, because the real schema
+    /// description is already in the prefix and repeating the summary would be
+    /// both wasteful and potentially contradictory.
+    pub fn program_directory(&self) -> Vec<ProgramDirectoryEntry> {
+        let mut by_program: BTreeMap<String, (ProgramInfoField, ProgramDirectoryEntry)> =
+            BTreeMap::new();
+        let mut ungrouped: Vec<ToolListing> = Vec::new();
+        for (name, state) in &self.tools {
+            if !state.available || !ToolAcl::allows(&self.acl.discover, &self.principal, name) {
+                continue;
+            }
+            let listing = ToolListing {
+                name: state.descriptor.name.clone(),
+                expanded: state.expanded,
+            };
+            match &state.descriptor.program {
+                None => ungrouped.push(listing),
+                Some(program) => {
+                    let slot = by_program.entry(program.name.clone()).or_insert_with(|| {
+                        (
+                            program.clone(),
+                            ProgramDirectoryEntry {
+                                program: program.name.clone(),
+                                overview: String::new(),
+                                tools: Vec::new(),
+                                expanded: 0,
+                            },
+                        )
+                    });
+                    if state.expanded {
+                        slot.1.expanded += 1;
+                    }
+                    slot.1.tools.push(listing);
+                }
+            }
+        }
+        let mut entries: Vec<ProgramDirectoryEntry> = by_program
+            .into_values()
+            .map(|(declared, mut entry)| {
+                if entry.expanded == 0 {
+                    entry.overview = declared.overview;
+                } else {
+                    entry.overview = String::new();
+                }
+                entry
+            })
+            .collect();
+        ungrouped.sort_by(|a, b| a.name.cmp(&b.name));
+        for entry in &mut entries {
+            entry.tools.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+        if !ungrouped.is_empty() {
+            entries.push(ProgramDirectoryEntry {
+                program: String::new(),
+                overview: String::new(),
+                expanded: ungrouped.iter().filter(|tool| tool.expanded).count(),
+                tools: ungrouped,
+            });
+        }
+        entries
+    }
+
+    /// One model-issued tool update. Selection is required (the caller knows
+    /// what it intends to do); folding is optional and only folds what the
+    /// caller named. When the caller asks for more than the window allows,
+    /// least-recently-used expanded tools are folded and reported back with the
+    /// idle-rounds cause so the model never has to guess what happened.
+    pub fn update(&mut self, select: &[String], fold: &[String]) -> Result<ToolUpdate, String> {
+        if select.is_empty() && fold.is_empty() {
+            return Err("tool update requires at least one selection or fold".to_owned());
+        }
+        let mut added: Vec<String> = Vec::new();
+        let mut already_expanded: Vec<String> = Vec::new();
+        let mut folded: Vec<String> = Vec::new();
+        let mut evicted: Vec<String> = Vec::new();
+        let mut rejected: Vec<UpdateRejection> = Vec::new();
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+
+        // Folding runs first: the caller may free window for its own additions,
+        // and a fold it named must never be undone by capacity eviction below.
+        for name in fold {
+            if !seen.insert(name.as_str()) {
+                return Err(format!("duplicate tool name in update: {name}"));
+            }
+            match self.fold_one(name) {
+                Ok(true) => folded.push(name.clone()),
+                Ok(false) => {}
+                Err((reason, message)) => rejected.push(UpdateRejection {
+                    name: name.clone(),
+                    reason: reason.to_owned(),
+                    message,
+                }),
+            }
+        }
+
+        for name in select {
+            if !seen.insert(name.as_str()) {
+                return Err(format!("duplicate tool name in update: {name}"));
+            }
+            match self.select_one(name) {
+                Ok(SelectOutcome::Added) => added.push(name.clone()),
+                Ok(SelectOutcome::AlreadyExpanded) => already_expanded.push(name.clone()),
+                Ok(SelectOutcome::AddedWithEviction(names)) => {
+                    added.push(name.clone());
+                    evicted.extend(names);
+                }
+                Err((reason, message)) => rejected.push(UpdateRejection {
+                    name: name.clone(),
+                    reason: reason.to_owned(),
+                    message,
+                }),
+            }
+        }
+
+        // Preserve discovery order and drop duplicates so the message stays
+        // readable when capacity folding repeats across selections.
+        let mut unique_evicted: Vec<String> = Vec::new();
+        for name in evicted {
+            if !unique_evicted.contains(&name) {
+                unique_evicted.push(name);
+            }
+        }
+        let mut update = ToolUpdate {
+            added,
+            already_expanded,
+            folded,
+            evicted: unique_evicted,
+            rejected,
+            message: String::new(),
+        };
+        update.message = update.render_message(self.idle_rounds);
+        Ok(update)
     }
 
     /// Handle a model or host request to expand a tool, subject to the
@@ -582,6 +810,105 @@ impl ToolSet {
         }
         false
     }
+
+    /// Expand one selected tool. EVICTION happens only when the window is full
+    /// and only over least-recently-touched expandable tools.
+    fn select_one(
+        &mut self,
+        name: &str,
+    ) -> std::result::Result<SelectOutcome, (&'static str, String)> {
+        if !ToolAcl::allows(&self.acl.expand, &self.principal, name) {
+            return Err(("expansion_denied", "expansion is not authorized".to_owned()));
+        }
+        let state = self
+            .tools
+            .get(name)
+            .ok_or(("unknown_tool", "unknown tool".to_owned()))?;
+        if !state.available {
+            return Err((
+                "not_in_catalog",
+                "tool is absent from the current host catalog".to_owned(),
+            ));
+        }
+        if state.expanded {
+            return Ok(SelectOutcome::AlreadyExpanded);
+        }
+        let evicted = self.make_room(name).map_err(|message| {
+            if message.starts_with("expanded-tool limit reached") {
+                ("window_full", message)
+            } else {
+                ("window_error", message)
+            }
+        })?;
+        let state = self
+            .tools
+            .get_mut(name)
+            .ok_or(("unknown_tool", "unknown tool".to_owned()))?;
+        state.expanded = true;
+        state.last_touched_round = Some(self.current_worker_round);
+        Ok(if evicted.is_empty() {
+            SelectOutcome::Added
+        } else {
+            SelectOutcome::AddedWithEviction(evicted)
+        })
+    }
+
+    /// Fold one named tool. Host-fixed and in-flight tools are refused rather
+    /// than silently skipped, so the caller learns the real reason.
+    fn fold_one(&mut self, name: &str) -> std::result::Result<bool, (&'static str, String)> {
+        if !ToolAcl::allows(&self.acl.discover, &self.principal, name)
+            || !ToolAcl::allows(&self.acl.expand, &self.principal, name)
+        {
+            return Err(("folding_denied", "folding is not authorized".to_owned()));
+        }
+        let state = self
+            .tools
+            .get(name)
+            .ok_or(("unknown_tool", "unknown tool".to_owned()))?;
+        if !state.available {
+            return Err((
+                "not_in_catalog",
+                "tool is absent from the current host catalog".to_owned(),
+            ));
+        }
+        if state.host_fixed {
+            return Err(("host_fixed", "host-fixed tools cannot be folded".to_owned()));
+        }
+        if !state.in_flight.is_empty() {
+            return Err((
+                "in_flight",
+                "tools with in-flight execution cannot be folded".to_owned(),
+            ));
+        }
+        if !state.expanded {
+            return Ok(false);
+        }
+        self.remove_expanded(name);
+        Ok(true)
+    }
+}
+
+enum SelectOutcome {
+    Added,
+    AlreadyExpanded,
+    AddedWithEviction(Vec<String>),
+}
+
+/// One host-declared program group as presented to the model.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProgramDirectoryEntry {
+    /// Empty string marks the pseudo-entry for ungrouped tools.
+    pub program: String,
+    pub overview: String,
+    pub tools: Vec<ToolListing>,
+    /// How many of this program's tools are currently expanded.
+    pub expanded: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ToolListing {
+    pub name: String,
+    pub expanded: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

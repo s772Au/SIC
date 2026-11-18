@@ -8,8 +8,7 @@
 #[path = "dsh_bridge_observation.rs"]
 mod observation;
 
-#[path = "dsh.rs"]
-mod wire;
+use crate::dsh as wire;
 
 use crate::{
     core::{Core, OperationContext},

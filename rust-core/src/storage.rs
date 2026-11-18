@@ -28,6 +28,13 @@ pub fn sha256(bytes: &[u8]) -> String {
 pub fn json_text(value: &Value) -> Result<String> {
     serde_json::to_string(value).map_err(|_| CoreError::invalid("value is not valid JSON"))
 }
+pub(crate) fn native_collection_proofs(source: &Value) -> Vec<&Value> {
+    match source.get("provenances").and_then(Value::as_array) {
+        Some(proofs) => proofs.iter().filter(|proof| proof.is_object()).collect(),
+        None => source.get("provenance").filter(|proof| proof.is_object()).into_iter().collect(),
+    }
+}
+
 pub fn digest(value: &Value) -> Result<String> {
     Ok(sha256(json_text(value)?.as_bytes()))
 }
@@ -138,6 +145,12 @@ impl Store {
         let store = Self {
             pool: SqlitePoolOptions::new()
                 .max_connections(1)
+                // SQLx drops an acquired connection if cancellation interrupts
+                // its async health check. For a one-connection memory database
+                // that destroys the schema. With no acquisition callbacks,
+                // disabling the ping removes the cancellation window between
+                // taking the idle connection and handing it to the caller.
+                .test_before_acquire(false)
                 .connect_with(options)
                 .await?,
             bridge_guard_state: bridge_guard_state(None),
@@ -269,7 +282,21 @@ impl Store {
         Ok(())
     }
     pub async fn begin(&self) -> Result<Transaction<'_, Sqlite>> {
-        Ok(self.pool.begin_with("BEGIN IMMEDIATE").await?)
+        // Keep queueing/acquisition cancellable. Only a connection already
+        // acquired from this bounded pool may enter the protected handoff.
+        let connection = self.pool.acquire().await?;
+        // SQLx's custom BEGIN path awaits a handle check after SQLite has
+        // acknowledged BEGIN, before constructing the rollback-on-drop guard.
+        // Cancelling in that gap leaves an unowned transaction on the pooled
+        // connection. Finish constructing the guard in a task that is not
+        // aborted when its JoinHandle is dropped. If the caller goes away,
+        // the unclaimed Transaction is dropped and rolls back normally.
+        let transaction = tokio::spawn(async move {
+            Transaction::begin(connection, Some("BEGIN IMMEDIATE".into())).await
+        })
+        .await
+        .map_err(|_| CoreError::storage())??;
+        Ok(transaction)
     }
     pub async fn close(&self) {
         self.pool.close().await;
@@ -355,7 +382,37 @@ pub async fn get_object(
             Ok(())
         };
         match kind.as_str() {
-            "source" => push_values("dependencies", Some("source"))?,
+            "native_source" => {
+                push_values("protected_cb_ids", Some("cb"))?;
+                if let Some(cut)=value["adopted_i"]["cut_id"].as_str() {stack.push((cut.to_owned(),Some("cut".into())));}
+                for provenance in native_collection_proofs(&value) {
+                    for (key,kind) in [("lifecycle_object_id","harness_object"),("collection_receipt_id","harness_event")] {
+                        let id = provenance[key].as_str().ok_or_else(||CoreError::invalid("native provenance dependency missing"))?;
+                        stack.push((id.to_owned(),Some(kind.into())));
+                    }
+                }
+                if let Some(dep) = value.get("core_source_id").and_then(Value::as_str) {
+                    stack.push((dep.to_owned(), Some("source".into())));
+                }
+            }
+            "native_i_projection" => {
+                for (key,kind) in [("source_id","native_source"),("publication_id","native_publication"),("cut_id","cut")] {
+                    if let Some(id)=value[key].as_str() {stack.push((id.to_owned(),Some(kind.into())));}
+                }
+            }
+            "native_version" | "native_publication" => {
+                let source = value.get("source_id").and_then(Value::as_str)
+                    .ok_or_else(|| CoreError::invalid("native source dependency missing"))?;
+                stack.push((source.to_owned(), Some("native_source".into())));
+                if let Some(cb) = value.get("cb_id").and_then(Value::as_str) {
+                    stack.push((cb.to_owned(), Some("cb".into())));
+                }
+            }
+            "source" => {
+                push_values("dependencies", Some("source"))?;
+                push_values("cb_dependencies", Some("cb"))?;
+                push_values("native_source_dependencies", Some("native_source"))?;
+            }
             "cb" => push_values("source_ids", Some("source"))?,
             "checkpoint" => {
                 let cut = value

@@ -12,7 +12,8 @@ use crate::{
     error::{CoreError, Result},
     storage::Store,
     toolset::{
-        ExecutionLease, ExecutionStart, Expansion, ToolAcl, ToolDescriptor, ToolSet, ToolSummary,
+        ExecutionLease, ExecutionStart, Expansion, ProgramDirectoryEntry, ToolAcl, ToolDescriptor,
+        ToolSet, ToolSummary, ToolUpdate,
     },
 };
 
@@ -228,6 +229,41 @@ impl ToolStore {
         Ok(set.expanded_descriptors())
     }
 
+    /// Preserve a registered Harness contract at its native top-level name.
+    /// Existing catalogs store parameter schemas; a host may also retain the
+    /// entire native function schema (including strict and extension fields).
+    pub fn native_function_schema(descriptor: &ToolDescriptor) -> Result<Value> {
+        if descriptor.schema.get("type").and_then(Value::as_str) == Some("function") {
+            if descriptor.schema["function"]["name"] != descriptor.name
+                || !descriptor.schema["function"]["parameters"].is_object()
+            {
+                return Err(CoreError::invalid("native schema and descriptor identity differ"));
+            }
+            Ok(descriptor.schema.clone())
+        } else {
+            Ok(json!({"type":"function","function":{
+                "name":descriptor.name,"description":descriptor.description,
+                "parameters":descriptor.schema
+            }}))
+        }
+    }
+
+    pub async fn native_schemas_in_transaction(
+        tx: &mut Transaction<'_, Sqlite>,
+        chain_id: &str,
+        actor: &str,
+    ) -> Result<Vec<Value>> {
+        Self::initialize_in_transaction(tx).await?;
+        if load_raw(tx, chain_id).await?.is_none() {
+            return Ok(Vec::new());
+        }
+        Self::expanded_descriptors_in_transaction(tx, chain_id, actor)
+            .await?
+            .iter()
+            .map(Self::native_function_schema)
+            .collect()
+    }
+
     pub async fn request_expansion(
         &self,
         chain_id: &str,
@@ -252,6 +288,31 @@ impl ToolStore {
             set.request_expansion(tool_name)
         })
         .await
+    }
+
+    /// Apply one model tool update (select and/or fold) atomically.
+    pub async fn update_in_transaction(
+        tx: &mut Transaction<'_, Sqlite>,
+        chain_id: &str,
+        actor: &str,
+        select: &[String],
+        fold: &[String],
+    ) -> Result<ToolUpdate> {
+        mutate(tx, chain_id, actor, |set| {
+            constrain_capacity(set).map_err(|error| error.message)?;
+            set.update(select, fold)
+        })
+        .await
+    }
+
+    /// Two-level directory for the post-prefix I material.
+    pub async fn program_directory_in_transaction(
+        tx: &mut Transaction<'_, Sqlite>,
+        chain_id: &str,
+        actor: &str,
+    ) -> Result<Vec<ProgramDirectoryEntry>> {
+        let set = load(tx, chain_id, actor).await?;
+        Ok(set.program_directory())
     }
 
     pub async fn request_reclaim(

@@ -18,6 +18,7 @@ pub struct TextUnit {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecodedRequest {
     format: String,
+    host_owned: bool,
     /// Exact accepted native request, retained as immutable protocol sidecar.
     sidecar: Value,
     pub units: Vec<TextUnit>,
@@ -754,6 +755,113 @@ pub fn decode(format: &str, request: &Value) -> Result<DecodedRequest, String> {
     };
     Ok(DecodedRequest {
         format: format.to_owned(),
+        host_owned: false,
+        sidecar: request.clone(),
+        units,
+    })
+}
+
+/// Extract known text anchors while leaving native admission to the Harness.
+/// Unknown fields and content blocks are immutable opaque sidecar data. This
+/// boundary neither selects a model nor validates provider request options.
+/// The original strict `decode` remains the Core's source-ingress validator.
+pub fn decode_host_owned(format: &str, request: &Value) -> Result<DecodedRequest, String> {
+    object(request, "native request")?;
+    let mut units = Vec::new();
+    // Keep persisted uN identities stable when adding native tool-output leaves.
+    let mut tool_output_units = Vec::new();
+    let (key, messages) = match format {
+        "openai-chat" | "anthropic-messages" | "dsh-messages" => ("messages", request.get("messages")),
+        "openai-responses" => {
+            if request.get("input").is_some_and(Value::is_string) {
+                add_unit(&mut units, &request["input"], vec![json!("input")])?;
+                return Ok(DecodedRequest {
+                    format: format.into(),
+                    host_owned: true,
+                    sidecar: request.clone(),
+                    units,
+                });
+            }
+            ("input", request.get("input"))
+        }
+        _ => return Err(err("unsupported protocol format")),
+    };
+    let messages = messages
+        .and_then(Value::as_array)
+        .ok_or_else(|| err("native context must be an array"))?;
+    for (index, message) in messages.iter().enumerate() {
+        let base = vec![json!(key), json!(index)];
+        if format == "openai-responses" {
+            match message["type"].as_str().unwrap_or("message") {
+                "function_call_output" => {
+                    if message["output"].is_string() {
+                        add_unit(&mut units, &message["output"], path(&base, "output"))?;
+                    } else if let Some(parts) = message["output"].as_array() {
+                        // Native Responses tool outputs may contain text,
+                        // image and file parts. Only their explicit text leaf
+                        // is editable; binary/reference payloads stay opaque.
+                        for (part_index, part) in parts.iter().enumerate() {
+                            if part["type"] == "input_text" && part["text"].is_string() {
+                                tool_output_units.push(TextUnit {
+                                    unit_id: format!("response-output:{index}:{part_index}"),
+                                    text: part["text"].as_str().unwrap().to_owned(),
+                                    anchor: Value::Array(path(&path(&path(&base, "output"), part_index), "text")),
+                                });
+                            }
+                        }
+                    }
+                    continue;
+                }
+                "message" => (),
+                _ => continue,
+            }
+        }
+        let role = message["role"].as_str().unwrap_or("");
+        if !matches!(role, "user" | "assistant" | "tool") {
+            continue; // system/developer/unknown roles are protected sidecar.
+        }
+        let content_path = path(&base, "content");
+        let content = &message["content"];
+        if content.is_string() && format != "dsh-messages" {
+            add_unit(&mut units, content, content_path)?;
+        } else if let Some(blocks) = content.as_array() {
+            for (bi, block) in blocks.iter().enumerate() {
+                let block_path = path(&content_path, bi);
+                let kind = block["type"].as_str().unwrap_or("");
+                let text_kind = match format {
+                    "openai-responses" => matches!(kind, "input_text" | "output_text"),
+                    _ => kind == "text",
+                };
+                if text_kind && block["text"].is_string() {
+                    add_unit(&mut units, &block["text"], path(&block_path, "text"))?;
+                } else if format == "anthropic-messages" && role == "user" && kind == "tool_result"
+                {
+                    let output = &block["content"];
+                    let output_path = path(&block_path, "content");
+                    if output.is_string() {
+                        add_unit(&mut units, output, output_path)?;
+                    } else if let Some(parts) = output.as_array() {
+                        for (pi, part) in parts.iter().enumerate() {
+                            if part["type"] == "text" && part["text"].is_string() {
+                                add_unit(
+                                    &mut units,
+                                    &part["text"],
+                                    path(&path(&output_path, pi), "text"),
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if !tool_output_units.is_empty() {
+        units.extend(tool_output_units);
+        units.sort_by_key(|unit| (unit.anchor[1].as_u64().unwrap_or(0), unit.anchor[3].as_u64().unwrap_or(0)));
+    }
+    Ok(DecodedRequest {
+        format: format.into(),
+        host_owned: true,
         sidecar: request.clone(),
         units,
     })
@@ -763,11 +871,15 @@ pub fn decode(format: &str, request: &Value) -> Result<DecodedRequest, String> {
 pub fn encode(decoded: &DecodedRequest) -> Result<Value, String> {
     if !matches!(
         decoded.format.as_str(),
-        "openai-chat" | "openai-responses" | "anthropic-messages"
+        "openai-chat" | "openai-responses" | "anthropic-messages" | "dsh-messages"
     ) {
         return Err(err("unsupported protocol format"));
     }
-    let canonical = decode(&decoded.format, &decoded.sidecar)?;
+    let canonical = if decoded.host_owned {
+        decode_host_owned(&decoded.format, &decoded.sidecar)?
+    } else {
+        decode(&decoded.format, &decoded.sidecar)?
+    };
     if canonical.units.len() != decoded.units.len() {
         return Err(err("editable unit set does not match the source sidecar"));
     }

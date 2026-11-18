@@ -1,5 +1,11 @@
 # SIC v0.1 演示后端准备情况
 
+> 历史记录：本文的 `run_experiment.py`、`release_check.ps1` 和 `sic-proxy` 命令属于 v1，
+> 不能验收当前 Rust v2。新的隔离合成实验使用 `python scripts/run_v2_experiment.py
+> --rust-binary <sic-core-rust.exe> --output <新结果目录>`，并使用
+> `verify_v2_experiment.py` / `score_v2_experiment.py` 校验。真实数据入口见
+> `real-text-experiments.md`。
+
 核验日期：2026-11-07。源码机制版本仍为 `9.0.0-alpha.3`；“v0.1”是演示里程碑，不重新分配旧实验成绩。本轮未恢复历史实验，没有 8341 推理/实验调用，也没有真实模型质量结论。8341 是非固定测试路由，排除正式实验。
 
 ## 已完成与本轮增量

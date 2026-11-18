@@ -7,6 +7,9 @@ pub mod error {
 pub mod dsh_bridge {
     pub use sic_core_rust::dsh_bridge::*;
 }
+pub mod harness_lifecycle {
+    pub use sic_core_rust::harness_lifecycle::*;
+}
 
 #[path = "../src/server.rs"]
 mod server;

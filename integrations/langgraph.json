@@ -11,6 +11,7 @@
     }
   },
   "graphs": {
+    "sic_rust": "./sic_workflow/rust_graph.py:graph",
     "sic_core": "./sic_workflow/v2_graph.py:graph",
     "sic_candidate": "./sic_workflow/workbench_graph.py:candidate_graph",
     "sic_hierarchy": "./sic_workflow/hierarchy_graph.py:graph",

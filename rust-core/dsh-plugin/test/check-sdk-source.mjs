@@ -1,0 +1,8 @@
+import {dshSourcePath,fixturePath} from './test-paths.mjs';
+import{prepareSdkRuntime}from'../transparent/prepare-sdk-runtime.mjs';import{createRequire}from'node:module';import{readFile}from'node:fs/promises';import{join}from'node:path';
+const dsh=dshSourcePath(),out=fixturePath('dsh-sdk-fixture-20261117');await prepareSdkRuntime(dsh,out);
+const ts=createRequire(join(dsh,'package.json'))('typescript'),overlay=JSON.parse(await readFile(join(out,'typescript-overlay.json'),'utf8')),mapped=new Map(Object.entries(overlay).map(([p,s])=>[p.replaceAll('\\','/').toLowerCase(),s]));
+const config=ts.readConfigFile(join(dsh,'packages/llm/llm/tsconfig.json'),ts.sys.readFile),parsed=ts.parseJsonConfigFileContent(config.config,ts.sys,join(dsh,'packages/llm/llm')),options={...parsed.options,noEmit:true,composite:false,rootDir:undefined,incremental:false};
+function check(patched){const host=ts.createCompilerHost(options),read=host.readFile;host.readFile=p=>(patched?mapped.get(p.replaceAll('\\','/').toLowerCase()):undefined)??read(p);return ts.getPreEmitDiagnostics(ts.createProgram(parsed.fileNames,options,host));}
+const key=d=>JSON.stringify([d.file?.fileName,d.code,ts.flattenDiagnosticMessageText(d.messageText,'\n')]),baseline=new Set(check(false).map(key)),added=check(true).filter(d=>!baseline.has(key(d)));
+if(added.length){console.error(ts.formatDiagnosticsWithColorAndContext(added,{getCurrentDirectory:()=>dsh,getCanonicalFileName:p=>p,getNewLine:()=> '\n'}));process.exitCode=1;}else console.log('Common native SDK dispatch source patch: no added TypeScript diagnostics ('+baseline.size+' pre-existing).');

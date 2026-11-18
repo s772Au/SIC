@@ -35,6 +35,45 @@ fn plan() -> PrefixPlan {
     PrefixPlan::freeze(spec("cut-1", "cb-1")).unwrap()
 }
 
+#[test]
+fn optional_native_table_preserves_schema_and_explicit_editor_candidate_role() {
+    let native = json!({"type":"function","function":{
+        "name":"apply_patch","description":"Original Harness candidate patch contract",
+        "strict":true,"parameters":{"type":"object","properties":{"patch":{"type":"string"}},
+            "required":["patch"],"additionalProperties":false}
+    }});
+    let plan = PrefixPlan::freeze_with_native_tools(spec("cut-1", "cb-1"), vec![], vec![native.clone()]).unwrap();
+    let mut visible = tool_names();
+    visible.push("apply_patch".into());
+    let worker = HostAuthorizationSpec {
+        plan_digest:plan.digest().into(),actor:"host-worker".into(),chain_id:plan.chain_id().into(),
+        context_id:plan.context_id().into(),level:plan.level(),cut_id:plan.cut_id().into(),
+        cb_ids:plan.cb_ids().to_vec(),scope_id:"worker-scope".into(),mode:Mode::Worker,acl_epoch:1,
+        visible_tools:visible,allowed_tools:vec!["apply_patch".into()],editor_scope:None,
+    };
+    let worker = HostAuthorization::from_host(worker).unwrap();
+    let editor = HostAuthorizationSpec {
+        plan_digest:plan.digest().into(),actor:"host-editor".into(),chain_id:plan.chain_id().into(),
+        context_id:plan.context_id().into(),level:plan.level(),cut_id:plan.cut_id().into(),
+        cb_ids:plan.cb_ids().to_vec(),scope_id:"wb-new".into(),mode:Mode::Editor,acl_epoch:1,
+        visible_tools:plan.common_tools().unwrap().iter().map(|tool|tool["function"]["name"].as_str().unwrap().into()).collect(),
+        allowed_tools:vec!["apply_patch".into()],editor_scope:Some(EditorScope {
+            job_id:"job-new".into(),wb_id:"wb-new".into(),source_id:"source-new".into(),
+            read_only_cb_ids:plan.cb_ids().to_vec(),editable_units:vec![EditableUnit {
+                unit_id:"u1".into(),source_id:"source-new".into(),text:"candidate instruction".into(),cb_id:None,
+            }],read_only_background:vec![],
+        }),
+    };
+    assert!(HostAuthorization::from_host(editor.clone()).is_err());
+    let editor = HostAuthorization::from_host_with_candidate_tools(editor, vec!["apply_patch".into()]).unwrap();
+    let worker = worker_request(&plan,&worker,&[],&json!({})).unwrap();
+    let editor = editor_request(&plan,&editor,&[],&json!({})).unwrap();
+    assert_eq!(worker.request["tools"],editor.request["tools"]);
+    assert_eq!(worker.request["tools"].as_array().unwrap().last(),Some(&native));
+    assert_eq!(worker.common_prefix_digest,editor.common_prefix_digest);
+    assert!(editor.request.to_string().contains("candidate_bound_native_tools"));
+}
+
 fn tool_names() -> Vec<String> {
     common_tool_registry()
         .iter()
@@ -57,7 +96,7 @@ fn worker_auth(plan: &PrefixPlan) -> HostAuthorization {
         acl_epoch: 7,
         visible_tools,
         allowed_tools: vec![
-            "sic_tool_search".into(),
+            "sic_tool_update".into(),
             "sic_tool_call".into(),
             "sic_socket_spawn".into(),
         ],
@@ -355,7 +394,7 @@ fn worker_and_editor_have_distinct_trusted_i_and_editor_only_gets_edit_tool() {
         activation_editor["sic_mode_instruction"]
             .as_str()
             .unwrap()
-            .contains("not to execute or answer")
+            .contains("only the assigned current-WB candidate units")
     );
     assert!(
         activation_worker["sic_mode_instruction"]
@@ -439,7 +478,7 @@ fn invalid_mode_tool_permissions_and_model_supplied_i_cannot_grant_tools() {
     assert!(
         HostAuthorization::from_host(spec)
             .unwrap_err()
-            .contains("only sic_edit_blocks")
+            .contains("only candidate-bound native tools or sic_edit_blocks")
     );
     // Model I is deliberately untrusted content and cannot alter frozen host activation.
     let request = worker_request(
@@ -454,7 +493,7 @@ fn invalid_mode_tool_permissions_and_model_supplied_i_cannot_grant_tools() {
     assert_eq!(activation["sic_host_activation"]["mode"], "worker");
     assert_eq!(
         activation["sic_host_activation"]["activated_tools"],
-        json!(["sic_tool_search", "sic_tool_call", "sic_socket_spawn"])
+        json!(["sic_tool_update", "sic_tool_call", "sic_socket_spawn"])
     );
 }
 
@@ -515,6 +554,7 @@ fn dynamic_directory_schema_stays_in_post_prefix_i_not_common_tools() {
                 name: "private_lookup".into(),
                 description: "private dynamic schema".into(),
                 schema: json!({"type":"object","properties":{"secret":{"type":"string"}}}),
+                program: None,
             },
             false,
         )
@@ -587,14 +627,19 @@ fn common_schema_contains_required_shared_operations_in_fixed_order() {
         names,
         vec![
             "sic_edit_blocks",
-            "sic_tool_search",
-            "sic_tool_expand",
-            "sic_tool_reclaim",
+            "sic_tool_update",
             "sic_tool_call",
             "sic_socket_spawn",
             "sic_socket_read",
             "sic_signal_send",
             "sic_signal_wait",
+            "sic_signal_status",
+            "sic_signal_broadcast",
+            "sic_signal_pause",
+            "sic_signal_sleep",
+            "sic_signal_drain",
+            "sic_signal_register",
+            "sic_signal_arrive",
             "sic_message_send",
             "sic_message_receive",
             "sic_message_read",
@@ -637,24 +682,35 @@ fn common_schema_contains_required_shared_operations_in_fixed_order() {
 }
 
 #[test]
-fn dynamic_tool_search_schema_exposes_safe_pagination_bounds() {
-    let search = common_tool_registry()
+fn tool_update_schema_accepts_selection_and_folding_only() {
+    let update = common_tool_registry()
         .into_iter()
-        .find(|tool| tool["function"]["name"] == "sic_tool_search")
+        .find(|tool| tool["function"]["name"] == "sic_tool_update")
         .unwrap();
-    let function = &search["function"];
-    assert_eq!(function["parameters"]["required"], json!(["query"]));
+    let function = &update["function"];
+    // Neither field is required: select alone, fold alone, or both are valid.
+    assert_eq!(function["parameters"]["required"], json!([]));
     assert_eq!(
-        function["parameters"]["properties"]["offset"]["type"],
-        "integer"
+        function["parameters"]["properties"]["select"]["type"],
+        "array"
     );
-    assert_eq!(function["parameters"]["properties"]["offset"]["minimum"], 0);
-    assert_eq!(function["parameters"]["properties"]["offset"]["default"], 0);
-    assert_eq!(function["parameters"]["properties"]["limit"]["minimum"], 1);
+    // No static cap: the window comes from the fixed registry size at runtime,
+    // and folding does not consume a schema slot at all.
+    assert!(
+        function["parameters"]["properties"]["select"]["maxItems"].is_null(),
+        "select must not advertise a static cap"
+    );
     assert_eq!(
-        function["parameters"]["properties"]["limit"]["maximum"],
-        100
+        function["parameters"]["properties"]["fold"]["type"],
+        "array"
     );
-    assert_eq!(function["parameters"]["properties"]["limit"]["default"], 20);
+    assert!(
+        function["parameters"]["properties"]["fold"]["maxItems"].is_null(),
+        "fold must not advertise a static cap"
+    );
+    // The old pagination fields must be gone so the model cannot send them.
+    assert!(function["parameters"]["properties"]["query"].is_null());
+    assert!(function["parameters"]["properties"]["offset"].is_null());
+    assert!(function["parameters"]["properties"]["limit"].is_null());
     assert_eq!(function["parameters"]["additionalProperties"], false);
 }

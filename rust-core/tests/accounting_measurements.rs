@@ -142,3 +142,84 @@ async fn three_independent_measurements_are_reported_without_quality_claims() {
     assert_eq!(after["measurements"]["suppressed"], "revocation");
     assert_eq!(after["resources"]["storage"]["class"], "host_measured");
 }
+
+#[tokio::test]
+async fn measurements_stay_three_separate_classes_and_never_merge_into_a_score() {
+    // F66 asks for three host-measured classes kept independent. The risk is a
+    // later reader treating one number as a quality or cost verdict, so this
+    // asserts the classes stay separate and carry their own non-claims.
+    let core = Core::new(Store::memory().await.unwrap());
+    let chain = call(&core, &context("owner", None), "chain.create", json!({})).await["chain_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let ctx = context("owner", Some(&chain));
+    edit_block(
+        &core,
+        &ctx,
+        "measurement body material",
+        json!([{"op":"REPLACE","target":"u1","content":"measured replacement"}]),
+
+        "three-classes",
+    )
+    .await;
+
+    let accounting = call(&core, &ctx, "accounting.get", json!({})).await;
+    let m = &accounting["measurements"];
+
+    // 1. Block shape: measured, not inferred.
+    assert_eq!(m["class"], "host_measured_per_chain");
+    assert!(m["blocks"]["count"].as_u64().unwrap() >= 1);
+    // Shape is asserted, not magnitude: a one-unit fixture has one fragment and
+    // one member, but those counts follow from the fixture, not from the API.
+    for field in ["body_chars", "fragments", "members"] {
+        let s = &m["blocks"][field];
+        assert!(s["count"].as_u64().unwrap() >= 1, "{field} has no count: {m:?}");
+        assert!(s["max"].is_u64(), "{field} has no measured max: {m:?}");
+        assert!(s["min"].is_u64(), "{field} has no measured min: {m:?}");
+    }
+
+    // 2. Edit noise: per-kind counts, not a single "quality" figure.
+    assert!(m["edit_noise"]["ops"].as_u64().unwrap() >= 1);
+    assert!(m["edit_noise"]["by_kind"].is_object());
+    assert!(m["edit_noise"]["ops_per_1000_chars"].is_number());
+    assert!(
+        m["edit_noise"].get("quality").is_none(),
+        "edit noise must not carry a quality field: {m:?}"
+    );
+
+    // 3. Cost: storage and attempts, with the bill explicitly refused.
+    assert!(m["cost"]["storage_bytes"].as_u64().unwrap() >= 1);
+    assert!(m["cost"]["model_attempts"].is_number());
+    assert!(m["cost"]["unknown_usage"].is_number());
+    assert!(
+        m["cost"].get("priced_cost").is_none() || m["cost"]["priced_cost"].is_null(),
+        "no price may be inferred from the surrogate: {m:?}"
+    );
+
+    // The three classes never collapse into one summary key.
+    for bogus in ["score", "quality", "total_cost", "verdict"] {
+        assert!(
+            m.get(bogus).is_none(),
+            "measurements must not expose a merged `{bogus}` field"
+        );
+    }
+
+    // Non-claims are enumerated rather than implied by absence.
+    let non_claims: Vec<&str> = m["non_claims"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    for required in [
+        "experiment_not_run",
+        "provider_quality_not_measured",
+        "real_bill_not_available",
+    ] {
+        assert!(
+            non_claims.contains(&required),
+            "missing non_claim {required}: {non_claims:?}"
+        );
+    }
+}

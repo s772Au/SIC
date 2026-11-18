@@ -4,27 +4,27 @@ Status: **preparation only**. No model quality, cost, or two-arm result is claim
 
 ## Source
 
-- Dataset: `D:\Claude\SIC\benchmarks\data\longmemeval-v2`
+- Dataset: `./benchmarks\data\longmemeval-v2`
 - Official repository revision: `2cc8c540bdb87fe6761629b585e727e1c4704520`
 - License: Apache-2.0 (see the dataset `LICENSE`)
 - Scale: 451 questions, 1,870 trajectories, small/medium haystacks.
 - `questions.jsonl` SHA256: `0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7`
 - `haystacks/lme_v2_small.json` SHA256: `9b5301defb23a088a5f06e45ff8d5f35e569d78305a66d492046a9fff9b46593`
-- Official adapter/source: `D:\Claude\SIC\.local\contract-rebuild\lme-official-adapter`
-- Source lock: `D:\Claude\SIC\benchmarks\lme-official-source-lock.json`
-- Qwen processor: `D:\Claude\SIC\.local\contract-rebuild\lme-qwen-processor`
+- Official adapter/source: `./.local\contract-rebuild\lme-official-adapter`
+- Source lock: `./benchmarks\lme-official-source-lock.json`
+- Qwen processor: `./.local\contract-rebuild\lme-qwen-processor`
 
 ## Prepared runtime
 
 Command used (official adapter, isolated data root):
 
 ```powershell
-python benchmarks/run_core_lme.py --official-root '.local/contract-rebuild/lme-official-adapter' prepare-runtime --data-root 'benchmarks/data/longmemeval-v2' --domain web --tier small --limit 1 --output-dir 'D:\SIC-real-evidence-20261112\lme-runtime-web1'
+python benchmarks/run_core_lme.py --official-root '.local/contract-rebuild/lme-official-adapter' prepare-runtime --data-root 'benchmarks/data/longmemeval-v2' --domain web --tier small --limit 1 --output-dir './evidence/real-run-20261112/lme-runtime-web1'
 ```
 
 Result: 1 question, 100 trajectories; `research_evaluation=not_evaluated`.
 
-- Runtime: `D:\SIC-real-evidence-20261112\lme-runtime-web1`
+- Runtime: `./evidence/real-run-20261112/lme-runtime-web1`
 - Question id: `00aa905a` (webarena-reddit, dynamic-environment)
 - Official evaluator: `mc_choice_match|require_non_empty=true`
 - Runtime questions SHA256: `00314977958bbd057be9570da72a5d17610aa377f0f55e75ba30de7af187c89e`
@@ -34,9 +34,9 @@ Result: 1 question, 100 trajectories; `research_evaluation=not_evaluated`.
 A reduced 2-trajectory haystack was derived from the prepared runtime. The official harness, with the SIC Python reference memory (`benchmarks/core_lme_memory.py`), successfully built and saved memory:
 
 - questions: same `00aa905a`
-- haystack: `D:\\SIC-real-evidence-20261112\\lme-runtime-web1\\haystack-smoke2.json` (2 trajectories)
-- config: `D:\\SIC-real-evidence-20261112\\lme-smoke-config.json` (`fanout=2`, `memory_chars=32768`)
-- output: `D:\\SIC-real-evidence-20261112\\lme-program-smoke3` (`memory_state/sic-core.sqlite`, 4,976,640 bytes)
+- haystack: `./evidence/real-run-20261112/lme-runtime-web1\\haystack-smoke2.json` (2 trajectories)
+- config: `./evidence/real-run-20261112/lme-smoke-config.json` (`fanout=2`, `memory_chars=32768`)
+- output: `./evidence/real-run-20261112/lme-program-smoke3` (`memory_state/sic-core.sqlite`, 4,976,640 bytes)
 - exit: 0; `skip-evaluation=true`
 
 This proves the official runtime and SIC memory plumbing can ingest a tiny slice. It is **not** the Rust Core, not a baseline/SIC two-arm run, not a reader answer, and not an independent quality score.
@@ -52,8 +52,8 @@ The same frozen model and official evaluator were used for one baseline and one 
 
 - Model: `deepseek-v4.1-flash-eco`
 - Official evaluator: `mc_choice_match|require_non_empty=true`
-- Baseline output: `D:\\SIC-real-evidence-20261112\\lme-base-arm1`
-- SIC output: `D:\\SIC-real-evidence-20261112\\lme-sic-arm5`
+- Baseline output: `./evidence/real-run-20261112/lme-base-arm1`
+- SIC output: `./evidence/real-run-20261112/lme-sic-arm5`
 - SIC memory context: 17,970 tokens, not truncated
 - SIC memory implementation: Python `benchmarks/core_lme_memory.py`, not the Rust Core
 - One question only; baseline is trivial for this question; the SIC arm answered UNKNOWN and lost the point.

@@ -1,6 +1,9 @@
 mod model_policy {
     pub use sic_core_rust::model_policy::*;
 }
+mod dsh {
+    pub use sic_core_rust::dsh::*;
+}
 
 pub mod core {
     pub use sic_core_rust::core::*;
@@ -53,14 +56,14 @@ async fn completion(
             }]}),
         ),
         2 => worker_tool_call(
-            "worker-search-1",
-            "sic_tool_search",
-            json!({"query":"calculator"}),
+            "worker-update-1",
+            "sic_tool_update",
+            json!({"select":["calculator"]}),
         ),
         3 => worker_tool_call(
-            "worker-expand-1",
-            "sic_tool_expand",
-            json!({"name":"calculator"}),
+            "worker-fold-1",
+            "sic_tool_update",
+            json!({"fold":["calculator"]}),
         ),
         4 => worker_tool_call(
             "worker-host-1",
@@ -1131,7 +1134,7 @@ async fn real_core_bridge_runs_editor_worker_host_tool_and_recovers_without_repe
             .as_array()
             .unwrap()
             .iter()
-            .any(|tool| { tool["function"]["name"] == "sic_tool_search" })
+            .any(|tool| { tool["function"]["name"] == "sic_tool_update" })
     );
     assert!(
         calls[3]["messages"]
@@ -1140,7 +1143,7 @@ async fn real_core_bridge_runs_editor_worker_host_tool_and_recovers_without_repe
             .iter()
             .any(|message| {
                 message["role"] == "tool"
-                    && message["tool_call_id"] == "worker-expand-1"
+                    && message["tool_call_id"] == "worker-update-1"
                     && message["content"]
                         .as_str()
                         .unwrap_or("")

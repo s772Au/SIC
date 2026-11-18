@@ -1,0 +1,4 @@
+interface:
+  display_name: "SIC 跨 Harness 提示词融合"
+  short_description: "Fuse native host prompts with evolving SIC behavior contracts"
+  default_prompt: "Use $sic-host-prompt-adapter to fuse this Harness's native prompts and tool contracts with the current SIC, preserving core behavior and checking compatibility and prompt quality."

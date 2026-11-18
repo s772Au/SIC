@@ -30,6 +30,7 @@ fn lock_database(path: &str) -> Result<std::fs::File, Box<dyn std::error::Error>
         .read(true)
         .write(true)
         .create(true)
+        .truncate(false)
         .open(PathBuf::from(lock_name))?;
     lock.try_lock()
         .map_err(|_| "another Rust process already owns this database")?;

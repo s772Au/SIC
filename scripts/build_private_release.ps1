@@ -2,6 +2,14 @@ param([string]$TargetDirectory = "", [string]$PythonExecutable = "python", [swit
 $ErrorActionPreference = "Stop"
 $project = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 Set-Location $project
+$gitArguments = @('-C', $project)
+if (Test-Path -LiteralPath (Join-Path $project 'git/.git')) {
+    $gitArguments = @("--git-dir=$(Join-Path $project 'git/.git')", "--work-tree=$project")
+}
+$sourceRevision = (& git @gitArguments rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Cannot establish the source commit.' }
+if (-not $ProbeOnly -and (& git @gitArguments status --porcelain)) { throw 'Release source must be a clean committed checkout.' }
+$lockDigest = (Get-FileHash -LiteralPath (Join-Path $project 'Cargo.lock') -Algorithm SHA256).Hash.ToLowerInvariant()
 if (-not $TargetDirectory) { $TargetDirectory = Join-Path $project "target/privacy-release" }
 $TargetDirectory = [IO.Path]::GetFullPath($TargetDirectory)
 $rustc = (Get-Command rustc -ErrorAction Stop).Source
@@ -51,9 +59,9 @@ try {
         & $rustc $source -O @flags -o $binary
         if ($LASTEXITCODE -ne 0) { throw "Privacy compile probe failed." }
     } else {
-        cargo build --release --target-dir $TargetDirectory
+        cargo build --locked --offline --release --package sic-core-rust --bin sic-core-rust --target-dir $TargetDirectory
         if ($LASTEXITCODE -ne 0) { throw "Private release build failed." }
-        $binary = Join-Path $TargetDirectory 'release/sic-proxy.exe'
+        $binary = Join-Path $TargetDirectory 'release/sic-core-rust.exe'
     }
     $report = Join-Path (Split-Path -Parent $binary) 'privacy-build.json'
     $scanArgs = @('scripts/scan_release_privacy.py', $binary, '--require-stripped', '--out', $report)
@@ -61,8 +69,12 @@ try {
     & $PythonExecutable @scanArgs
     if ($LASTEXITCODE -ne 0) { throw "Privacy scan rejected the binary; matching values are withheld." }
     $evidence = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    if (-not $ProbeOnly -and (((& git @gitArguments rev-parse HEAD).Trim() -ne $sourceRevision) -or
+        (& git @gitArguments status --porcelain))) { throw 'Source changed during the release build; rebuild the committed revision.' }
     $evidence | Add-Member -NotePropertyName build_policy -NotePropertyValue @{
         kind = $(if ($ProbeOnly) { 'probe' } else { 'release' })
+        source_commit = $sourceRevision
+        cargo_lock_sha256 = $lockDigest
         remap_path_prefix = $true
         mapped_root_forms = $orderedMaps.Count
         c_and_cpp_prefix_maps = $true

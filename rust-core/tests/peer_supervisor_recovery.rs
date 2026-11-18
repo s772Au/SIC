@@ -212,7 +212,7 @@ async fn fixture() -> Fixture {
         "timeout_seconds":10,
         "api_timeout_seconds":3,
         "prices":{"input":0.0,"output":0.0,"cache_read":0.0,"cache_write":0.0},
-        "allowed_tools":["sic_tool_search"],
+        "allowed_tools":["sic_tool_update"],
         "prompt":"synthetic supervisor recovery fixture"
     });
     Fixture {

@@ -1,0 +1,4 @@
+Package version: tiktoken-rs 0.12.1
+Upstream repository: https://github.com/zurawiki/tiktoken-rs
+Exact source commit from crate .cargo_vcs_info.json: 72a5a800651a1cea1ad609292446ba02c80e3bcd
+LICENSE copied verbatim from that commit.

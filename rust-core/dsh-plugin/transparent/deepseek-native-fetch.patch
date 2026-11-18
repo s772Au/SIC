@@ -1,0 +1,115 @@
+--- a/packages/llm/llm-deepseek/src/types.ts
++++ b/packages/llm/llm-deepseek/src/types.ts
+@@ -1,5 +1,5 @@
+ /** Model catalog and request-local dependencies for DeepSeek Messages. */
+-import type { LlmModelInfo, ModelModality, SystemPromptUpdate, ToolUpdate, ResolvedRetryPolicy, ImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
++import type { LlmModelInfo, ModelModality, SystemPromptUpdate, ToolUpdate, ResolvedRetryPolicy, ImageAttachmentAccess, GenerateOptions, RequestMessage } from '@deepseek-ai/dsh-llm'
+ import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+ import type { AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
+ import type { DeepSeekLlmApiExtensionRequest, PreparedDeepSeekLlmApiExtensions } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
+@@ -91,6 +91,10 @@
+
+ /** Constructor options for {@link DeepSeekAdapter}: the operation-local resolution hooks the plugin owns. */
+ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOptions = DeepSeekConnectionOptions> {
++  /** Host SDK projection before the original Provider serializer. */
++  projectContext?: (history: readonly RequestMessage[], options: GenerateOptions) => Promise<{history: readonly RequestMessage[]; projection?: unknown}>
++  /** Native HTTP hook with host-only provenance. */
++  fetch?: (input: RequestInfo | URL, init: RequestInit, provenance: {options: GenerateOptions; history: readonly RequestMessage[]; context_projection?: unknown; serializeHistory: (history: readonly RequestMessage[]) => unknown}) => Promise<Response>
+   /** Report unusable native Messages replay metadata without exposing content or signatures. */
+   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
+   /** Report extension fields omitted from one request because the merged request failed to serialize. */
+--- a/packages/llm/llm-deepseek/src/adapter.ts
++++ b/packages/llm/llm-deepseek/src/adapter.ts
+@@ -1,7 +1,7 @@
+ /** Direct Messages transport with one cancellable lifecycle per model request. */
+
+ import { attributionHeaders, LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm'
+-import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm'
++import type { GenerateOptions, RequestMessage, ImageAttachmentAccessResolver, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm'
+ import type { DeepSeekLlmApiJson } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
+ import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
+ import { modelInfo } from './model-info.ts'
+@@ -115,10 +115,13 @@
+             continue
+           }
+         }
+-        const history = inline ? inlineImages(messages, versions, connection) : messages
+-        const body = serialize(options, connection, history, versions, this.imageAccess, (reason) => {
++        const originalHistory = inline ? inlineImages(messages, versions, connection) : messages
++        const contextProjection = await this.dependencies.projectContext?.(originalHistory, options)
++        const history = contextProjection?.history ?? originalHistory
++        const serializeHistory = (history: readonly RequestMessage[]) => serialize(options, connection, history, versions, this.imageAccess, (reason) => {
+           this.dependencies.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
+         }, fileIds)
++        const body = serializeHistory(history)
+         const extensions = await prepareRequestExtensions(body as Readonly<Record<string, DeepSeekLlmApiJson>>, {
+           signal,
+           ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
+@@ -135,7 +138,8 @@
+             ? [MESSAGES_TOOL_CHANGES_BETA]
+             : [],
+         ]
+-        const response = await fetch(`${messagesApiRoot(connection.baseURL)}/messages`, {
++        const nativeFetch = this.dependencies.fetch ?? ((input: RequestInfo | URL, init: RequestInit, _provenance: unknown) => fetch(input, init))
++        const response = await nativeFetch(`${messagesApiRoot(connection.baseURL)}/messages`, {
+           method: 'POST', signal, body: extensions.payload, redirect: 'error',
+           headers: {
+             ...attributionHeaders(),
+@@ -147,7 +151,7 @@
+             ...options.sessionId === undefined ? {} : { 'x-deepseek-harness-session-id': String(options.sessionId) },
+             ...options.purpose === 'compaction' ? { 'x-deepseek-harness-compact': '1' } : {},
+           },
+-        })
++        }, {options, history, context_projection: contextProjection?.projection, serializeHistory})
+         if (!response.ok) {
+           const text = await response.text()
+           let raw: unknown
+--- a/packages/llm/llm-deepseek/src/host.ts
++++ b/packages/llm/llm-deepseek/src/host.ts
+@@ -4,6 +4,7 @@
+ import type {} from '@deepseek-ai/cordis-plugin-loader'
+ import type {} from '@deepseek-ai/dsh-fs'
+ import { resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
++import type { GenerateOptions, RequestMessage } from '@deepseek-ai/dsh-llm'
+ import { getOrCreateAnonymousUserId, type AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
+ import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
+ import { DeepSeekAdapter } from './adapter.ts'
+@@ -26,6 +27,21 @@
+   const unacceptedRoutes = new Set<string>()
+   const adapter = new DeepSeekAdapter({
+     ...dependencies,
++    projectContext: async (history, options) => {
++      const exchange = {history, options, projection: undefined as unknown}
++      const projected = await ctx.waterfall('llm/context-project', exchange, () => Promise.resolve(exchange.history))
++      return {history: projected, projection: exchange.projection}
++    },
++    fetch: (input, init, provenance) => {
++      const guards: Array<(request: Request) => void | Promise<void>> = []
++      const exchange = {request: new Request(input, init), provenance, format: 'anthropic-messages' as const} as NativeFetchExchange
++      Object.defineProperty(exchange, 'addFinalGuard', {value: (guard: (request: Request) => void | Promise<void>) => {guards.push(guard)}, writable: false, configurable: false})
++      Object.preventExtensions(exchange)
++      return ctx.waterfall('llm/native-fetch', exchange, async () => {
++        for (const guard of guards) await guard(exchange.request)
++        return fetch(exchange.request)
++      })
++    },
+     resolveUserId: () => userId ??= getOrCreateAnonymousUserId(),
+     onReplayDegrade: ({ provider, model, reason }) => {
+       const key = `${provider}/${model}\u0000${reason}`
+@@ -63,3 +79,16 @@
+     registeredPolicy = policy
+   })
+ }
++
++interface NativeFetchExchange {
++  request: Request
++  readonly provenance: Parameters<NonNullable<DeepSeekAdapterOptions['fetch']>>[2]
++  readonly format: 'anthropic-messages'
++  readonly addFinalGuard: (guard: (request: Request) => void | Promise<void>) => void
++}
++declare module '@deepseek-ai/cordis' {
++  interface Events {
++    'llm/context-project'(exchange: {history: readonly RequestMessage[]; options: GenerateOptions; projection?: unknown}, next: () => Promise<readonly RequestMessage[]>): Promise<readonly RequestMessage[]>
++    'llm/native-fetch'(exchange: NativeFetchExchange, next: () => Promise<Response>): Promise<Response>
++  }
++}

@@ -13,5 +13,6 @@ from .runtime import SICRuntime
 from .accounting import SICAccounting
 from .editor_task import SICEditorTask
 from .hierarchy import SICHierarchy
+from .rust_workbench import SICRustWorkbench
 
-__all__ = ["SICOperation", "SICAction", "SICWorkspace", "SICCandidate", "SICDecision", "SICConfiguration", "SICMemory", "SICRoutes", "SICBoard", "SICNativeInput", "SICCoverage", "SICRuntime", "SICAccounting", "SICEditorTask", "SICHierarchy"]
+__all__ = ["SICOperation", "SICAction", "SICWorkspace", "SICCandidate", "SICDecision", "SICConfiguration", "SICMemory", "SICRoutes", "SICBoard", "SICNativeInput", "SICCoverage", "SICRuntime", "SICAccounting", "SICEditorTask", "SICHierarchy", "SICRustWorkbench"]

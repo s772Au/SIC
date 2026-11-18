@@ -1,17 +1,23 @@
-param([int]$Port = 12025, [switch]$CoreDemo)
+param([int]$Port = 12025, [switch]$CoreDemo,
+      [string]$CliPath = $env:SIC_LANGGRAPH_CLI,
+      [string]$RuntimeDir = $env:SIC_UI_RUNTIME_DIR)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$cli = Join-Path $root '.local\langgraph-venv\Scripts\langgraph.exe'
+$cli = if ($CliPath) { $CliPath } else { Join-Path $root '.local\langgraph-venv\Scripts\langgraph.exe' }
 if (-not (Test-Path $cli)) { throw 'Install the separate Studio environment first; see integrations/README.md.' }
 if ($CoreDemo) { . (Join-Path $PSScriptRoot 'use-core-demo-environment.ps1') }
+if (-not $CoreDemo -and -not $env:SIC_CORE_TOKEN -and $env:SIC_CORE_TOKEN_FILE) {
+    $env:SIC_CORE_TOKEN = [IO.File]::ReadAllText($env:SIC_CORE_TOKEN_FILE).Trim()
+}
 $env:PYTHONPATH = $PSScriptRoot + [IO.Path]::PathSeparator + $root
 $env:PYTHONUTF8 = '1'
 $env:LANGSMITH_TRACING = 'false'
 $env:LANGCHAIN_TRACING_V2 = 'false'
-$taskInstance = Join-Path $root ".local/langgraph-$Port"
+$taskLocal = if ($RuntimeDir) { $RuntimeDir } else { Join-Path $root '.local' }
+$taskInstance = Join-Path $taskLocal "langgraph-$Port"
 New-Item -ItemType Directory -Force $taskInstance | Out-Null
 $taskConfig = Join-Path $taskInstance 'langgraph.json'
-$taskGraphs = @{sic_core='sic_workflow.v2_graph:graph';sic_candidate='sic_workflow.workbench_graph:candidate_graph';sic_memory='sic_workflow.workbench_graph:memory_graph';sic_legacy_control='sic_workflow.graph:graph'}
+$taskGraphs = @{sic_rust='sic_workflow.rust_graph:graph';sic_core='sic_workflow.v2_graph:graph';sic_candidate='sic_workflow.workbench_graph:candidate_graph';sic_memory='sic_workflow.workbench_graph:memory_graph';sic_legacy_control='sic_workflow.graph:graph'}
 foreach($taskDomain in @('decision','routes','runtime','configuration','editor','source')) { $taskGraphs['sic_'+$taskDomain] = 'sic_workflow.domain_graphs:'+$taskDomain+'_graph' }
 $taskGraphs['sic_accounting'] = 'sic_workflow.accounting_graph:graph'
 $taskGraphs['sic_hierarchy'] = 'sic_workflow.hierarchy_graph:graph'

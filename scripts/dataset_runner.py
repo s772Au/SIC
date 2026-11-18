@@ -315,9 +315,19 @@ def main():
     parser.add_argument("--max-request-bytes", type=int, default=64 * 1024 * 1024)
     parser.add_argument("--max-output-tokens", type=int, default=4096)
     parser.add_argument("--max-model-calls", type=int, default=10)
+    parser.add_argument("--worker-call-limit", type=int, default=1,
+                        help="maximum Rust Worker calls per answer, including built-in tool continuations")
+    parser.add_argument("--hierarchy-fanout", type=int, default=0,
+                        help="0 disables higher levels; 2..64 groups CBs with deterministic program editing")
     parser.add_argument("--verify-sources", action="store_true")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--provider", choices=["mock", "chat-completions"], default="mock")
+    parser.add_argument("--backend", choices=["rust-v2", "legacy-v1"], default="rust-v2",
+                        help="Rust v2 is the current test backend; legacy-v1 requires the historical sic-proxy")
+    parser.add_argument("--rust-binary", type=Path, help="explicit sic-core-rust executable for an isolated run")
+    parser.add_argument("--model-config", type=Path, help="frozen Rust Worker/Editor host profiles for real execution")
+    parser.add_argument("--editor-mode", choices=["model", "program"], default="model",
+                        help="model Editor, or a program-KEEP plumbing control")
     parser.add_argument("--endpoint")
     parser.add_argument("--model")
     parser.add_argument("--judge-model")
@@ -327,10 +337,12 @@ def main():
     args = parser.parse_args()
     if args.data_root:
         os.environ["SIC_DATA_ROOT"] = str(args.data_root.resolve())
-    if args.limit_cases < 1 or args.question_limit < 0 or args.chunk_bytes < 4 or args.max_output_tokens < 1 or len(set(args.arms)) != len(args.arms) or len(set(args.dataset)) != len(args.dataset):
+    if args.limit_cases < 1 or args.question_limit < 0 or args.chunk_bytes < 4 or args.max_output_tokens < 1 or args.worker_call_limit < 1 or (args.hierarchy_fanout != 0 and not 2 <= args.hierarchy_fanout <= 64) or len(set(args.arms)) != len(args.arms) or len(set(args.dataset)) != len(args.dataset):
         parser.error("invalid limits or duplicate arms/datasets")
     if args.out.exists():
         parser.error("output already exists; no reuse or resume")
+    if args.backend == "legacy-v1" and (args.rust_binary or args.model_config or args.editor_mode != "model" or args.worker_call_limit != 1 or args.hierarchy_fanout):
+        parser.error("Rust binary, profile, editor, continuation and hierarchy options require --backend rust-v2")
     if args.execute and args.provider == "chat-completions":
         try:
             endpoint_check(args.endpoint)
@@ -340,7 +352,18 @@ def main():
             parser.error("real execution requires --allow-network, fixed --model and API key environment variable")
         if any(not d.startswith("babilong") for d in args.dataset) and not args.judge_model:
             parser.error("BEAM/CorpusQA require explicit fixed --judge-model")
+        if args.backend == "rust-v2":
+            from rust_v2_dataset_runner import validate_real_config
+            try:
+                validate_real_config(args)
+            except (ValueError, OSError, json.JSONDecodeError) as error:
+                parser.error(str(error))
+    if args.execute and args.backend == "rust-v2" and not args.rust_binary:
+        parser.error("Rust v2 execution requires --rust-binary")
     plan = make_plan(args)
+    if args.backend == "rust-v2":
+        from rust_v2_dataset_runner import add_rust_plan
+        add_rust_plan(plan, args.editor_mode, args.worker_call_limit, args.hierarchy_fanout)
     if not args.execute:
         args.out.mkdir(parents=True, exist_ok=False)
         write_json(args.out / "plan.json", plan)
@@ -348,6 +371,9 @@ def main():
         return 0
     if args.max_model_calls < plan["call_estimate"]["total"]:
         parser.error(f"planned {plan['call_estimate']['total']} calls exceed --max-model-calls; inspect a dry plan and raise the explicit budget")
+    if args.backend == "rust-v2":
+        from rust_v2_dataset_runner import run as run_rust_v2
+        return run_rust_v2(args, plan, Provider)
     return run(args, plan)
 
 

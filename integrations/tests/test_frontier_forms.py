@@ -114,7 +114,9 @@ class FrontierOfficialSDKTests(unittest.TestCase):
                 self.assertFalse(failure['result']['ok']);self.assertEqual(failure['status'],'failed');self.assertEqual(failure['records'],[])
                 captures.append({'negative':failure})
                 report={'status':'passed','official_lfx_output_builder':True,'official_langgraph_sdk':True,'browser_gui_loaded':False,'existing_services_restarted':False,'external_model_calls':0,'owned_fixture_model_requests':len(fixture.model_requests),'captures':captures,'core_http_trace':client.trace}
-                dest=ROOT/'.local/contract-rebuild/frontier-forms-sdk.json';dest.write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
+                evidence_dir=Path(os.environ.get('SIC_TEST_EVIDENCE_DIR', ROOT/'.local/contract-rebuild'))
+                evidence_dir.mkdir(parents=True, exist_ok=True)
+                dest=evidence_dir/'frontier-forms-sdk.json';dest.write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
         finally:
             for key,value in saved.items():
                 if value is None:os.environ.pop(key,None)

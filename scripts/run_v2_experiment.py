@@ -1,4 +1,4 @@
-"""Execute new-core baseline batch vs SIC incremental on an owned HTTP fixture.
+"""Execute baseline batch vs SIC incremental on an owned HTTP fixture.
 
 This is a reproducible engineering experiment, not a research quality result.
 No flag or configuration can redirect this command to a real provider.
@@ -9,11 +9,12 @@ import json
 from pathlib import Path
 import sys
 import time
+from types import SimpleNamespace
 import uuid
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 from sic_core.accounting import summarize_records, compare_workflows
 from v2_experiment_fixture import OwnedFixture
 
@@ -109,10 +110,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=Path, help="JSON {task_id,goal,blocks:[text,...]}; copied into the frozen run")
     parser.add_argument("--output", type=Path, help="New empty run directory; default .local/experiments-v2/<unique>")
+    parser.add_argument("--backend", choices=["rust-v2", "python"], default="rust-v2")
+    parser.add_argument("--rust-binary", type=Path)
+    parser.add_argument("--max-model-calls", type=int, default=100)
+    parser.add_argument("--worker-call-limit", type=int, default=1)
+    parser.add_argument("--hierarchy-fanout", type=int, default=0)
     args = parser.parse_args()
     task = json.loads(args.task.read_text(encoding="utf-8-sig")) if args.task else DEFAULT_TASK
     if not isinstance(task.get("blocks"), list) or not task["blocks"] or any(not isinstance(block, str) for block in task["blocks"]):
         raise ValueError("Task must contain nonempty text blocks")
+    if args.backend == "rust-v2":
+        if not args.output:
+            parser.error("Rust fixture requires an explicit new --output directory")
+        from rust_v2_research import run as run_rust
+        options = SimpleNamespace(rust_binary=args.rust_binary, hierarchy_fanout=args.hierarchy_fanout,
+            prices=None, allow_provider=False, provider_config=None, allow_test_gateway=False, dataset=None,
+            data_root=None, task=None, chunk_bytes=32768, output=args.output, engines=["batch", "sic"],
+            max_model_calls=args.max_model_calls, worker_call_limit=args.worker_call_limit, trim_budget=4096)
+        return run_rust(options, task_override=task)
+    if args.worker_call_limit != 1 or args.hierarchy_fanout:
+        parser.error("Worker continuation and hierarchy options apply to the Rust fixture")
     output = args.output or ROOT / ".local/experiments-v2" / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])
     if output.exists() and any(output.iterdir()):
         raise ValueError("Output must be new/empty; old answers are never reused")
@@ -152,4 +169,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

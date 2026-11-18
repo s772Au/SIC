@@ -3,7 +3,8 @@ mod toolset;
 
 use serde_json::json;
 use toolset::{
-    AclGrant, DEFAULT_IDLE_ROUNDS, DEFAULT_MAX_EXPANDED, ToolAcl, ToolDescriptor, ToolSet,
+    AclGrant, DEFAULT_IDLE_ROUNDS, DEFAULT_MAX_EXPANDED, ProgramInfoField, ToolAcl, ToolDescriptor,
+    ToolListing, ToolSet,
 };
 
 fn grant(names: &[&str]) -> Vec<AclGrant> {
@@ -26,7 +27,18 @@ fn descriptor(name: impl Into<String>) -> ToolDescriptor {
             "function":{"name":name,"parameters":{"type":"object","properties":{}}}
         }),
         name,
+        program: None,
     }
+}
+
+/// One grouped descriptor for the two-level directory tests.
+fn grouped(name: &str, program: &str, overview: &str) -> ToolDescriptor {
+    let mut base = descriptor(name);
+    base.program = Some(ProgramInfoField {
+        name: program.to_owned(),
+        overview: overview.to_owned(),
+    });
+    base
 }
 
 #[test]
@@ -354,4 +366,165 @@ fn serialized_state_roundtrip_preserves_acl_recency_and_active_lease() {
     );
     restored.finish_execution(&lease).unwrap();
     assert_eq!(restored.request_expansion("b").unwrap().evicted, vec!["a"]);
+}
+
+#[test]
+fn update_selects_folds_and_reports_exactly_what_happened() {
+    let mut set = ToolSet::with_limits(
+        "worker-A",
+        acl(&["a", "b"], &["a", "b"], &["a", "b"]),
+        15,
+        8,
+    );
+    set.register_tool(descriptor("a"), false).unwrap();
+    set.register_tool(descriptor("b"), false).unwrap();
+    assert!(!set.is_expanded("a"));
+
+    let first = set.update(&["a".into()], &[]).unwrap();
+    assert_eq!(first.added, vec!["a".to_owned()]);
+    assert!(first.folded.is_empty());
+    assert!(first.evicted.is_empty());
+    assert!(first.message.contains("Added a."));
+    assert!(set.is_expanded("a"));
+
+    let second = set.update(&["b".into()], &["a".into()]).unwrap();
+    assert_eq!(second.added, vec!["b".to_owned()]);
+    assert_eq!(second.folded, vec!["a".to_owned()]);
+    assert!(!set.is_expanded("a"));
+    assert!(set.is_expanded("b"));
+    assert!(second.message.contains("Folded a as you requested."));
+}
+
+#[test]
+fn update_reports_already_expanded_without_re_expanding() {
+    let mut set = ToolSet::with_limits("worker-A", acl(&["a"], &["a"], &["a"]), 15, 8);
+    set.register_tool(descriptor("a"), false).unwrap();
+    set.update(&["a".into()], &[]).unwrap();
+    let again = set.update(&["a".into()], &[]).unwrap();
+    assert!(again.added.is_empty());
+    assert_eq!(again.already_expanded, vec!["a".to_owned()]);
+    assert!(again.message.contains("Already expanded: a."));
+}
+
+#[test]
+fn update_eviction_names_the_cause_and_the_victim() {
+    let mut set = ToolSet::with_limits(
+        "worker-A",
+        acl(&["a", "b", "c"], &["a", "b", "c"], &["a", "b", "c"]),
+        15,
+        2,
+    );
+    set.register_tool(descriptor("a"), false).unwrap();
+    set.register_tool(descriptor("b"), false).unwrap();
+    set.register_tool(descriptor("c"), false).unwrap();
+    set.update(&["a".into(), "b".into()], &[]).unwrap();
+    set.advance_worker_round().unwrap();
+    let third = set.update(&["c".into()], &[]).unwrap();
+    assert_eq!(third.added, vec!["c".to_owned()]);
+    assert_eq!(third.evicted.len(), 1);
+    assert!(third.message.contains("Also folded"));
+    assert!(third.message.contains("15 idle rounds unused"));
+    assert!(!set.is_expanded(&third.evicted[0]));
+    assert!(set.is_expanded("c"));
+}
+
+#[test]
+fn update_rejects_unauthorized_unknown_fixed_and_in_flight_tools() {
+    let mut set = ToolSet::with_limits("worker-A", acl(&["a"], &["a"], &["a"]), 15, 8);
+    set.register_tool(descriptor("a"), false).unwrap();
+    set.register_tool(descriptor("fixed"), true).unwrap();
+
+    let mut granted = set.clone();
+    granted.update_acl(acl(
+        &["ghost", "fixed"],
+        &["ghost", "fixed"],
+        &["ghost", "fixed"],
+    ));
+    let unknown = granted.update(&["ghost".into()], &[]).unwrap();
+    assert_eq!(unknown.rejected.len(), 1);
+    assert_eq!(unknown.rejected[0].reason, "unknown_tool");
+    assert!(unknown.added.is_empty());
+
+    // A name outside the ACL is denied before any catalog lookup happens.
+    let denied = set.update(&["ghost".into()], &[]).unwrap();
+    assert_eq!(denied.rejected[0].reason, "expansion_denied");
+
+    let fixed = granted.update(&[], &["fixed".into()]).unwrap();
+    assert_eq!(fixed.rejected.len(), 1);
+    assert_eq!(fixed.rejected[0].reason, "host_fixed");
+    assert!(fixed.folded.is_empty());
+    assert!(set.is_expanded("fixed"));
+}
+
+#[test]
+fn update_requires_a_selection_or_a_fold_and_refuses_duplicates() {
+    let mut set = ToolSet::with_limits("worker-A", acl(&["a"], &["a"], &["a"]), 15, 8);
+    set.register_tool(descriptor("a"), false).unwrap();
+    assert!(set.update(&[], &[]).is_err());
+    assert!(set.update(&["a".into(), "a".into()], &[]).is_err());
+}
+
+#[test]
+fn program_directory_groups_tools_and_keeps_overview_for_folded_programs() {
+    let mut set = ToolSet::with_limits(
+        "worker-A",
+        acl(
+            &["ps.a", "ps.b", "il.c", "solo"],
+            &["ps.a", "ps.b", "il.c", "solo"],
+            &["ps.a", "ps.b", "il.c", "solo"],
+        ),
+        15,
+        16,
+    );
+    set.register_tool(grouped("ps.a", "Photoshop", "Bitmap image editing."), false)
+        .unwrap();
+    set.register_tool(grouped("ps.b", "Photoshop", "Bitmap image editing."), false)
+        .unwrap();
+    set.register_tool(grouped("il.c", "Illustrator", "Vector drawing."), false)
+        .unwrap();
+    set.register_tool(descriptor("solo"), false).unwrap();
+    set.update(&["ps.a".into()], &[]).unwrap();
+
+    // An expanded program drops its overview: the real schema description is
+    // already in the prefix, so repeating the summary is wasteful.
+    let directory = set.program_directory();
+    let photoshop = directory.iter().find(|e| e.program == "Photoshop").unwrap();
+    assert_eq!(photoshop.overview, "");
+    assert_eq!(photoshop.expanded, 1);
+    assert_eq!(photoshop.tools.len(), 2);
+    assert!(
+        photoshop
+            .tools
+            .iter()
+            .any(|t| t.name == "ps.a" && t.expanded)
+    );
+    assert!(
+        photoshop
+            .tools
+            .iter()
+            .any(|t| t.name == "ps.b" && !t.expanded)
+    );
+
+    // A fully folded program keeps its overview so it still explains itself.
+    let illustrator = directory
+        .iter()
+        .find(|e| e.program == "Illustrator")
+        .unwrap();
+    assert_eq!(illustrator.overview, "Vector drawing.");
+    assert_eq!(illustrator.expanded, 0);
+
+    let ungrouped: Vec<&ToolListing> = directory
+        .iter()
+        .filter(|entry| entry.program.is_empty())
+        .flat_map(|entry| entry.tools.iter())
+        .collect();
+    assert_eq!(ungrouped.len(), 1);
+    assert_eq!(ungrouped[0].name, "solo");
+
+    // Folding the last expanded tool brings the overview back.
+    set.update(&[], &["ps.a".into()]).unwrap();
+    let directory = set.program_directory();
+    let photoshop = directory.iter().find(|e| e.program == "Photoshop").unwrap();
+    assert_eq!(photoshop.overview, "Bitmap image editing.");
+    assert_eq!(photoshop.expanded, 0);
 }

@@ -1,0 +1,10 @@
+{
+  "id": "dsh-sic-transparent-v2",
+  "files": {
+    "append-only.md": "233f344a2857c41f8a36aaa8939a0cb889c0e1fc5955f1fd1c2c020cbd0727a4",
+    "fused.md": "e1d66b59368f70fe6b219fabafaa9b63eafca30c04ea191ac0c725c79ee7e882",
+    "native-tools.json": "ad7494554084e28294c8774b1b68838a9b97ca75815412b840f794d72724acc9",
+    "native.md": "387102197a467e004fea90deef9e59d5698ba912934ad8cf7e495bd89687864d",
+    "sic-extra-tools.json": "984769630d6048f56318f941d1ed05ecdf378e9190b4d5de9566974d6fd880a1"
+  }
+}

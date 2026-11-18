@@ -7,7 +7,7 @@ import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path[:0] = [str(ROOT), str(ROOT / "scripts")]
 from sic_core.accounting import summarize_records, compare_workflows
 
 
@@ -18,6 +18,11 @@ def read(path):
 def validate_run(directory):
     directory = Path(directory).resolve()
     manifest = read(directory / "manifest.json")
+    if manifest.get("schema") == "sic-rust-v2-research-run-v1":
+        if manifest.get("mode") != "owned_fixture":
+            raise ValueError("synthetic experiment verifier accepts only owned fixture runs")
+        from rust_v2_research import verify as verify_rust
+        return verify_rust(directory)
     if manifest.get("schema") != "sic-new-experiment-v1":
         raise ValueError("Unsupported run schema")
     checked = 0

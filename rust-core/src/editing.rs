@@ -455,6 +455,7 @@ fn materialize_inner(
     let mut flags: HashMap<String, String> = HashMap::new();
     let mut persistent: Vec<String> = Vec::new();
     let mut volatile: Vec<String> = Vec::new();
+    let mut volatile_index:Vec<Value>=Vec::new();
     let mut instant = Map::new();
     let mut ops = Vec::new();
     let mut additions: Vec<Addition> = Vec::new();
@@ -492,6 +493,10 @@ fn materialize_inner(
                     .unwrap_or("")
                     .to_owned();
                 if lifecycle == "V" {
+                    let related=target.as_ref().and_then(|id|units.iter().find(|unit|unit.id==*id));
+                    volatile_index.push(serde_json::json!({"position":volatile.len(),"origin":"operation","operation_index":ops.len()-1,"editor":editor,
+                        "source_unit_ids":related.map(|unit|vec![unit.id.clone()]).unwrap_or_default(),"source_anchors":related.map(|unit|vec![unit.anchor.clone()]).unwrap_or_default(),
+                        "text_ranges":if content.is_empty(){vec![]}else{vec![serde_json::json!({"utf8_start":0,"utf8_end":content.len()})]}}));
                     volatile.push(content);
                 } else {
                     let key = op
@@ -582,13 +587,11 @@ fn materialize_inner(
             persistent.push(text.clone());
             ops.push(json_add(&text, editor, "editor-P"));
         }
-        volatile.extend(
-            pvi.get("V")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .map(|v| v.as_str().expect("validated V string").to_owned()),
-        );
+        for item in pvi.get("V").and_then(Value::as_array).into_iter().flatten() {
+            let text=item.as_str().expect("validated V string").to_owned();
+            volatile_index.push(serde_json::json!({"position":volatile.len(),"origin":"editor-pvi-V","editor":editor,"source_unit_ids":[],"source_anchors":[],"text_ranges":if text.is_empty(){vec![]}else{vec![serde_json::json!({"utf8_start":0,"utf8_end":text.len()})]}}));
+            volatile.push(text);
+        }
         if let Some(views) = pvi.get("I").and_then(Value::as_object) {
             for (key, value) in views {
                 if instant.contains_key(key) {
@@ -632,6 +635,7 @@ fn materialize_inner(
         })
     };
     let mut pieces: Vec<String> = Vec::new();
+    let mut piece_owners:Vec<Vec<(String,usize,usize)>>=Vec::new();
     for unit in active {
         for addition in additions.iter().filter(|a| {
             a.anchor
@@ -639,6 +643,7 @@ fn materialize_inner(
                 .is_some_and(|(target, position)| target == &unit.id && position == "before")
         }) {
             pieces.push(addition.content.clone());
+            piece_owners.push(Vec::new());
         }
         let mut rendered = texts[&unit.id].clone();
         if let Some(flag) = flags.get(&unit.id) {
@@ -646,8 +651,11 @@ fn materialize_inner(
             rendered.push_str(flag);
         }
         if unit.continuation && !pieces.is_empty() && !has_before(&unit.id) {
+            let start=pieces.last().expect("nonempty").len();
+            piece_owners.last_mut().expect("parallel pieces").push((unit.id.clone(),start,start+rendered.len()));
             pieces.last_mut().expect("nonempty").push_str(&rendered);
         } else {
+            piece_owners.push(vec![(unit.id.clone(),0,rendered.len())]);
             pieces.push(rendered);
         }
         for addition in additions.iter().filter(|a| {
@@ -656,16 +664,18 @@ fn materialize_inner(
                 .is_some_and(|(target, position)| target == &unit.id && position == "after")
         }) {
             pieces.push(addition.content.clone());
+            piece_owners.push(Vec::new());
         }
     }
-    pieces.extend(
-        additions
-            .iter()
-            .filter(|a| a.anchor.is_none())
-            .map(|a| a.content.clone()),
-    );
-    pieces.extend(persistent);
+    for addition in additions.iter().filter(|a|a.anchor.is_none()) {pieces.push(addition.content.clone());piece_owners.push(Vec::new());}
+    for text in persistent {pieces.push(text);piece_owners.push(Vec::new());}
     let body = pieces.join("\n");
+    let mut p_ranges=HashMap::<String,Vec<Value>>::new();let mut base=0;
+    for (index,(piece,owners)) in pieces.iter().zip(&piece_owners).enumerate(){
+        if index>0{base+=1;}
+        for (id,start,end) in owners {if start<end {p_ranges.entry(id.clone()).or_default().push(serde_json::json!({"utf8_start":base+start,"utf8_end":base+end}));}}
+        base+=piece.len();
+    }
 
     let index = units.iter().map(|unit| {
         let operation_indexes = ops.iter().enumerate().filter_map(|(i, op)| {
@@ -673,10 +683,11 @@ fn materialize_inner(
             let group_targets = op.get("targets").and_then(Value::as_array).is_some_and(|targets| targets.iter().any(|v| v.as_str() == Some(unit.id.as_str())));
             (directly_targets || group_targets).then_some(i)
         }).collect::<Vec<_>>();
-        serde_json::json!({"unit_id":unit.id,"anchor":unit.anchor,"operation_indexes":operation_indexes})
+        serde_json::json!({"unit_id":unit.id,"anchor":unit.anchor,"operation_indexes":operation_indexes,
+            "p_active":p_ranges.get(&unit.id).is_some_and(|ranges|!ranges.is_empty()),"p_text_ranges":p_ranges.get(&unit.id).cloned().unwrap_or_default()})
     }).collect::<Vec<_>>();
     Ok(
-        serde_json::json!({"body":body,"ops":ops,"volatile":volatile,"instant":Value::Object(instant),"index":index}),
+        serde_json::json!({"body":body,"ops":ops,"volatile":volatile,"volatile_index":volatile_index,"instant":Value::Object(instant),"index":index}),
     )
 }
 
@@ -741,7 +752,7 @@ fn json_add(content: &str, editor: &str, origin: &str) -> Value {
 
 /// Rebuild a pure content state from the first `step` fixed operation records.
 /// No model, tool, permission, publication, or external effect is replayed.
-pub fn replay(
+pub(crate) fn replay_with_index(
     source: &Value,
     records: &Value,
     step: usize,
@@ -827,6 +838,8 @@ pub fn replay(
     }
     Ok(serde_json::json!({
         "body":result["body"],
+        "index":result["index"],
+        "volatile_index":result["volatile_index"],
         "volatile":result["volatile"],
         "instant":result["instant"],
         "step":step,
@@ -834,4 +847,13 @@ pub fn replay(
         "external_effects_replayed":false,
         "basis":"archived WB with published ordered operation prefix"
     }))
+}
+
+/// Public replay keeps its existing response shape; internal lineage reads the
+/// actual materializer index without inventing a second operation interpreter.
+pub fn replay(source:&Value,records:&Value,step:usize,primary_decision:bool)->Result<Value,String>{
+    let mut result=replay_with_index(source,records,step,primary_decision)?;
+    result.as_object_mut().expect("replay object").remove("index");
+    result.as_object_mut().expect("replay object").remove("volatile_index");
+    Ok(result)
 }

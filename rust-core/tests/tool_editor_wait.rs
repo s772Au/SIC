@@ -8,11 +8,13 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 use tempfile::tempdir;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 
 #[derive(Clone, Default)]
 struct Mock {
     calls: Arc<Mutex<usize>>,
+    editor_started: Arc<Notify>,
+    release_editor: Arc<Notify>,
 }
 
 async fn complete(State(mock): State<Mock>, Json(_body): Json<Value>) -> Json<Value> {
@@ -30,7 +32,8 @@ async fn complete(State(mock): State<Mock>, Json(_body): Json<Value>) -> Json<Va
             }}]}),
         ),
         2 => {
-            tokio::time::sleep(Duration::from_millis(5_000)).await;
+            mock.editor_started.notify_one();
+            mock.release_editor.notified().await;
             Json(
                 json!({"model":"mock","usage":{"prompt_tokens":10,"completion_tokens":4},
                 "choices":[{"finish_reason":"tool_calls","message":{
@@ -86,7 +89,7 @@ async fn tool_finishing_first_waits_for_the_inflight_editor_before_worker_contin
     let profile = json!({"model":"openai/mock","api_base":format!("http://{address}/v1"),
         "api_key_env":"FIXTURE_ONLY","tokenizer_model":"host-surrogate",
         "context_window":32000,"max_input_tokens":32000,"max_output_tokens":2048,
-        "default_output_tokens":128,"timeout_seconds":10});
+        "default_output_tokens":128,"timeout_seconds":60});
     let core = Core::with_model_config_and_resolver(
         store.clone(),
         json!({"roles":{"worker":profile.clone(),"editor":profile}}),
@@ -160,6 +163,9 @@ async fn tool_finishing_first_waits_for_the_inflight_editor_before_worker_contin
             )
             .await
     });
+    tokio::time::timeout(Duration::from_secs(20), mock.editor_started.notified())
+        .await
+        .expect("the Editor must reach the mock provider before the tool finishes");
     let dir = tempdir().unwrap();
     let log_path = dir.path().join("tool-wait.log");
     let command = format!(
@@ -192,23 +198,11 @@ async fn tool_finishing_first_waits_for_the_inflight_editor_before_worker_contin
         .await
         .unwrap_err();
     assert_eq!(blocked.code, "editor_pending");
+    assert!(!editor.is_finished(), "the Editor request is still in flight");
+    mock.release_editor.notify_one();
     let editor_result = editor.await.unwrap().unwrap();
     assert_eq!(editor_result["result"]["status"], "ready");
-    let completed = call(&core, &ctx, "tools.tasks", json!({})).await["tasks"][0]["completed_at"]
-        .as_u64()
-        .unwrap();
     let accounting = call(&core, &ctx, "accounting.get", json!({})).await;
-    let editor_interval = accounting["resources"]["timing"]["intervals"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|interval| interval["role"] == "editor")
-        .expect("editor interval");
-    let editor_end = editor_interval["end"].as_u64().unwrap();
-    assert!(
-        completed < editor_end,
-        "tool completed {completed} before editor end {editor_end}"
-    );
     let state = call(&core, &ctx, "chain.get", json!({})).await;
     call(
         &core,

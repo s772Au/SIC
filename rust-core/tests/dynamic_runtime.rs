@@ -10,6 +10,12 @@ pub mod toolset {
 pub mod prefix {
     pub use sic_core_rust::prefix::*;
 }
+pub mod core {
+    pub use sic_core_rust::core::*;
+}
+pub mod transparent {
+    pub use sic_core_rust::transparent::*;
+}
 #[path = "../src/tool_dispatch.rs"]
 mod tool_dispatch;
 #[path = "../src/tool_store.rs"]
@@ -39,6 +45,7 @@ fn descriptor(name: &str) -> ToolDescriptor {
         name: name.to_owned(),
         description: format!("{name} integration fixture"),
         schema: json!({"type":"object","properties":{"value":{"type":"string"}},"required":["value"],"additionalProperties":false}),
+        program: None,
     }
 }
 
@@ -74,8 +81,8 @@ async fn parses_fixed_operations_and_rejects_model_supplied_identity_or_unknown_
     let denied = dispatch(
         &db,
         &scope(false),
-        "sic_tool_search",
-        json!({"query":"fixture"}),
+        "sic_tool_update",
+        json!({"select":["fixture"]}),
     )
     .await
     .unwrap_err();
@@ -84,8 +91,8 @@ async fn parses_fixed_operations_and_rejects_model_supplied_identity_or_unknown_
     let bad = dispatch(
         &db,
         &scope(true),
-        "sic_tool_search",
-        json!({"query":"fixture","actor":"attacker"}),
+        "sic_tool_update",
+        json!({"select":["fixture"],"actor":"attacker"}),
     )
     .await
     .unwrap_err();
@@ -93,42 +100,47 @@ async fn parses_fixed_operations_and_rejects_model_supplied_identity_or_unknown_
     let unknown = dispatch(&db, &scope(true), "sic_tool_export", json!({}))
         .await
         .unwrap_err();
-    assert_eq!(unknown.status, 501);
+    // Original host names now enter the native dispatch path; unknown names
+    // still cannot acquire a host execution lease without an execute grant.
+    assert_eq!(unknown.status, 403);
 
-    let found = dispatch(
+    // Selecting nothing and folding nothing is a shape error, not a no-op.
+    let empty = dispatch(&db, &scope(true), "sic_tool_update", json!({}))
+        .await
+        .unwrap_err();
+    assert_eq!(empty.status, 422);
+
+    let selected = dispatch(
         &db,
         &scope(true),
-        "sic_tool_search",
-        json!({"query":"fixture"}),
+        "sic_tool_update",
+        json!({"select":["fixture"]}),
     )
     .await
     .unwrap();
-    assert!(
-        matches!(found, ToolDispatch::Search { tools, offset, total, next_offset }
-        if tools.len() == 1 && tools[0].name == "fixture" && offset == 0 && total == 1 && next_offset.is_none())
-    );
-    let expanded = dispatch(
+    let ToolDispatch::Updated { update } = selected else {
+        panic!("expected an update result")
+    };
+    assert_eq!(update.added, vec!["fixture".to_owned()]);
+    assert!(update.message.contains("Added fixture."));
+
+    let folded = dispatch(
         &db,
         &scope(true),
-        "sic_tool_expand",
-        json!({"name":"fixture"}),
+        "sic_tool_update",
+        json!({"fold":["fixture"]}),
     )
     .await
     .unwrap();
-    assert!(matches!(expanded, ToolDispatch::Expanded { .. }));
-    let reclaimed = dispatch(
-        &db,
-        &scope(true),
-        "sic_tool_reclaim",
-        json!({"name":"fixture"}),
-    )
-    .await
-    .unwrap();
-    assert_eq!(reclaimed, ToolDispatch::Reclaimed { reclaimed: true });
+    let ToolDispatch::Updated { update } = folded else {
+        panic!("expected an update result")
+    };
+    assert_eq!(update.folded, vec!["fixture".to_owned()]);
+    assert!(update.message.contains("Folded fixture as you requested."));
 }
 
 #[tokio::test]
-async fn search_paginates_large_discoverable_catalog_and_honors_acl() {
+async fn update_handles_a_large_catalog_and_enforces_capacity() {
     let db = Store::memory().await.unwrap();
     let names = (0..130)
         .map(|index| format!("catalog-{index:03}"))
@@ -137,7 +149,7 @@ async fn search_paginates_large_discoverable_catalog_and_honors_acl() {
         .iter()
         .map(|name| AclGrant::new(ACTOR, name.clone()))
         .collect::<Vec<_>>();
-    let expanded = ToolStore::new(db.clone())
+    ToolStore::new(db.clone())
         .configure_from_host(
             CHAIN,
             ACTOR,
@@ -149,77 +161,67 @@ async fn search_paginates_large_discoverable_catalog_and_honors_acl() {
                 .map(|name| (descriptor(&name), false))
                 .collect(),
         )
-        .await;
-    expanded.unwrap();
-    let first = dispatch(
+        .await
+        .unwrap();
+    let first_twelve = names.iter().take(12).cloned().collect::<Vec<_>>();
+    let selected = dispatch(
         &db,
         &scope(true),
-        "sic_tool_search",
-        json!({"query":"catalog"}),
+        "sic_tool_update",
+        json!({"select":first_twelve}),
     )
     .await
     .unwrap();
-    let ToolDispatch::Search {
-        tools,
-        offset,
-        total,
-        next_offset,
-    } = first
-    else {
-        panic!("expected paginated search results")
+    let ToolDispatch::Updated { update } = selected else {
+        panic!("expected an update result")
     };
-    assert_eq!(offset, 0);
-    assert_eq!(tools.len(), 20);
-    assert_eq!(total, 130);
-    assert_eq!(next_offset, Some(20));
-    assert!(tools.iter().all(|tool| tool.name != "catalog-hidden"));
+    assert_eq!(update.added, first_twelve);
+    assert!(update.evicted.is_empty());
 
-    let mut pages = tools;
-    let mut next = next_offset;
-    while let Some(offset) = next {
-        let page = dispatch(
+    // The request accepts at most 64 names per field, so the ceiling is
+    // reached in batches; the host folds least-recently-used tools and names them.
+    let mut bulk_update = None;
+    for batch in names.chunks(64) {
+        let bulk = dispatch(
             &db,
             &scope(true),
-            "sic_tool_search",
-            json!({"query":"catalog","offset":offset,"limit":100}),
+            "sic_tool_update",
+            json!({"select":batch}),
         )
         .await
         .unwrap();
-        let ToolDispatch::Search {
-            tools,
-            offset: actual_offset,
-            total: actual_total,
-            next_offset,
-        } = page
-        else {
-            panic!("expected paginated search results")
+        let ToolDispatch::Updated { update } = bulk else {
+            panic!("expected an update result")
         };
-        assert_eq!(actual_offset, offset);
-        assert_eq!(actual_total, 130);
-        pages.extend(tools);
-        next = next_offset;
+        bulk_update = Some(update);
     }
-    assert_eq!(pages.len(), 130);
-    assert_eq!(
-        pages
-            .iter()
-            .map(|tool| &tool.name)
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        130
-    );
-    assert!(!pages.iter().any(|tool| tool.name == "catalog-hidden"));
+    let update = bulk_update.expect("at least one batch ran");
+    assert!(!update.evicted.is_empty());
+    assert!(update.message.contains("Also folded"));
+
+    // A name outside the catalog is reported, never silently dropped.
+    let ghost = dispatch(
+        &db,
+        &scope(true),
+        "sic_tool_update",
+        json!({"select":["catalog-hidden"]}),
+    )
+    .await
+    .unwrap();
+    let ToolDispatch::Updated { update } = ghost else {
+        panic!("expected an update result")
+    };
+    assert_eq!(update.rejected.len(), 1);
+    assert_eq!(update.rejected[0].reason, "expansion_denied");
 
     for invalid in [
-        json!({"query":"catalog","offset":-1}),
-        json!({"query":"catalog","offset":"1"}),
-        json!({"query":"catalog","offset":1.5}),
-        json!({"query":"catalog","limit":0}),
-        json!({"query":"catalog","limit":101}),
-        json!({"query":"catalog","limit":"20"}),
+        json!({"select":"catalog-000"}),
+        json!({"select":["catalog-000","catalog-000"]}),
+        json!({"select":[""]}),
+        json!({"select":["catalog-000"],"extend":[]}),
     ] {
         assert_eq!(
-            dispatch(&db, &scope(true), "sic_tool_search", invalid)
+            dispatch(&db, &scope(true), "sic_tool_update", invalid)
                 .await
                 .unwrap_err()
                 .status,
@@ -306,8 +308,8 @@ async fn worker_response_completion_advances_once_and_rolls_back_atomically() {
     dispatch(
         &db,
         &scope(true),
-        "sic_tool_expand",
-        json!({"name":"fixture"}),
+        "sic_tool_update",
+        json!({"select":["fixture"]}),
     )
     .await
     .unwrap();

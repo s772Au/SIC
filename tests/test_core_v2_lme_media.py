@@ -63,7 +63,7 @@ class OfficialLMEMediaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='sic-lme-harness-') as d:
             root=Path(d);data=root/'data';self.data(data);config=root/'memory.json';config.write_text(json.dumps({'memory_type':'sic_core_v01','memory_params':{'data_root':str(data)}}))
             env=dict(os.environ);env['PYTHONIOENCODING']='utf-8';env['PYTHONPATH']=os.pathsep.join([os.environ.get('SIC_LME_OFFICIAL_DEPS',''),str(ROOT)])
-            command=[sys.executable,str(ROOT/'benchmarks/run_core_lme.py'),'--official-root',str(self.official),'harness','--domain','web','--questions-path',str(data/'questions.jsonl'),'--haystack-path',str(data/'haystacks/lme_v2_small.json'),'--trajectories-path',str(data/'trajectories.jsonl'),'--memory-config-path',str(config),'--output-dir',str(root/'run'),'--save-memory','--skip-evaluation']
+            command=[sys.executable,str(ROOT/'benchmarks/run_core_lme.py'),'--backend','python','--official-root',str(self.official),'harness','--domain','web','--questions-path',str(data/'questions.jsonl'),'--haystack-path',str(data/'haystacks/lme_v2_small.json'),'--trajectories-path',str(data/'trajectories.jsonl'),'--memory-config-path',str(config),'--output-dir',str(root/'run'),'--save-memory','--skip-evaluation']
             result=subprocess.run(command,env=env,capture_output=True,text=True,encoding='utf-8',timeout=120)
             self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
             saved=self.load(root/'run/memory_state')

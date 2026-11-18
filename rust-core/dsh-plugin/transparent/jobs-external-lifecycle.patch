@@ -1,0 +1,443 @@
+--- a/packages/jobs/jobs/src/index.ts
++++ b/packages/jobs/jobs/src/index.ts
+@@ -85,7 +85,35 @@
+  *   never an error. Settlement trims retention to the settled cap and ends
+  *   the stream; the ring has no separate lifecycle.
+  */
++export interface ExternalJobsLifecycle {
++  handles(owner: SessionId | undefined): boolean
++  beforeStart(spec: JobSpec): void
++  reserve(id: JobId, spec: JobSpec): void
++  deliver(event: import('./types.ts').JobEvent, owner: SessionId, snapshot: {job: JobView; read: JobOutputRead; result?: string}, next: () => void): void
++  list(owner: SessionId): JobView[]
++  output(id: JobId, from: number, owner: SessionId): JobOutputRead
++  consumed(id: JobId, owner: SessionId): void
++  kill(id: JobId, owner: SessionId, reason?: string, invocation?: unknown): Promise<'requested' | 'already-finished'>
++  control<T>(name: string, args: unknown, exec: unknown, waitTimeoutMs?: number): Promise<T>
++  collectionMeta(): {sic_collection?: {lifecycle_object_id: string; collection_receipt_id: string; collection_digest: string; chain_id: string | null}}
++  drain(): Promise<unknown>
++}
+ export abstract class JobRegistry extends Service {
++  private readonly externalLaunchTools = new WeakMap<object, 'job' | 'peer' | 'workflow'>()
++  registerExternalLaunchTool(definition: object, kind: 'job' | 'peer' | 'workflow'): void { this.externalLaunchTools.set(definition, kind) }
++  externalLaunchKind(definition: object | undefined): 'job' | 'peer' | 'workflow' | undefined { return definition ? this.externalLaunchTools.get(definition) : undefined }
++  externalControlVersion: number | undefined
++  get externalExecutorJoinVersion(): number { return 0 }
++  externalLifecycle: ExternalJobsLifecycle | undefined
++  attachExternalLifecycle(port: ExternalJobsLifecycle): () => void {
++    if (this.externalLifecycle) throw new Error('one external job lifecycle authority only')
++    this.externalLifecycle = port
++    return () => { if (this.externalLifecycle === port) this.externalLifecycle = undefined }
++  }
++  cancelExecutor(id: JobId, caller?: SessionId, reason?: string): 'requested' | 'already-finished' { return this.kill(id, caller, reason) }
++  joinExecutor(_id: JobId, _caller?: SessionId): Promise<void> { return Promise.reject(new Error('native executor settlement join port required')) }
++  acknowledgeCollection(_id: JobId, _throughByte: number, _resultCollected: boolean, _caller?: SessionId): JobView | undefined { return undefined }
++
+   constructor(ctx: Context) {
+     // `abstract` erases at runtime, so a composition row naming this package
+     // would register a ctx.jobs with no method implementations and fail far
+--- a/packages/jobs/jobs/src/types.ts
++++ b/packages/jobs/jobs/src/types.ts
+@@ -307,3 +307,11 @@
+    */
+   subscribe(filter: JobEventFilter, listener: JobEventListener): () => void
+ }
++
++
++declare module '@deepseek-ai/dsh-session/types' {
++  interface PluginRecordMap {
++    'plugin:sic/jobs/receipt': {object_id: string; revision: number; external_id: string | null; status: string; receipt_id: string | null}
++    'plugin:sic/jobs/collection': {lifecycle_object_id: string; collection_receipt_id: string; collection_digest: string; chain_id: string | null; message_id: string; call_id: string; material: {block_index: number; utf8_start: number; utf8_end: number}}
++  }
++}
+--- a/packages/jobs/jobs-local/src/index.ts
++++ b/packages/jobs/jobs-local/src/index.ts
+@@ -224,6 +224,8 @@
+       )
+     }
+ 
++    this.externalLifecycle?.beforeStart(spec)
++
+     // The producer uses the same short UUID identity as controls and durable lifecycle records.
+     // Retry a collision while this registry still holds an earlier id.
+     let id: JobId
+@@ -238,6 +240,7 @@
+       append: (text, options) => { this.appendRing(state, ring, text, options, 'producer') },
+       updateProgress: (line) => { this.updateProgress(state, line) },
+     }
++    this.externalLifecycle?.reserve(id, spec)
+     const hooks = spec.run(handle)
+ 
+     let markSettled!: () => void
+@@ -308,20 +311,37 @@
+   }
+ 
+   list(caller?: SessionId): JobView[] {
++    if (caller !== undefined && this.externalLifecycle?.handles(caller)) return this.externalLifecycle.list(caller)
+     return [...this.store.values()]
+       .filter(job => job.owner === undefined || job.owner.id === caller)
+       .map(job => this.view(job))
+   }
+ 
+   get(id: JobId, caller?: SessionId): JobView {
++    if (caller !== undefined && this.externalLifecycle?.handles(caller)) {
++      const job = this.externalLifecycle.list(caller).find(job => job.id === id)
++      if (!job) throw new Error('job is not visible in authoritative owner scope')
++      return job
++    }
+     return this.view(this.expect(id, caller))
+   }
+ 
++  override acknowledgeCollection(id: JobId, throughByte: number, resultCollected: boolean, caller?: SessionId): JobView {
++    const job = this.expect(id, caller)
++    if (!Number.isSafeInteger(throughByte) || throughByte < 0 || throughByte > job.ring.total) throw new Error('invalid authoritative collection resource watermark')
++    job.modelCursor = Math.max(job.modelCursor, throughByte)
++    if (resultCollected) job.resultDelivered = true
++    if (isTerminal(job.status)) job.ring.trim(Math.max(this.settledRetainBytes, job.ring.total - job.modelCursor))
++    return this.view(job)
++  }
+   read(id: JobId, caller?: SessionId): JobRead {
+-    return this.readJob(this.expect(id, caller))
++    const result = this.readJob(this.expect(id, caller))
++    if (caller !== undefined && this.externalLifecycle?.handles(caller)) this.externalLifecycle.consumed(id, caller)
++    return result
+   }
+ 
+   readAt(id: JobId, from: number, caller?: SessionId): JobOutputRead {
++    if (caller !== undefined && this.externalLifecycle?.handles(caller)) return this.externalLifecycle.output(id, from, caller)
+     const job = this.expect(id, caller)
+     if (!Number.isSafeInteger(from) || from < 0) {
+       throw new Error(`invalid output read offset: expected a non-negative safe integer, got ${JSON.stringify(from)}`)
+@@ -329,10 +349,23 @@
+     return job.ring.readFrom(from)
+   }
+ 
++  override cancelExecutor(id: JobId, caller?: SessionId, reason?: string): 'requested' | 'already-finished' {
++    return this.killJob(this.expect(id, caller), reason)
++  }
+   kill(id: JobId, caller?: SessionId, reason?: string): 'requested' | 'already-finished' {
++    if (this.externalLifecycle?.handles(caller)) throw new Error('external job cancellation requires asynchronous durable admission')
+     return this.killJob(this.expect(id, caller), reason)
+   }
+ 
++  override get externalExecutorJoinVersion(): number { return 1 }
++  override async joinExecutor(id: JobId, caller?: SessionId): Promise<void> {
++    // Native removal/owner disposal only drops records after their settlement.
++    // A resource already retired by that path needs no second lookup/join.
++    const job = this.store.get(id)
++    if (job === undefined) return
++    this.expect(id, caller)
++    await job.settled
++  }
+   async wait(id: JobId, timeoutMs: number, caller?: SessionId, signal?: AbortSignal): Promise<JobView> {
+     return this.waitJob(this.expect(id, caller), timeoutMs, signal)
+   }
+@@ -437,7 +470,13 @@
+   }
+ 
+   private emit(event: JobEvent, owner: Agent | undefined): void {
+-    this.hub.emit(event, owner)
++    if (owner !== undefined && this.externalLifecycle?.handles(owner.id)) {
++      const id = event.type === 'output' ? event.id : event.job.id
++      const job = this.store.get(id)
++      const snapshot = job ? {job: this.view(job), read: job.ring.readFrom(0), ...job.result === undefined ? {} : {result: job.result}}
++        : {job: (event as Exclude<JobEvent, {type: 'output'}>).job, read: {chunks: [], next: 0, lossy: false}}
++      this.externalLifecycle.deliver(event, owner.id, snapshot, () => this.hub.emit(event, owner))
++    } else this.hub.emit(event, owner)
+   }
+ 
+   /** Publish committed facts before live subscribers or completion waiters react. */
+@@ -657,6 +696,7 @@
+     this.cancelForTeardown(owned, 'owner disposed')
+     await Promise.all(owned.map(job => job.settled))
+     this.drop(owned)
++    await this.externalLifecycle?.drain()
+   }
+ 
+   /** Drop settled records and announce each removal, the one visible-set change no per-job record carries. */
+@@ -684,6 +724,7 @@
+     const ownerCleanups = [...this.ownerCleanups.values()]
+     this.ownerCleanups.clear()
+     await Promise.all(ownerCleanups.map(cleanup => Promise.resolve(cleanup())))
++    await this.externalLifecycle?.drain()
+   }
+ 
+   /**
+--- a/packages/jobs/tool-jobs/src/index.ts
++++ b/packages/jobs/tool-jobs/src/index.ts
+@@ -246,6 +246,7 @@
+ 
+   // Producers may start work only while a controller is attached.
+   ctx.jobs.attachController('tool-jobs')
++  ctx.jobs.externalControlVersion = 1
+ 
+   // Cross-call guidance follows the filesystem sections and precedes product sections.
+   ctx.systemPrompt.section({
+@@ -328,6 +329,7 @@
+           job: { ...PUBLIC_JOB_SCHEMA, required: true },
+         },
+       },
++      presentationMeta: () => ctx.jobs.externalLifecycle?.collectionMeta() ?? {},
+       render: (_args, value) => {
+         const body = value.text.length > 0 ? value.text : '(no new output)'
+         const separator = body.endsWith('\n') ? '' : '\n'
+@@ -335,6 +337,7 @@
+       },
+     },
+     async execute(args, exec) {
++      if (ctx.jobs.externalLifecycle?.handles(exec.agent?.id)) return ctx.jobs.externalLifecycle.control<{text: string; job: PublicJobSnapshot}>('job_output', args, exec, Math.min(args.timeout_ms ?? waitDefault, waitCap))
+       const id = validateJobId(args.job_id)
+       const jobs = ctx.jobs
+       if (args.wait === true) {
+@@ -363,6 +366,7 @@
+       }],
+     },
+     execute(_args, exec) {
++      if (ctx.jobs.externalLifecycle?.handles(exec.agent?.id)) return ctx.jobs.externalLifecycle.control<PublicJobSnapshot[]>('job_list', _args, exec)
+       const jobs = ctx.jobs.list(exec.agent?.id)
+       return Promise.resolve(jobs.map(publicJob))
+     },
+@@ -398,6 +402,7 @@
+       }],
+     },
+     execute(args, exec) {
++      if (ctx.jobs.externalLifecycle?.handles(exec.agent?.id)) return ctx.jobs.externalLifecycle.control<{outcome: 'cancellation-requested' | 'already-finished'; job: PublicJobSnapshot}>('job_kill', args, exec)
+       const id = validateJobId(args.job_id)
+       const jobs = ctx.jobs
+       const result = jobs.kill(id, exec.agent?.id, args.reason)
+--- a/packages/shell/tool-bash/src/index.ts
++++ b/packages/shell/tool-bash/src/index.ts
+@@ -304,7 +304,7 @@
+        * with the call, as the model never saw the id.
+        */
+       const stop = async (reason: string): Promise<JobView> => {
+-        registry.kill(attached.id, owner, reason)
++        await (owner !== undefined && registry.externalLifecycle?.handles(owner) ? registry.externalLifecycle.kill(attached.id, owner, reason) : registry.kill(attached.id, owner, reason))
+         const settled = await registry.wait(attached.id, timeoutMs, owner)
+         if (settled.status !== 'running' && settled.status !== 'stopping') registry.remove(attached.id, owner)
+         return settled
+@@ -365,7 +365,7 @@
+       const stopped = attached.stopped()
+       return { kind: 'foreground' as const, ...canonicalBashResult(result, spec.workdir), ...stopped !== undefined ? { stopped } : {} }
+     }
+-    return defineTool({
++    const definition = defineTool({
+       name: 'bash',
+       description: bashDescription(),
+       parameters: {
+@@ -532,6 +532,8 @@
+       presentCall: presentBashCall,
+       presentResult: presentBashResult,
+     })
++    jobs?.registerExternalLaunchTool(definition, 'job')
++    return definition
+   }
+ 
+   // The background surface follows the registry. The foreground-only variant
+--- a/packages/shell/tool-pwsh/src/index.ts
++++ b/packages/shell/tool-pwsh/src/index.ts
+@@ -321,7 +321,7 @@
+        * with the call, as the model never saw the id.
+        */
+       const stop = async (reason: string): Promise<JobView> => {
+-        registry.kill(attached.id, owner, reason)
++        await (owner !== undefined && registry.externalLifecycle?.handles(owner) ? registry.externalLifecycle.kill(attached.id, owner, reason) : registry.kill(attached.id, owner, reason))
+         const settled = await registry.wait(attached.id, timeoutMs, owner)
+         if (settled.status !== 'running' && settled.status !== 'stopping') registry.remove(attached.id, owner)
+         return settled
+@@ -383,7 +383,7 @@
+       return { ...canonicalPwshResult(result, spec.workdir), ...stopped !== undefined ? { stopped } : {} }
+     }
+     /* jscpd:ignore-end */
+-    return defineTool({
++    const definition = defineTool({
+       name: 'pwsh',
+       description: pwshDescription(escalationModes.length > 0),
+       /* jscpd:ignore-start -- deliberate mirror of dsh-tool-bash's parameter surface (pwsh-tool-and-executor Agent Note). */
+@@ -593,6 +593,8 @@
+       },
+       /* jscpd:ignore-end */
+     })
++    jobs?.registerExternalLaunchTool(definition, 'job')
++    return definition
+   }
+ 
+   // The background surface follows the registry. The foreground-only variant
+--- a/packages/api/job-controller/src/index.ts
++++ b/packages/api/job-controller/src/index.ts
+@@ -107,7 +107,7 @@
+    * @returns the registry's admission of the kill request.
+    */
+   @Remote('kill')
+-  kill(request: JobKillRequest): JobKillValue {
++  async kill(request: JobKillRequest): Promise<JobKillValue> {
+     const jobs = this.ctx.jobs
+     try {
+       jobs.get(request.jobId, request.sessionId)
+@@ -122,7 +122,9 @@
+     // Same synchronous span as the lookup, so nothing can remove the job in
+     // between — and a producer-cancel throw propagates per the registry
+     // contract (job state unchanged) instead of masquerading as job-not-found.
+-    const outcome = jobs.kill(request.jobId, request.sessionId, 'cancelled by the user')
++    const outcome = jobs.externalLifecycle?.handles(request.sessionId)
++      ? await jobs.externalLifecycle.kill(request.jobId, request.sessionId, 'cancelled by the user', this.ctx.invocation)
++      : jobs.kill(request.jobId, request.sessionId, 'cancelled by the user')
+     return { outcome }
+   }
+ }
+--- a/packages/subagent/subagent/src/index.ts
++++ b/packages/subagent/subagent/src/index.ts
+@@ -1,3 +1,4 @@
++import type { SubagentResult as ExternalSubagentResult } from './types.ts'
+ /**
+  * Service Definition for the subagent capability seam (`ctx.subagents`): a named-provider registry plus a
+  * capability-validating asynchronous start API. Providers establish a
+@@ -191,7 +192,20 @@
+ }
+ 
+ /** Named provider registry with managed activations, durable discovery, and local child messaging. */
++export interface ExternalSubagentLifecycle {
++  prepare(parent: Agent, nativeId: string, provider: string, kind: 'local' | 'external'): Promise<unknown>
++  attach(parent: Agent, childId: string, dispose: () => Promise<void>, claim: unknown): Promise<void>
++  settle(parent: Agent, childId: string, result: ExternalSubagentResult, claim: unknown): Promise<void>
++}
+ export class SubagentRuntime extends TypertRemoteService {
++  externalLifecycle: ExternalSubagentLifecycle | undefined
++  get externalPeerResidencyVersion(): number { return 2 }
++  attachExternalLifecycle(port: ExternalSubagentLifecycle): () => void {
++    if (this.externalLifecycle) throw new Error('one external subagent authority only')
++    this.externalLifecycle = port
++    return () => { if (this.externalLifecycle === port) this.externalLifecycle = undefined }
++  }
++
+   static Config = z.object({
+     maxDepth: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(1).volatile(),
+     maxActiveSubagents: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(8).volatile(),
+@@ -211,6 +225,9 @@
+     this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
+     ctx.inject(['agents'], (childCtx: Context) => {
+       const manager = new SubagentManager(childCtx, {
++        prepareActivation: (parent, id, provider, kind) => this.externalLifecycle?.prepare(parent, id, provider, kind),
++        attachActivation: (parent, id, dispose, claim) => this.externalLifecycle?.attach(parent, id, dispose, claim),
++        settleActivation: (parent, id, result, claim) => this.externalLifecycle?.settle(parent, id, result, claim),
+         startExternal: (name, request) => {
+           const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'start'>>
+           return provider.start(request)
+--- a/packages/subagent/subagent/src/manager.ts
++++ b/packages/subagent/subagent/src/manager.ts
+@@ -58,6 +58,9 @@
+ 
+ /** Package-private hooks supplied by the owning service. */
+ interface SubagentHost {
++  prepareActivation(parent: Agent, id: string, provider: string, kind: 'local' | 'external'): unknown | Promise<unknown>
++  attachActivation(parent: Agent, id: string, dispose: () => Promise<void>, claim: unknown): void | Promise<void>
++  settleActivation(parent: Agent, id: string, result: SubagentResult, claim: unknown): void | Promise<void>
+   startExternal(name: string, request: ResolvedSubagentStartRequest): Promise<SubagentRun>
+   /** Resolve one provider's detached continuable-creation contribution. */
+   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
+@@ -129,6 +132,7 @@
+ /** Own subagent requests and the resources of every live activation. */
+ export class SubagentManager {
+   /** Child session id → its live Activation. Process-local, never durable. */
++  private readonly externalClaims = new WeakMap<object, unknown>()
+   private readonly resident = new Map<SessionId, Activation>()
+   /** Root identities retain their pool across child settlement without retaining dead roots. */
+   private readonly rootPools = new WeakMap<Agent, ActivationPool>()
+@@ -857,6 +861,7 @@
+     const { provider, parent } = inputs
+     let childId = inputs.childId
+     inputs.signal.throwIfAborted()
++    const externalClaim = await this.host.prepareActivation(parent, childId, provider, inputs.kind)
+     let resource: ActivationResource
+     if (inputs.kind === 'external') {
+       const controller = new AbortController()
+@@ -939,6 +944,7 @@
+       observer,
+       announced: false,
+     }
++    this.externalClaims.set(activation, externalClaim)
+     void activation.result.promise.catch(() => undefined)
+     this.resident.set(childId, activation)
+     try {
+@@ -953,6 +959,7 @@
+         activation.handle.agent.ctx.on('agent/inbox/claimed', wakeSettlement)
+         activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
+       }
++      await this.host.attachActivation(parent, childId, () => this.dispose(activation), externalClaim)
+       observer.start(activationAgent(activation))
+     } catch (error: unknown) {
+       /* v8 ignore next -- rollback failure must not mask the admission failure
+@@ -1175,6 +1182,7 @@
+     this.resident.delete(childId)
+     activation.releaseSlot()
+     const terminal: SubagentResult = failure === undefined ? result : { output: [], stopReason: 'error' }
++    await this.host.settleActivation(activation.parent, activation.childId, terminal, this.externalClaims.get(activation))
+     this.notifySettlement(activation, result)
+     this.releaseOwnership(childId)
+     activation.observer.settle(terminal)
+--- a/packages/subagent/tool-subagent/src/index.ts
++++ b/packages/subagent/tool-subagent/src/index.ts
+@@ -337,6 +337,7 @@
+           return { kind: 'activation' as const, subagentId: started.childId }
+         },
+       })
++      runtimeCtx.inject(['jobs'], child => { child.jobs.registerExternalLaunchTool(definition, 'peer') })
+       const disposeTool = runtimeCtx.effect(() => {
+         const unregister = runtimeCtx.tools.register(definition)
+         delegationTools.add(definition)
+--- a/packages/workflow/workflow/src/index.ts
++++ b/packages/workflow/workflow/src/index.ts
+@@ -154,7 +154,20 @@
+  * listener failures are contained, and `workflow/end` fires exactly once as the
+  * result settles.
+  */
++export interface ExternalWorkflowLifecycle {
++  start(request: WorkflowStartRequest, execute: () => WorkflowRun): WorkflowRun
++  event(name: string, args: unknown[], deliver: () => void): void
++}
+ export abstract class WorkflowEngine extends Service {
++  externalLifecycle: ExternalWorkflowLifecycle | undefined
++  attachExternalLifecycle(port: ExternalWorkflowLifecycle): () => void {
++    if (this.externalLifecycle) throw new Error('one external workflow authority only')
++    this.externalLifecycle = port
++    const original = this.start
++    this.start = function(request) { return port.start(request, () => original.call(this, request)) }
++    return () => { this.start = original; if (this.externalLifecycle === port) this.externalLifecycle = undefined }
++  }
++
+   constructor(ctx: Context) {
+     super(ctx, 'workflowEngine')
+   }
+@@ -173,6 +186,11 @@
+    * @param args - the event's payload, matching its declared signature.
+    */
+   protected emitWorkflowEvent(name: WorkflowEventName, ...args: unknown[]): void {
++    const deliver = (): void => this.deliverWorkflowEvent(name, ...args)
++    if (this.externalLifecycle) this.externalLifecycle.event(name, args, deliver)
++    else deliver()
++  }
++  private deliverWorkflowEvent(name: WorkflowEventName, ...args: unknown[]): void {
+     for (const callback of this.ctx.events.dispatch('emit', [name, ...args])) {
+       try {
+         const returned: unknown = (callback as (...payload: unknown[]) => unknown)(...args)
+--- a/packages/workflow/tool-workflow/src/index.ts
++++ b/packages/workflow/tool-workflow/src/index.ts
+@@ -328,7 +328,7 @@
+     order: ctx.systemPrompt.getSectionOrder('TOOL_WORKFLOW'),
+     text: `Use the ${toolName} tool ONLY when the user explicitly asks for a workflow or for large multi-agent orchestration: you write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results. For one or two delegations, prefer plain subagent calls.`,
+   })
+-  ctx.tools.register(defineTool({
++  const definition = defineTool({
+     name: toolName,
+     description: DESCRIPTION,
+     parameters: {
+@@ -483,5 +483,7 @@
+     },
+     presentCall: args => presentWorkflowCall(args),
+     presentResult: (args, result) => presentWorkflowResult(args, result),
+-  }))
+-}
++  })
++  ctx.inject(['jobs'], child => { child.jobs.registerExternalLaunchTool(definition, 'workflow') })
++  ctx.tools.register(definition)
++}

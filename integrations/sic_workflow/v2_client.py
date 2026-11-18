@@ -32,13 +32,33 @@ class CoreClient:
                 result = json.load(exc)
             except (ValueError, UnicodeError):
                 result = {"ok": False, "error": {"code": "http_error", "message": f"HTTP {exc.code}"}}
+            if not isinstance(result, dict):
+                result = {"error": {"code": "http_error", "message": f"HTTP {exc.code}"}}
+            # The Rust service returns {"error": ...} without an "ok" field.
+            # Treat an authentication or other HTTP failure as a failure before
+            # attempting to interpret it as a capability catalog.
+            result["ok"] = False
             result["http_status"] = exc.code
         except (URLError, TimeoutError, ConnectionError):
             result = {"ok": False, "error": {"code": "core_unavailable",
                       "message": "V2 core is unavailable from this runtime. Check its local binding and private environment; this stage has not executed."}}
+        except (ValueError, UnicodeError):
+            result = {"ok": False, "error": {"code": "invalid_core_response",
+                      "message": "The core returned an invalid JSON response."}}
+        if not isinstance(result, dict):
+            result = {"ok": False, "error": {"code": "invalid_core_response",
+                      "message": "The core response must be a JSON object."}}
         # Credentials are read only here, never in node inputs or graph state.
         if token:
-            result = json.loads(json.dumps(result).replace(token, "[redacted]"))
+            def redact(value):
+                if isinstance(value, str):
+                    return value.replace(token, "[redacted]")
+                if isinstance(value, list):
+                    return [redact(item) for item in value]
+                if isinstance(value, dict):
+                    return {redact(key): redact(item) for key, item in value.items()}
+                return value
+            result = redact(result)
         return result
 
     def capabilities(self):

@@ -3,7 +3,8 @@ import argparse,hashlib,json,sys
 from pathlib import Path,PurePosixPath
 ROOT=Path(__file__).resolve().parents[1]
 
-def prepare(data_root,tier='small',question_id=None):
+def prepare(data_root,tier='small',question_id=None,backend='python'):
+    if backend not in ('python','rust-v2'):raise ValueError('Unknown LME Core backend')
     data_root=Path(data_root);question=None
     with (data_root/'questions.jsonl').open(encoding='utf-8') as f:
         for line in f:
@@ -29,10 +30,16 @@ def prepare(data_root,tier='small',question_id=None):
             if len(found)==len(wanted):break
     if set(found)!=wanted:raise ValueError('Missing trajectories')
     question_image=image(question.get('image') or (question['question'].get('image') if isinstance(question['question'],dict) else None))
-    return {'schema':'sic-research-task-v2','task_id':'longmemeval-v2-'+tier+':'+question['id'],'goal':question['question'],'media_required':True,'question_image':question_image,'ordered_trajectories':[found[x] for x in members],'references':{'answer':question['answer'],'official_eval_function':question['eval_function']},'missing_images':missing_images,'source':{'revision':'f152293e235517d504809563c833d7190b8c713b','haystack_sha256':hashlib.sha256(haystack.read_bytes()).hexdigest()},'execution_status':'blocked-missing-images' if missing_images else 'ready-for-official-memory-adapter','memory_adapter':'benchmarks.core_lme_memory:SICCoreMemory','research_evaluation':'not_evaluated','not_a_text_only_official_score':True}
+    image_states=sum(state['image'] is not None for trajectory in found.values() for state in trajectory['states'])
+    rust_ready=not missing_images and not image_states and question_image is None
+    if missing_images:status='blocked-missing-images'
+    elif backend=='rust-v2' and not rust_ready:status='blocked-rust-v2-image-ingress'
+    elif backend=='rust-v2':status='ready-for-rust-v2-text-memory'
+    else:status='ready-for-official-memory-adapter'
+    return {'schema':'sic-research-task-v2','task_id':'longmemeval-v2-'+tier+':'+question['id'],'goal':question['question'],'media_required':True,'question_image':question_image,'ordered_trajectories':[found[x] for x in members],'references':{'answer':question['answer'],'official_eval_function':question['eval_function']},'missing_images':missing_images,'source':{'revision':'f152293e235517d504809563c833d7190b8c713b','haystack_sha256':hashlib.sha256(haystack.read_bytes()).hexdigest()},'execution_status':status,'memory_adapter':'benchmarks.rust_v2_lme_memory:RustV2Memory' if backend=='rust-v2' else 'benchmarks.core_lme_memory:SICCoreMemory','rust_v2_readiness':{'ready':rust_ready,'trajectory_image_states':image_states,'question_image':question_image is not None,'reason':None if rust_ready else 'Rust v2 Editor/Worker cannot yet preserve screenshot input'},'research_evaluation':'not_evaluated','not_a_text_only_official_score':True}
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--data-root',type=Path,default=ROOT/'benchmarks/data/longmemeval-v2');p.add_argument('--tier',choices=['small','medium'],default='small');p.add_argument('--question-id');p.add_argument('--output',type=Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--data-root',type=Path,default=ROOT/'benchmarks/data/longmemeval-v2');p.add_argument('--tier',choices=['small','medium'],default='small');p.add_argument('--question-id');p.add_argument('--backend',choices=['rust-v2','python'],default='rust-v2');p.add_argument('--output',type=Path,required=True);a=p.parse_args()
     if a.output.exists():raise ValueError('Do not overwrite task artifact')
-    value=prepare(a.data_root,a.tier,a.question_id);a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps({'task_id':value['task_id'],'trajectories':len(value['ordered_trajectories']),'missing_images':len(value['missing_images']),'execution_status':value['execution_status']}))
+    value=prepare(a.data_root,a.tier,a.question_id,a.backend);a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps({'task_id':value['task_id'],'trajectories':len(value['ordered_trajectories']),'missing_images':len(value['missing_images']),'execution_status':value['execution_status']}))
 if __name__=='__main__':main()

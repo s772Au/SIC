@@ -1,0 +1,406 @@
+--- a/packages/goal/goal/src/index.ts
++++ b/packages/goal/goal/src/index.ts
+@@ -11,7 +11,7 @@
+ import type { ZodType } from 'zod'
+ import { agentEvents } from '@deepseek-ai/dsh-agent'
+ import type { Agent } from '@deepseek-ai/dsh-agent'
+-import { SessionSeq } from '@deepseek-ai/dsh-session'
++import { SessionSeq, pluginRecordOf } from '@deepseek-ai/dsh-session'
+ import type { Session, SessionEvent, SessionLogOffset } from '@deepseek-ai/dsh-session'
+ import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
+ import type {} from '@deepseek-ai/dsh-session-projection'
+@@ -87,6 +87,7 @@
+     { message: 'seen goal ids must be unique' },
+   ),
+   failure: zod.string().min(1).nullable(),
++  externalRevision: zod.number().int().nonnegative().optional(),
+ }).strict().superRefine((state, context) => {
+   if (state.current === null) return
+   if (!state.seenGoalIds.includes(state.current.goal.id)) {
+@@ -144,6 +145,15 @@
+  * @returns the next projection (same reference when the event is unrelated).
+  */
+ export function applyGoalProjection(state: GoalProjectionState, event: SessionEvent): GoalProjectionState {
++  const record = pluginRecordOf(event)
++  if (record?.type === 'plugin:sic/goal/receipt') {
++    const data = record.data as {revision: number; current: GoalProjection | null}
++    const current = goalProjectionSchema.parse(data.current)
++    if (!Number.isSafeInteger(data.revision) || data.revision < 0) throw new Error('invalid Core receipt projection revision')
++    return { current, seenGoalIds: current ? [...new Set([...state.seenGoalIds, current.goal.id])] : state.seenGoalIds,
++      failure: null, externalRevision: data.revision }
++  }
++  if (state.externalRevision !== undefined) return state
+   if (state.failure !== null) return state
+   if (event.type !== 'goal/change'
+     && (event.type !== 'user/message' || event.data.source.kind !== 'goal')) return state
+@@ -165,7 +175,7 @@
+   init: (): GoalProjectionState => ({ current: null, seenGoalIds: [], failure: null }),
+   apply: applyGoalProjection,
+   wire: { viewSchema: goalProjectionSchema, view: state => state.current },
+-  stateVersion: 6,
++  stateVersion: 7,
+ } satisfies ProjectionDefinition<'goal', GoalProjectionState>
+ 
+ /** Deployment defaults for goal creation. */
+@@ -237,7 +247,32 @@
+ }
+ 
+ /** Goal service (`ctx.goals`) backed exclusively by the owning session log. */
++export interface ExternalGoalStatePort {
++  get(): GoalView | undefined
++  refresh(): Promise<void>
++  start(source: {goalId: string; revision: number; round: number}): Promise<void>
++  settle(attempt: {phase: string; cancelled: boolean}): Promise<void>
++  disarm(reason?: string): Promise<void>
++  mutate(action: string, ref?: GoalRef, request?: unknown, source?: unknown): Promise<any>
++}
+ export class GoalService extends TypertRemoteService {
++  private readonly externalPorts = new WeakMap<Agent, ExternalGoalStatePort>()
++  private externalDriverOwner: object | undefined
++  get externalDriverVersion(): number | undefined { return this.externalDriverOwner ? 1 : undefined }
++  attachExternalDriver(owner: object): () => void {
++    if (this.externalDriverOwner) throw new Error('only one native goal lifecycle driver may run')
++    this.externalDriverOwner = owner
++    return () => { if (this.externalDriverOwner === owner) this.externalDriverOwner = undefined }
++  }
++  get defaultMaxGoalRounds(): number { return this.resolved.defaultMaxGoalRounds }
++  externalStateFor(agent: Agent): ExternalGoalStatePort | undefined { return this.externalPorts.get(agent) }
++  attachExternalState(agent: Agent, port: ExternalGoalStatePort): () => void {
++    this.assertLive(agent)
++    if (this.externalPorts.has(agent)) throw new Error('goal state port already attached')
++    this.externalPorts.set(agent, port)
++    return () => { if (this.externalPorts.get(agent) === port) this.externalPorts.delete(agent) }
++  }
++
+   static inject = ['agents', 'sessionProjections']
+ 
+   static Config: z<Config> = z.object({
+@@ -273,10 +308,9 @@
+    * @returns a fresh view or `undefined` when no goal is current.
+    * @throws {@link GoalError} when the agent is not the registry's live instance.
+    */
+-  @Remote('get')
+   get(agent: Agent): GoalView | undefined {
+     this.assertLive(agent)
+-    return this.view(this.state(agent.session), this.runtimeState(agent.session))
++    return this.externalStateFor(agent)?.get() ?? (this.externalStateFor(agent) ? undefined : this.view(this.state(agent.session), this.runtimeState(agent.session)))
+   }
+ 
+   /**
+@@ -288,6 +322,7 @@
+    */
+   disarm(agent: Agent): GoalView | undefined {
+     this.assertLive(agent)
++    if (this.externalStateFor(agent)) throw new Error('external goal lifecycle requires its asynchronous state port')
+     this.setActivation(agent.session, 'disarmed')
+     const runtime = this.runtimeState(agent.session)
+     return this.view(this.state(agent.session), runtime)
+@@ -325,7 +360,6 @@
+    * @param request - at least one replacement field.
+    * @returns the edited view.
+    */
+-  @Remote('edit')
+   edit(agent: Agent, ref: GoalRef, request: EditGoalRequest): GoalView {
+     const [state, runtime] = this.prepareMutation(agent)
+     const currentState = this.expectCurrent(state, ref)
+@@ -348,7 +382,6 @@
+    * @param ref - expected current revision.
+    * @returns the paused view.
+    */
+-  @Remote('pause')
+   pause(agent: Agent, ref: GoalRef): GoalView {
+     return this.transition(agent, ref, 'pause', ['active'], 'paused', 'disarmed')
+   }
+@@ -360,7 +393,6 @@
+    * @param ref - expected current revision.
+    * @returns the active view.
+    */
+-  @Remote('resume')
+   resume(agent: Agent, ref: GoalRef): GoalView {
+     const [state, runtime] = this.prepareMutation(agent)
+     const currentState = this.expectCurrent(state, ref)
+@@ -387,7 +419,6 @@
+    * @param ref - expected current revision.
+    * @returns the completed view.
+    */
+-  @Remote('complete')
+   complete(agent: Agent, ref: GoalRef): GoalView {
+     return this.transition(
+       agent,
+@@ -429,7 +460,6 @@
+    * @param ref - expected current revision.
+    * @returns the tombstone ref whose revision is one past the cleared snapshot.
+    */
+-  @Remote('clear')
+   clear(agent: Agent, ref: GoalRef): GoalRef {
+     const [state, runtime] = this.prepareMutation(agent)
+     const currentState = this.expectCurrent(state, ref)
+@@ -449,6 +479,7 @@
+   /** Resolve the durable and process-local state used by a mutation. */
+   private prepareMutation(agent: Agent): readonly [GoalProjection | null, GoalRuntimeState] {
+     this.assertLive(agent)
++    if (this.externalStateFor(agent)) throw new Error('external goal mutation requires its asynchronous state port')
+     return [this.state(agent.session), this.runtimeState(agent.session)]
+   }
+ 
+@@ -644,10 +675,41 @@
+    * @returns the created Goal identity.
+    */
+   @Remote('create')
+-  remoteExportCreate(agent: Agent, request: CreateGoalRequest): CreateGoalResult {
+-    const view = this.create(agent, request)
++  async remoteExportCreate(agent: Agent, request: CreateGoalRequest): Promise<CreateGoalResult> {
++    const port = this.externalStateFor(agent)
++    const view = port ? await port.mutate('create', undefined, request, {remoteInvocation: this.ctx.invocation}) : this.create(agent, request)
+     return { ref: { id: view.id, revision: view.revision } }
+   }
++  @Remote('get')
++  async remoteExportGet(agent: Agent): Promise<GoalView | undefined> {
++    await this.externalStateFor(agent)?.refresh()
++    return this.get(agent)
++  }
++  @Remote('edit')
++  async remoteExportEdit(agent: Agent, ref: GoalRef, request: EditGoalRequest): Promise<GoalView> {
++    const port = this.externalStateFor(agent)
++    return port ? await port.mutate('edit', ref, request, {remoteInvocation: this.ctx.invocation}) : this.edit(agent, ref, request)
++  }
++  @Remote('pause')
++  async remoteExportPause(agent: Agent, ref: GoalRef): Promise<GoalView> {
++    const port = this.externalStateFor(agent)
++    return port ? await port.mutate('pause', ref, undefined, {remoteInvocation: this.ctx.invocation}) : this.pause(agent, ref)
++  }
++  @Remote('resume')
++  async remoteExportResume(agent: Agent, ref: GoalRef): Promise<GoalView> {
++    const port = this.externalStateFor(agent)
++    return port ? await port.mutate('resume', ref, undefined, {remoteInvocation: this.ctx.invocation}) : this.resume(agent, ref)
++  }
++  @Remote('complete')
++  async remoteExportComplete(agent: Agent, ref: GoalRef): Promise<GoalView> {
++    const port = this.externalStateFor(agent)
++    return port ? await port.mutate('complete', ref, undefined, {remoteInvocation: this.ctx.invocation}) : this.complete(agent, ref)
++  }
++  @Remote('clear')
++  async remoteExportClear(agent: Agent, ref: GoalRef): Promise<GoalRef> {
++    const port = this.externalStateFor(agent)
++    return port ? await port.mutate('clear', ref, undefined, {remoteInvocation: this.ctx.invocation}) : this.clear(agent, ref)
++  }
+ }
+ 
+ export default GoalService
+--- a/packages/goal/goal/src/types.ts
++++ b/packages/goal/goal/src/types.ts
+@@ -117,6 +117,7 @@
+ 
+ /** Strict checkpoint state used to derive the current goal client value. */
+ export interface GoalProjectionState {
++  readonly externalRevision?: number
+   /** Latest valid current goal, or null before creation and after clear. */
+   readonly current: GoalProjection | null
+   /** Goal identities already created in this Session, retained to reject reuse. */
+--- a/packages/goal/goal/src/domain.ts
++++ b/packages/goal/goal/src/domain.ts
+@@ -59,6 +59,11 @@
+ }
+ 
+ declare module '@deepseek-ai/dsh-session/types' {
++  interface PluginRecordMap {
++    /** Receipt-derived view cache: Core remains authoritative after omission. */
++    'plugin:sic/goal/receipt': { revision: number; current: import('./types.ts').GoalProjection | null }
++    'plugin:sic/goal/intent': { request_id: string; peer_id: string; action: string; goal_id?: string; revision?: number }
++  }
+   interface SessionEventMap {
+     /**
+      * Complete post-mutation goal state or clear tombstone.
+--- a/packages/goal/goal-round-driver/src/index.ts
++++ b/packages/goal/goal-round-driver/src/index.ts
+@@ -75,6 +75,7 @@
+ 
+ /** Install automatic same-session continuation and its race fences. */
+ export function apply(ctx: Context): void {
++  const releaseExternalDriver = ctx.goals.attachExternalDriver?.(ctx)
+   const states = new Map<Agent, DriverState>()
+   // Releases drivers still joining subagents when the plugin unloads.
+   const unloading = Promise.withResolvers<void>()
+@@ -122,13 +123,21 @@
+   }
+ 
+   /** Remove automatic authority while preserving the durable phase. */
+-  function disarm(state: DriverState): void {
++  async function disarm(state: DriverState): Promise<void> {
+     try {
+       const goal = currentGoal(state)
+-      if (goal?.activation === 'armed') ctx.goals.disarm(state.agent)
++      const port = ctx.goals.externalStateFor?.(state.agent)
++      if (port) await port.disarm('driver-disarm')
++      else if (goal?.activation === 'armed') ctx.goals.disarm(state.agent)
+     } catch (error: unknown) {
+       ctx.logger.warn(`goal-round-driver: could not disarm agent "${state.agent.id}": ${renderThrown(error)}`)
+     }
++  }
++
++  function block(agent: Agent, ref: GoalRef, reason: {code: string; message: string}): void {
++    const port = ctx.goals.externalStateFor?.(agent)
++    if (port) void port.disarm(reason.code).catch(error => ctx.logger.warn(String(error)))
++    else ctx.goals.block(agent, ref, reason)
+   }
+ 
+   /** Preserve claimed step context when this driver drops only its own round. */
+@@ -146,6 +155,8 @@
+   async function drive(state: DriverState): Promise<void> {
+     const { agent } = state
+     if (!readyToDrive(state)) return
++    await ctx.goals.externalStateFor?.(agent)?.refresh()
++    if (!readyToDrive(state)) return
+ 
+     if (state.needsCheckpoint) {
+       state.needsCheckpoint = false
+@@ -153,7 +164,7 @@
+         await ctx.sessions.flush(agent.session)
+       } catch (error: unknown) {
+         ctx.logger.warn(`goal-round-driver: durability checkpoint failed for agent "${agent.id}": ${renderThrown(error)}`)
+-        disarm(state)
++        await disarm(state)
+         return
+       }
+       // A mutation or ordinary prompt may have arrived while the checkpoint
+@@ -163,6 +174,7 @@
+ 
+     const attempt = state.attempt
+     if (attempt !== undefined) {
++      await ctx.goals.externalStateFor?.(agent)?.settle(attempt)
+       state.attempt = undefined
+       state.needsCheckpoint = true
+       state.requested = true
+@@ -179,8 +191,8 @@
+       await Promise.race([subagents.waitForChildren(agent), unloading.promise])
+       if (!readyAfterCheckpoint(state)) return
+     }
+-    if (goal.roundsStarted >= goal.maxGoalRounds) {
+-      ctx.goals.block(agent, goalRef(goal), {
++    if (goal.maxGoalRounds !== undefined && goal.roundsStarted >= goal.maxGoalRounds) {
++      block(agent, goalRef(goal), {
+         code: 'round-limit',
+         message: `Goal reached its configured limit of ${goal.maxGoalRounds} rounds.`,
+       })
+@@ -212,7 +224,7 @@
+       const latest = currentGoal(state)
+       if (latest !== undefined && latest.id === goal.id && latest.revision === goal.revision
+         && latest.phase === 'active' && latest.activation === 'armed') {
+-        ctx.goals.block(agent, goalRef(latest), {
++        block(agent, goalRef(latest), {
+           code: 'queue-failed',
+           message: `Could not queue goal round ${round}: ${renderThrown(error)}`,
+         })
+@@ -290,7 +302,9 @@
+           state.attempt = undefined
+           try {
+             if (attempt.phase === 'queued') agent.inbox.remove(attempt.messageId)
+-            if (pause) ctx.goals.pause(agent, goalRef(goal))
++            const port = ctx.goals.externalStateFor?.(agent)
++            if (port) { if (attempt) void port.settle({...attempt, cancelled: true}).catch(error => ctx.logger.warn(String(error))) }
++            else if (pause) ctx.goals.pause(agent, goalRef(goal))
+           } catch (error: unknown) {
+             ctx.logger.warn(`goal-round-driver: could not settle cancelled goal round for agent "${agent.id}": ${renderThrown(error)}`)
+             disarm(state)
+@@ -385,6 +399,7 @@
+       const state = stateFor(agent)
+       let valid = false
+       try {
++        await ctx.goals.externalStateFor?.(agent)?.refresh()
+         valid = validReservation(state, content, source)
+       } catch (error: unknown) {
+         ctx.logger.warn(`goal-round-driver: pre-step check failed for agent "${agent.id}": ${renderThrown(error)}`)
+@@ -421,7 +436,7 @@
+         const goal = currentGoal(state)
+         if (goal !== undefined && goal.id === source.goalId && goal.revision === source.revision
+           && goal.phase === 'active' && goal.activation === 'armed') {
+-          ctx.goals.block(agent, goalRef(goal), {
++          block(agent, goalRef(goal), {
+             code: 'prompt-rejected',
+             message: 'Goal round was rejected before entering its step.',
+           })
+@@ -441,6 +456,7 @@
+         requestDrive(state)
+         return { kind: 'reject' }
+       }
++      await ctx.goals.externalStateFor?.(agent)?.start(source)
+       return { ...decision, startsRequestSeries: true }
+     })
+ 
+@@ -458,7 +474,7 @@
+       const waits: Promise<void>[] = []
+       for (const state of states.values()) {
+         state.stopping = true
+-        disarm(state)
++        waits.push(disarm(state))
+         const attempt = state.attempt
+         if (attempt !== undefined) {
+           attempt.stale = true
+@@ -472,6 +488,7 @@
+       }
+       await Promise.allSettled(waits)
+       states.clear()
++      releaseExternalDriver?.()
+     }
+   }, 'goal-round-driver lifecycle')
+ }
+--- a/packages/goal/command-goal/src/index.ts
++++ b/packages/goal/command-goal/src/index.ts
+@@ -123,7 +123,7 @@
+ }
+ 
+ /** Execute one parsed human command through the domain that owns persistence. */
+-function executeGoalCommand(ctx: Context, invocation: CommandInvocation): CommandResult {
++async function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Promise<CommandResult> {
+   const command = parseGoalCommand(invocation.rawInput)
+   if (invocation.attachments.length > 0 && command.kind !== 'create' && command.kind !== 'edit') {
+     return {
+@@ -132,6 +132,11 @@
+     }
+   }
+   try {
++    const port = ctx.goals.externalStateFor?.(invocation.agent)
++    await port?.refresh()
++    const mutate = async (action: string, ref?: GoalRef, request?: unknown) => port
++      ? port.mutate(action, ref, request, invocation)
++      : (ctx.goals as any)[action](invocation.agent, ...ref ? [ref, request] : [request])
+     const current = ctx.goals.get(invocation.agent)
+     switch (command.kind) {
+       case 'show':
+@@ -147,30 +152,30 @@
+             text: `A goal is already ${phaseLabel(current.phase)}. Use /goal edit <objective> to change it or /goal clear before replacing it.`,
+           }
+         }
+-        const created = ctx.goals.create(invocation.agent, { objective: command.objective })
++        const created = await mutate('create', undefined, { objective: command.objective })
+         submitObjectiveAttachments(invocation)
+         return renderGoal('Goal created', created)
+       }
+       case 'edit': {
+         if (current === undefined) return missingGoal('edit')
+         if (current.phase === 'complete') {
+-          const replaced = ctx.goals.create(invocation.agent, { objective: command.objective })
++          const replaced = await mutate('create', undefined, { objective: command.objective })
+           submitObjectiveAttachments(invocation)
+           return renderGoal('Goal created', replaced)
+         }
+-        const edited = ctx.goals.edit(invocation.agent, goalRef(current), { objective: command.objective })
++        const edited = await mutate('edit', goalRef(current), { objective: command.objective })
+         submitObjectiveAttachments(invocation)
+         return renderGoal('Goal updated', edited)
+       }
+       case 'pause':
+         if (current === undefined) return missingGoal('pause')
+-        return renderGoal('Goal paused', ctx.goals.pause(invocation.agent, goalRef(current)))
++        return renderGoal('Goal paused', await mutate('pause', goalRef(current)))
+       case 'resume':
+         if (current === undefined) return missingGoal('resume')
+-        return renderGoal('Goal resumed', ctx.goals.resume(invocation.agent, goalRef(current)))
++        return renderGoal('Goal resumed', await mutate('resume', goalRef(current)))
+       case 'clear':
+         if (current === undefined) return { kind: 'success', text: 'No goal to clear.' }
+-        ctx.goals.clear(invocation.agent, goalRef(current))
++        await mutate('clear', goalRef(current))
+         return { kind: 'success', text: 'Goal cleared.' }
+       /* v8 ignore next 2 -- GoalCommand is closed and every member is handled above */
+       default: return assertNever(command, 'goal command')

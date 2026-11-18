@@ -18,13 +18,13 @@ async fn model(State(mock): State<Mock>, Json(body): Json<Value>) -> Json<Value>
     let (finish, message) = match n {
         1 => (
             "tool_calls",
-            json!({"role":"assistant","content":null,"tool_calls":[{"id":"search-1","type":"function","function":{
-            "name":"sic_tool_search","arguments":json!({"query":"calcul"}).to_string()}}]}),
+            json!({"role":"assistant","content":null,"tool_calls":[{"id":"update-1","type":"function","function":{
+            "name":"sic_tool_update","arguments":json!({"select":["calculator"]}).to_string()}}]}),
         ),
         2 => (
             "tool_calls",
             json!({"role":"assistant","content":null,"tool_calls":[{"id":"call-1","type":"function","function":{
-            "name":"sic_tool_call","arguments":json!({"name":"calculator","arguments":{"a":2,"b":3}}).to_string()}}]}),
+            "name":"calculator","arguments":json!({"a":2,"b":3}).to_string()}}]}),
         ),
         _ => ("stop", json!({"role":"assistant","content":"5"})),
     };
@@ -41,7 +41,7 @@ async fn paged_catalog_model(State(mock): State<Mock>, Json(body): Json<Value>) 
         (
             "tool_calls",
             json!({"role":"assistant","content":null,"tool_calls":[{"id":"page-search","type":"function","function":{
-                "name":"sic_tool_search","arguments":json!({"query":"catalog","offset":100,"limit":100}).to_string()
+                "name":"sic_tool_update","arguments":json!({"select":["catalog_100","catalog_101"]}).to_string()
             }}]}),
         )
     } else {
@@ -62,8 +62,8 @@ async fn duplicate_indexes_model(State(mock): State<Mock>, Json(body): Json<Valu
         (
             "tool_calls",
             json!({"role":"assistant","content":null,"reasoning_content":"opaque synthetic provider reasoning","tool_calls":[
-                {"index":0,"id":"search-multi","type":"function","function":{"name":"sic_tool_search","arguments":"{\"query\":\"calculator\"}"}},
-                {"index":0,"id":"expand-multi","type":"function","function":{"name":"sic_tool_expand","arguments":"{\"name\":\"calculator\"}"}}
+                {"index":0,"id":"update-multi","type":"function","function":{"name":"sic_tool_update","arguments":"{\"select\":[\"calculator\"]}"}},
+                {"index":0,"id":"fold-multi","type":"function","function":{"name":"sic_tool_update","arguments":"{\"fold\":[\"calculator\"]}"}}
             ]}),
         )
     } else {
@@ -84,11 +84,8 @@ async fn continuous_tool_model(State(mock): State<Mock>, Json(body): Json<Value>
     let n = requests.len();
     // Asking again for an already-expanded schema is not an execution and
     // must not keep an unused tool alive indefinitely.
-    let (name, args) = if n == 1 || n == 8 {
-        ("sic_tool_expand", json!({"name":"calculator"}))
-    } else {
-        ("sic_tool_search", json!({"query":"calculator"}))
-    };
+    let args = json!({"select":["calculator"]});
+    let name = "sic_tool_update";
     Json(
         json!({"model":"deepseek-v4.1-flash-eco","choices":[{"finish_reason":"tool_calls",
         "message":{"role":"assistant","content":null,"tool_calls":[{"id":format!("idle-test-{n}"),
@@ -271,15 +268,34 @@ async fn unused_tool_is_evicted_after_fifteen_tool_call_responses() {
                     .as_str()
                     .and_then(|content| serde_json::from_str::<Value>(content).ok())
                     .and_then(|view| {
-                        view.pointer("/sic_editable_I_views/dynamic_tool_directory")
+                        view.pointer("/sic_editable_I_views/tool_directory/programs")
                             .cloned()
                     })
-                    .and_then(|directory| directory.as_array().cloned())
-                    .is_some_and(|directory| {
-                        directory.iter().any(|tool| tool["name"] == "calculator")
+                    .and_then(|programs| programs.as_array().cloned())
+                    .is_some_and(|programs| {
+                        programs.iter().any(|entry| {
+                            entry["tools"].as_array().is_some_and(|tools| {
+                                tools.iter().any(|tool| {
+                                    tool["name"] == "calculator" && tool["expanded"] == true
+                                })
+                            })
+                        })
                     })
             })
     };
+    if !has_calculator(&requests[1]) {
+        let msgs = requests[1]["messages"].as_array().unwrap();
+        for (i, m) in msgs.iter().enumerate() {
+            let c = m["content"].as_str().unwrap_or("");
+            if c.contains("tool_directory") {
+                eprintln!(
+                    "MSG {i} role={} content={}",
+                    m["role"],
+                    &c[..c.len().min(1400)]
+                );
+            }
+        }
+    }
     assert!(has_calculator(&requests[1]));
     assert!(!has_calculator(&requests[16]));
     server.abort();
@@ -343,11 +359,11 @@ async fn complete_parallel_calls_with_repeated_indexes_are_dispatched_and_audite
     assert_eq!(first["result"]["tool_calls"][1]["index"], 1);
     assert_eq!(
         first["result"]["tool_results"][0]["tool_call_id"],
-        "search-multi"
+        "update-multi"
     );
     assert_eq!(
         first["result"]["tool_results"][1]["tool_call_id"],
-        "expand-multi"
+        "fold-multi"
     );
     assert_eq!(first["result"]["tool_results"][1]["result"]["ok"], true);
     let mut tx = store.begin().await.unwrap();
@@ -369,16 +385,16 @@ async fn complete_parallel_calls_with_repeated_indexes_are_dispatched_and_audite
     let messages = requests[1]["messages"].as_array().unwrap();
     assert!(messages.iter().any(|m| m["role"] == "assistant"
         && m["reasoning_content"] == "opaque synthetic provider reasoning"
-        && m["tool_calls"][1]["id"] == "expand-multi"));
+        && m["tool_calls"][1]["id"] == "fold-multi"));
     assert!(
         messages
             .iter()
-            .any(|m| m["role"] == "tool" && m["tool_call_id"] == "search-multi")
+            .any(|m| m["role"] == "tool" && m["tool_call_id"] == "update-multi")
     );
     assert!(
         messages
             .iter()
-            .any(|m| m["role"] == "tool" && m["tool_call_id"] == "expand-multi")
+            .any(|m| m["role"] == "tool" && m["tool_call_id"] == "fold-multi")
     );
     let group = core
         .operate(
@@ -459,15 +475,19 @@ async fn real_core_dispatches_search_then_waits_for_host_tool_and_continues() {
     .await
     .unwrap();
     let search = core.operate("worker.run", &ctx, &json!({})).await.unwrap();
-    assert_eq!(
-        search["result"]["tool_results"][0]["result"]["tools"][0]["name"],
-        "calculator"
+    let update = &search["result"]["tool_results"][0]["result"]["update"];
+    assert_eq!(update["added"][0], "calculator");
+    assert!(
+        update["message"]
+            .as_str()
+            .unwrap()
+            .contains("Added calculator.")
     );
-    assert_eq!(search["result"]["tool_results"][0]["result"]["offset"], 0);
-    assert_eq!(search["result"]["tool_results"][0]["result"]["total"], 1);
-    assert_eq!(
-        search["result"]["tool_results"][0]["result"]["next_offset"],
-        Value::Null
+    assert!(
+        search["result"]["tool_results"][0]["result"]["update"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Added calculator.")
     );
     let requested = core.operate("worker.run", &ctx, &json!({})).await.unwrap();
     assert_eq!(
@@ -505,7 +525,13 @@ async fn real_core_dispatches_search_then_waits_for_host_tool_and_continues() {
     assert_eq!(answer["result"]["content"], "5");
     let requests = mock.requests.lock().await;
     assert_eq!(requests.len(), 3);
-    assert_eq!(requests[0]["tools"], requests[2]["tools"]);
+    let native = requests[1]["tools"].as_array().unwrap().iter()
+        .find(|tool| tool["function"]["name"] == "calculator").unwrap();
+    assert_eq!(native["function"]["parameters"], json!({
+        "type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},
+        "required":["a","b"]
+    }));
+    assert_eq!(requests[1]["tools"], requests[2]["tools"]);
     assert!(
         requests[1]["messages"]
             .as_array()
@@ -513,12 +539,14 @@ async fn real_core_dispatches_search_then_waits_for_host_tool_and_continues() {
             .iter()
             .any(|message| {
                 message["role"] == "tool"
-                    && message["tool_call_id"] == "search-1"
+                    && message["tool_call_id"] == "update-1"
                     && serde_json::from_str::<Value>(message["content"].as_str().unwrap_or(""))
                         .is_ok_and(|content| {
-                            content["total"] == 1
-                                && content["offset"] == 0
-                                && content["next_offset"].is_null()
+                            content["ok"] == true
+                                && content["update"]["added"][0] == "calculator"
+                                && content["update"]["message"]
+                                    .as_str()
+                                    .is_some_and(|text| text.contains("Added calculator."))
                         })
             })
     );
@@ -605,7 +633,7 @@ async fn worker_i_bounds_large_catalog_and_search_pages_reach_remaining_tools() 
     core.operate(
         "tools.configure",
         &ctx,
-        &json!({"acl":{"discover":discover_acl,"expand":[],"execute":[]},"tools":tools}),
+        &json!({"acl":{"discover":discover_acl,"expand":discover_acl,"execute":[]},"tools":tools}),
     )
     .await
     .unwrap();
@@ -619,12 +647,11 @@ async fn worker_i_bounds_large_catalog_and_search_pages_reach_remaining_tools() 
 
     let searched = core.operate("worker.run", &ctx, &json!({})).await.unwrap();
     let result = &searched["result"]["tool_results"][0]["result"];
-    assert_eq!(result["offset"], 100);
-    assert_eq!(result["total"], 130);
-    assert_eq!(result["next_offset"], Value::Null);
-    assert_eq!(result["tools"].as_array().unwrap().len(), 30);
-    assert_eq!(result["tools"][0]["name"], "catalog_100");
-    assert_eq!(result["tools"][29]["name"], "catalog_129");
+    let update = &result["update"];
+    assert_eq!(update["added"].as_array().unwrap().len(), 2);
+    assert_eq!(update["added"][0], "catalog_100");
+    assert_eq!(update["added"][1], "catalog_101");
+    assert!(update["message"].as_str().unwrap().contains("Added"));
 
     core.operate("worker.run", &ctx, &json!({})).await.unwrap();
     let requests = mock.requests.lock().await;
@@ -636,12 +663,21 @@ async fn worker_i_bounds_large_catalog_and_search_pages_reach_remaining_tools() 
         .filter_map(|message| message["content"].as_str())
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(initial_context.contains("\"total\":130"));
-    assert!(initial_context.contains("\"has_more\":true"));
+    // The directory lists every discoverable tool with its expanded state,
+    // so the Worker can see the whole catalog without a search page.
+    assert!(initial_context.contains("\"total_tools\":130"));
     assert!(initial_context.contains("catalog_000"));
-    assert!(initial_context.contains("catalog_019"));
-    assert!(!initial_context.contains("catalog_020"));
-    assert!(!initial_context.contains("catalog_129"));
+    assert!(initial_context.contains("catalog_129"));
+    // Schemas stay out of the prefix until a tool is actually selected.
     assert!(!initial_context.contains("unique_catalog_description_"));
+    let selected = requests[1]["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|message| message["content"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(selected.contains("catalog_100"));
+    assert!(selected.contains("unique_catalog_description_100"));
     server.abort();
 }

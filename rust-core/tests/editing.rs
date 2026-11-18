@@ -102,6 +102,35 @@ fn pvi_routes_content_and_validates_primary_decision_views() {
 }
 
 #[test]
+fn instant_never_becomes_working_source_and_old_instant_is_not_reapplied() {
+    let original = source();
+    let assignments = json!([{"editor":"e1","unit_ids":["u1","u2","u3"]}]);
+    // F25: a later round with no P/V/I must not resurrect the previous I text.
+    let first = json!({"e1":{"ops":[],"pvi":{"I":{"status":{"ready":true}}}}});
+    let first_result = materialize(&original, &assignments, &first, true).unwrap();
+    assert_eq!(first_result["instant"]["status"], json!({"ready":true}));
+    let second = json!({"e1":{"ops":[],"pvi":{}}});
+    let second_result = materialize(&original, &assignments, &second, true).unwrap();
+    // The body must be unchanged: I is a projection, never appended WB text.
+    assert_eq!(second_result["body"], first_result["body"]);
+    assert!(!second_result["body"].as_str().unwrap().contains("ready"));
+    // The previous round's I must not be carried into this round: it is a
+    // per-round projection, not accumulated state.
+    assert_ne!(
+        second_result["instant"],
+        first_result["instant"],
+        "a later round must not inherit the earlier instant view"
+    );
+
+    // I is not an editable target: naming it as a target must be refused.
+    let edit_instant = json!({"e1":{"ops":[{"op":"DELETE","target":"instant"}],"pvi":{}}});
+    assert!(materialize(&original, &assignments, &edit_instant, true).is_err());
+    // Nor may ordinary I text carry a capability field into the editable view.
+    let forged_mode = json!({"e1":{"ops":[{"op":"ADD","content":"x","lifecycle":"I","view_key":"mode"}],"pvi":{"I":{"mode":"editor"}}}});
+    assert!(materialize(&original, &assignments, &forged_mode, true).is_err());
+}
+
+#[test]
 fn rejects_scope_escalation_unknown_protocol_fields_and_instant_conflicts() {
     let original = source();
     let assignments = json!([{"editor":"e1","unit_ids":["u1"]}]);

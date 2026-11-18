@@ -109,3 +109,88 @@ async fn provider_cache_tokens_are_reported_without_claiming_physical_proof() {
     );
     server.abort();
 }
+
+/// F36 negative case: a provider that reports no cache fields must not be
+/// recorded as a hit. The absence of `prompt_tokens_details` is "unknown",
+/// never zero-cached and never a free reuse.
+async fn completion_without_cache_report(Json(_body): Json<Value>) -> Json<Value> {
+    Json(json!({
+        "model": "deepseek-v4.1-flash-eco",
+        "usage": {"prompt_tokens": 16, "completion_tokens": 8},
+        "choices": [{"finish_reason": "tool_calls", "message": {
+            "role": "assistant", "content": null,
+            "tool_calls": [{"id": "edit-empty", "type": "function",
+                "function": {"name": "sic_edit_blocks", "arguments": "{\"ops\":[],\"pvi\":{}}"}}]
+        }}]
+    }))
+}
+
+#[tokio::test]
+async fn a_provider_that_reports_no_cache_is_unknown_not_a_zero_hit() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let _ = axum::serve(
+            listener,
+            Router::new()
+                .route("/v1/chat/completions", post(completion_without_cache_report))
+                .with_state(()),
+        )
+        .await;
+    });
+    let store = Store::memory().await.unwrap();
+    let p = profile(format!("http://{address}/v1"));
+    let core = Core::with_model_config_and_resolver(
+        store.clone(),
+        json!({"roles":{"worker":p.clone(),"editor":p}}),
+        Arc::new(|_| Ok("fixture-key".into())),
+    )
+    .unwrap();
+    let chain = call(&core, &context(None), "chain.create", json!({})).await["chain_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let ctx = context(Some(chain));
+    let source = call(
+        &core,
+        &ctx,
+        "source.ingest",
+        json!({"request":{"messages":[{"role":"user","content":"no cache unit"}]}}),
+    )
+    .await["source_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    call(&core, &ctx, "wb.form", json!({"source_ids":[source]})).await;
+    let job = call(
+        &core,
+        &ctx,
+        "edit.prepare",
+        json!({"source_id":source,"assignments":[{"editor":"e1","unit_ids":["u1"]}]}),
+    )
+    .await["job_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    call(&core, &ctx, "edit.run", json!({"job_id":job,"editor":"e1"})).await;
+
+    let accounting = call(&core, &ctx, "accounting.get", json!({})).await;
+    let attempts = accounting["attempts"].as_array().unwrap();
+    assert_eq!(attempts.len(), 1);
+    // Absent cached_tokens is null, not zero: zero would claim a measured miss.
+    assert!(
+        attempts[0]["provider_reported_cached_tokens"].is_null(),
+        "an unreported cache field must stay null, not become 0: {:?}",
+        attempts[0]
+    );
+    assert_eq!(accounting["physical_cache_hit"], "unknown");
+    assert_eq!(
+        accounting["cache_observation"]["attempts_without_cache_report"], 1,
+        "the missing report must be counted, not hidden by a zero"
+    );
+    assert_eq!(
+        accounting["cache_observation"]["physical_cache_hit_proof"],
+        false
+    );
+    server.abort();
+}

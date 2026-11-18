@@ -124,6 +124,8 @@ fn policy(max_level: u32) -> SchedulerPolicy {
         max_units_per_wb: 64,
         level_batch_sizes: levels,
         max_level,
+        min_level: 1,
+        protected_prefix_blocks: 0,
         flush: false,
         max_actions: 256,
         max_model_calls: 16,

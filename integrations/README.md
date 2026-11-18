@@ -1,5 +1,13 @@
 # SIC v2 官方 Langflow / LangGraph 控制面
 
+## 当前 Rust Core 工作台
+
+新版 Rust 后端请先使用 [Rust 工作台接入说明](RUST-WORKBENCH.md)。
+Langflow 的 SIC Rust 实时工作台和 LangGraph Studio 的 sic_rust 图读取正在运行的
+Rust Core 能力表与参数，而不依赖下面记录的 Python Core 操作目录。两者可指向同一个
+Rust 数据库。本文其余旧语义表单和历史验收描述主要针对 Python Core；Rust 未公布的
+操作会显示 capability_missing，不能把旧表单的全部功能视为已经移植。
+
 当前逐功能状态见[F01–F73实施验收账](../docs/functional-acceptance.md)，新增[任务总账](../docs/task-ledger.md)与[真实角色前沿对照](../docs/frontier-comparison.md)。源表单、隔离SDK、常驻API、浏览器GUI分别记录，不按节点数量判完成。当前专用Studio最终组件已加载：selected Editor各表及media/communication完整分页在官方GUI实测通过，无这些控件的重载待办；证据`GUI_STUDIO_FINAL`及SHA见[验收账](functional-acceptance.json)，不声称73项全部GUI通过。
 
 双链、N阶真实编辑及Editor私有持续上下文的新语义入口见[递归工作台](hierarchy-workbench.md)。旧R65覆盖表不是新73项完备证明；新域GUI验收单独记录。

@@ -9,11 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lfx.custom.utils import build_custom_component_template
 from components.sic import (SICAction, SICNativeInput, SICWorkspace, SICCandidate, SICDecision,
-                            SICMemory, SICConfiguration, SICRoutes, SICBoard, SICRuntime, SICAccounting, SICCoverage, SICEditorTask, SICHierarchy)
+                            SICMemory, SICConfiguration, SICRoutes, SICBoard, SICRuntime, SICAccounting, SICCoverage, SICEditorTask, SICHierarchy, SICRustWorkbench)
 
 ROOT = Path(__file__).resolve().parent
 CLASSES = {cls.__name__: cls for cls in (SICAction, SICNativeInput, SICWorkspace, SICCandidate, SICDecision, SICMemory,
-                                       SICConfiguration, SICRoutes, SICBoard, SICRuntime, SICAccounting, SICCoverage, SICEditorTask, SICHierarchy)}
+                                       SICConfiguration, SICRoutes, SICBoard, SICRuntime, SICAccounting, SICCoverage, SICEditorTask, SICHierarchy, SICRustWorkbench)}
 
 
 def make_workbench_flow(name, steps, connect=False):
@@ -30,7 +30,7 @@ def make_workbench_flow(name, steps, connect=False):
         if "action" in schema["template"] and hasattr(component, "update_build_config"):
             schema["template"] = component.update_build_config(schema["template"], schema["template"]["action"]["value"], "action")
         # Source artifacts never ship enabled writes or model grants.
-        for field in ("allow_write", "allow_model"):
+        for field in ("allow_write", "allow_model", "allow_revoke"):
             if field in schema["template"]:
                 schema["template"][field]["value"] = False
         node_id = f"{cls.__name__}-{index + 1}"
@@ -85,11 +85,19 @@ def hierarchy_steps(context=None, members=None, level=2, context_id='main'):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--only',choices=['accounting','runtime','requirements'],help='Export only this domain; leave all other flows untouched')
+    parser.add_argument('--only',choices=['accounting','runtime','requirements','rust'],help='Export only this domain; leave all other flows untouched')
     args=parser.parse_args()
     if args.only:
-        cls={'accounting':SICAccounting,'runtime':SICRuntime,'requirements':SICCoverage}[args.only]
-        flow=make_workbench_flow(f'SIC 工作台 — {args.only}',[{'component':cls.__name__,'values':{} if cls is SICCoverage else {'chain_id':'SELECT_ROUTE'}}])
+        cls={'accounting':SICAccounting,'runtime':SICRuntime,'requirements':SICCoverage,'rust':SICRustWorkbench}[args.only]
+        steps = [{'component':cls.__name__,'values':{} if cls in (SICCoverage,SICRustWorkbench) else {'chain_id':'SELECT_ROUTE'}}]
+        if args.only == 'rust':
+            steps += [{'component':name, 'values':{}} for name in ('SICNativeInput', 'SICWorkspace', 'SICAccounting')]
+        flow=make_workbench_flow(f'SIC 工作台 — {args.only}',steps)
+        if args.only == 'rust':
+            native_format = flow['data']['nodes'][1]['data']['node']['template']['native_format']
+            native_format['options'] = ['openai-chat']
+            native_format['value'] = 'openai-chat'
+            native_format['info'] = '当前 Rust Core 仅接入 openai-chat。'
         (ROOT/'flows'/f'workbench-{args.only}.json').write_text(json.dumps(flow,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
         print(f'workbench-{args.only}.json',len(flow['data']['nodes']))
         return

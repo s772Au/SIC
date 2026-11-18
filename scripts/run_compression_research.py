@@ -1,4 +1,4 @@
-"""New-Core compression comparison; default owned fixture, explicit fixed provider opt-in."""
+"""Compression comparison: Rust v2 by default, Python reference by explicit opt-in."""
 import os
 import argparse,hashlib,importlib.util,json,sys,time,uuid,zipfile
 from pathlib import Path
@@ -106,7 +106,13 @@ def arm(folder,task,engine,pack,profile,prices,trim_budget,fanout,media_root=Non
         return {'engine':engine,'status':'passed','calls':len(usage['calls']),'editor_calls':sum(c['role']=='editor' for c in usage['calls']),'summary':summary}
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--task',type=Path);ap.add_argument('--media-data-root',type=Path);ap.add_argument('--dataset');ap.add_argument('--chunk-bytes',type=int,default=32768);ap.add_argument('--output',type=Path,required=True);ap.add_argument('--engines',nargs='+',default=['batch','sic','structured_summary','program_exact','langchain_trim','unchanged']);ap.add_argument('--provider-config',type=Path);ap.add_argument('--allow-provider',action='store_true');ap.add_argument('--allow-test-gateway',action='store_true',help='Explicit exploratory 8341 route; no fixed-model/generalization claim');ap.add_argument('--prices',type=Path);ap.add_argument('--trim-budget',type=int,default=4096);ap.add_argument('--hierarchy-fanout',type=int,default=0);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--task',type=Path);ap.add_argument('--media-data-root',type=Path);ap.add_argument('--dataset');ap.add_argument('--data-root',type=Path);ap.add_argument('--chunk-bytes',type=int,default=32768);ap.add_argument('--output',type=Path,required=True);ap.add_argument('--engines',nargs='+',default=['batch','sic','structured_summary','program_exact','langchain_trim','unchanged']);ap.add_argument('--backend',choices=['rust-v2','python'],default='rust-v2');ap.add_argument('--rust-binary',type=Path);ap.add_argument('--max-model-calls',type=int,default=100);ap.add_argument('--worker-call-limit',type=int,default=1);ap.add_argument('--plan-only',action='store_true');ap.add_argument('--provider-config',type=Path);ap.add_argument('--allow-provider',action='store_true');ap.add_argument('--allow-test-gateway',action='store_true',help='Explicit exploratory 8341 route; no fixed-model/generalization claim');ap.add_argument('--prices',type=Path);ap.add_argument('--trim-budget',type=int,default=4096);ap.add_argument('--hierarchy-fanout',type=int,default=0);args=ap.parse_args()
+    if args.backend=='rust-v2':
+        from rust_v2_research import run as run_rust_v2
+        return run_rust_v2(args)
+    if args.plan_only:raise ValueError('Python reference does not support --plan-only; use Rust v2')
+    if args.worker_call_limit!=1 or args.rust_binary:raise ValueError('Worker continuation and Rust binary options require --backend rust-v2')
+    if args.data_root:os.environ['SIC_DATA_ROOT']=str(args.data_root.resolve())
     if args.hierarchy_fanout and args.hierarchy_fanout<2:raise ValueError('Hierarchy fanout must be at least two')
     if args.provider_config and not args.allow_provider:raise ValueError('Fixed provider requires explicit --allow-provider')
     if args.allow_test_gateway and not (args.allow_provider and args.provider_config):raise ValueError('--allow-test-gateway requires --provider-config and --allow-provider')
@@ -140,7 +146,7 @@ def main():
         save(out/'comparison.json',{'schema':'sic-compression-comparison-v2','arms':results,'reference_engine':anchor['engine'],'independent_accounting_pairs':comparisons,'quality':{'status':'not_evaluated'},'causal_claim':'No quality/cost superiority inferred; output/caching/resources differ by observed workflow'})
     except Exception as e:status='failed';save(out/'failure.json',{'type':type(e).__name__,'message':str(e),'quality':'not_evaluated'})
     files={p.relative_to(out).as_posix():{'sha256':sha(p),'bytes':p.stat().st_size} for p in sorted(out.rglob('*')) if p.is_file()}
-    save(out/'manifest.json',{'schema':SCHEMA,**disclosure,'status':status,'mode':'fixed_provider' if profile else 'owned_fixture','new_results_only':True,'files':files,'research_evaluation':'not_evaluated','real_provider_calls':None if profile else 0})
+    save(out/'manifest.json',{'schema':SCHEMA,**disclosure,'backend':'python-reference-core','status':status,'mode':'fixed_provider' if profile else 'owned_fixture','new_results_only':True,'files':files,'research_evaluation':'not_evaluated','real_provider_calls':None if profile else 0})
     print(json.dumps({'status':status,**disclosure,'mode':'fixed_provider' if profile else 'owned_fixture','quality':'not_evaluated','engines':args.engines,'real_provider_calls':None if profile else 0}))
     if status!='passed':raise SystemExit(1)
-if __name__=='__main__':main()
+if __name__=='__main__':sys.exit(main())

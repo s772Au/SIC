@@ -48,6 +48,19 @@ class LedgerScope(BaseModel):
 def ledger_payload(fields):
     return LedgerScope.model_validate({key:fields[key] for key in LedgerScope.model_fields if key in fields}).payload()
 
+def read_available_ledger(client, context, payload):
+    """Read the backend's actual ledger without translating unsupported scope."""
+    caps = client.capabilities()
+    if caps.get('ok') is False:
+        return {**caps, 'operation': 'accounting.get', 'context': context}
+    if str(caps.get('implementation', '')).startswith('sic-rust-core'):
+        if payload != {'scope': 'chain'}:
+            return {'ok': False, 'operation': 'accounting.get', 'context': context,
+                    'error': {'code': 'capability_missing',
+                              'message': 'Rust accounting.get reports one chain; task scope, custom prices and interval overrides are unavailable.'}}
+        return client.execute('accounting.get', context, {})
+    return client.execute('ledger.export', context, payload)
+
 def ledger_tables(body):
     """Return actual Core fields, never recalculate fees or cache benefit."""
     scope=body.get('scope',{})

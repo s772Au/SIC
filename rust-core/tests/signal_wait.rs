@@ -18,7 +18,10 @@ fn context(actor: &str, chain: Option<&str>, model: bool) -> OperationContext {
 }
 
 async fn call(core: &Core, context: &OperationContext, operation: &str, payload: Value) -> Value {
-    core.operate(operation, context, &payload).await.unwrap()["result"].clone()
+    core.operate(operation, context, &payload)
+        .await
+        .unwrap_or_else(|error| panic!("{operation}: {error:?}"))["result"]
+        .clone()
 }
 
 async fn pair(core: &Core) -> (OperationContext, OperationContext, String) {
@@ -970,4 +973,96 @@ async fn mixed_nonzero_wait_returns_tool_error_without_delaying_other_actions() 
     );
     assert_eq!(result["result"]["tool_results"][1]["result"]["ok"], true);
     server.abort();
+}
+
+async fn cancellation_stress(store: Store) -> (Core, OperationContext) {
+    let core = Core::new(store);
+    let (alice, bob, socket) = pair(&core).await;
+    for round in 0..40 {
+        let mut tasks = Vec::new();
+        for index in 0..32 {
+            let core = core.clone();
+            let alice = alice.clone();
+            tasks.push(tokio::spawn(async move {
+                if index % 2 == 0 {
+                    core.operate(
+                        "signal.wait",
+                        &alice,
+                        &json!({"signal_id":format!("cancel-{round}-{index}"),"timeout_ms":30000}),
+                    )
+                    .await
+                } else {
+                    core.operate(
+                        "message.wait",
+                        &alice,
+                        &json!({"after_sequence":0,"timeout_ms":30000}),
+                    )
+                    .await
+                }
+            }));
+        }
+        // Poll spawned waits into the acquisition/query path, then cancel at
+        // varying async boundaries instead of waiting for their first poll to finish.
+        for _ in 0..=round % 4 {
+            tokio::task::yield_now().await;
+        }
+        for task in &tasks {
+            task.abort();
+        }
+        for task in tasks {
+            match task.await {
+                Err(error) => assert!(error.is_cancelled(), "round {round}: {error}"),
+                Ok(result) => {
+                    panic!("waiter finished before cancellation in round {round}: {result:?}")
+                }
+            }
+        }
+        let result = call(
+            &core,
+            &alice,
+            "signal.wait",
+            json!({"signal_id":"after-cancel","timeout_ms":1}),
+        )
+        .await;
+        assert_eq!(result["timed_out"], true, "round {round}");
+    }
+    call(
+        &core,
+        &bob,
+        "socket.signal",
+        json!({"socket_id":socket,"signal_id":"still-writable","action":"wake"}),
+    )
+    .await;
+    let received = call(
+        &core,
+        &alice,
+        "signal.wait",
+        json!({"signal_id":"still-writable"}),
+    )
+    .await;
+    assert_eq!(received["receipt"]["signal_id"], "still-writable");
+    (core, alice)
+}
+
+#[tokio::test]
+async fn cancelling_waiters_during_acquisition_preserves_database_and_releases_permits() {
+    cancellation_stress(Store::memory().await.unwrap()).await;
+}
+
+#[tokio::test]
+async fn cancelled_wait_acquisitions_preserve_file_store_and_reopened_receipts() {
+    let directory = tempfile::tempdir().unwrap();
+    let db = directory.path().join("cancelled-waits.db");
+    let (core, alice) = cancellation_stress(Store::create(&db).await.unwrap()).await;
+    core.store.close().await;
+    drop(core);
+    let reopened = Core::new(Store::open(&db).await.unwrap());
+    let result = call(
+        &reopened,
+        &alice,
+        "signal.wait",
+        json!({"signal_id":"still-writable"}),
+    )
+    .await;
+    assert_eq!(result["receipt"]["signal_id"], "still-writable");
 }

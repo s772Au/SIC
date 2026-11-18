@@ -1,0 +1,38 @@
+--- a/packages/llm/llm/src/index.ts
++++ b/packages/llm/llm/src/index.ts
+@@ -352,6 +352,7 @@
+  * API, interceptable via the `llm/stream` waterfall.
+  */
+ export class LlmRuntime extends TypertRemoteService {
++  get contextDispatchVersion(): number { return 1 }
+   private adapters = new Map<string, AdapterRegistration>()
+   private directory = new Map<string, LlmConfigurableProvider>()
+   private discoveries = new Map<
+@@ -1115,7 +1116,14 @@
+         }
+         if (Object.isFrozen(resolvedOptions)) deepFreeze(projectedOptions)
+       }
+-      const stream = dispatch(this.forAdapter(projectedOptions, adapter))
++      const contextGuards: Array<(options: GenerateOptions) => void | Promise<void>> = []
++      const exchange = {options: this.forAdapter(projectedOptions, adapter)} as ContextDispatchExchange
++      Object.defineProperty(exchange, 'addFinalGuard', {value: (guard: (options: GenerateOptions) => void | Promise<void>) => contextGuards.push(guard), writable: false, configurable: false})
++      Object.preventExtensions(exchange)
++      const stream = this.ctx.waterfall(this, 'llm/context-dispatch', exchange, () => (async function* () {
++        for (const guard of contextGuards) await guard(exchange.options)
++        yield* dispatch(exchange.options)
++      })())
+       iterator = stream[Symbol.asyncIterator]()
+     } catch (error: unknown) {
+       yield adapterFailureChunk(error, options.signal)
+@@ -1216,3 +1224,11 @@
+ }
+
+ export default LlmRuntime
++
++interface ContextDispatchExchange {
++  options: GenerateOptions
++  readonly addFinalGuard: (guard: (options: GenerateOptions) => void | Promise<void>) => void
++}
++declare module '@deepseek-ai/cordis' { interface Events {
++  'llm/context-dispatch'(this: LlmRuntime, exchange: ContextDispatchExchange, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
++} }

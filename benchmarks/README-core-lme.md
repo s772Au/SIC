@@ -1,5 +1,22 @@
 # SIC v0.1：官方LongMemEval-V2媒体适配
 
+## Rust v2 测试入口（2026-11-14）
+
+`run_core_lme.py` 默认选择 `--backend rust-v2`，注册 `sic_rust_v2` Memory，配置示例为
+`configs/sic-lme-rust-v2.json`。先启动独立 Rust Core，并通过 `SIC_RUST_CORE_URL`、
+`SIC_RUST_CORE_TOKEN`、`SIC_RUST_CORE_ACTOR` 指定本机地址、凭据和宿主身份；凭据不进入
+Memory 配置或保存工件。程序编辑可用于无模型烟测；模型编辑需在 Rust 宿主配置模型并显式
+设置 `max_editor_calls`。保存工件是指向该 Rust 数据库的链和校验包，**不是独立数据库备份**；
+加载时要求原数据库可用且包校验通过。
+可选 `hierarchy_fanout` 为 2–64，使用确定性去重构建高阶 CB，不额外调用模型。
+
+Rust Core 尚不能把图片贯穿 Editor/Worker。运行前 wrapper 会检查选定题目及轨迹，发现截图就
+以 `media_not_implemented` 停止，不移除图片、不产生官方成绩。`prepare_core_lme.py` 默认输出
+Rust v2 的准备状态；目前仅无图片的文本 fixture 可用于 Rust 机械联调。下面原有图片及
+`sic_core_v01` 说明针对 Python 参考实现；运行其 harness 时须显式加 `--backend python`。
+
+---
+
 SIC编辑文本；截图按原始source、message/part、角色与工具组保留为不可变只读媒体。Core Worker实际发送原字节的标准image_url data URI，Editor收到已授权文本和只读媒体身份/来源，不收到图片base64作为编辑目标。跨阶媒体引用按原source身份去重；不同时间/part出现的同图仍保留各自观察关系。固定CB和原WB不被图片投影修改。
 
 ## 官方接口与来源
@@ -33,7 +50,7 @@ python benchmarks/run_core_lme.py --official-root <官方源码> prepare-runtime
 `configs/sic-lme-program.json`提供确定程序编辑，`configs/sic-lme-model.json`提供语义Editor路径。复制配置并显式填写可用的data_root；模型编辑另用`--sic-core-config`指向冻结Core roles/profiles配置，凭据只用环境变量，不放进memory_params。插件默认按原state自然边界形成每state一个WB（wb_state_count可显式指定每块state数量），保持同Agent连续两链及完整原序；不是把整条长trajectory塞给一次Editor。Worker/Editor完整输入仍超预算时明确拒绝，不截断原材料。
 
 ```powershell
-python benchmarks/run_core_lme.py --official-root <官方源码> --processor-path <processor目录> harness --domain web --questions-path <runtime目录>/questions.json --haystack-path <runtime目录>/haystack.json --trajectories-path <runtime目录>/trajectories.jsonl --memory-config-path <memory配置.json> --output-dir <新结果目录> --model <显式reader模型> --base-url <reader地址>
+python benchmarks/run_core_lme.py --backend python --official-root <官方源码> --processor-path <processor目录> harness --domain web --questions-path <runtime目录>/questions.json --haystack-path <runtime目录>/haystack.json --trajectories-path <runtime目录>/trajectories.jsonl --memory-config-path <memory配置.json> --output-dir <新结果目录> --model <显式reader模型> --base-url <reader地址>
 ```
 
 Reader/evaluator配置及其它参数原样交给官方harness。仅建库可添加`--save-memory --skip-evaluation`，此时无需reader或processor；保存的Core档包含原截图，不依赖原数据继续挂载。正式结果须分别完成web/enterprise及独立质量评价，不能把建库或fixture通过写成官方分数。

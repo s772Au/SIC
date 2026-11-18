@@ -10,9 +10,9 @@ the evidence that cannot be produced from this isolated checkout alone.
 - Langflow/Studio isolated use: allowed.
 - Real prices/bills (F56–F59): skipped.
 - Long task set: use the previously prepared local set. Located:
-  `D:\Claude\SIC\benchmarks\data\longmemeval-v2` (451 questions/1,870
+  `./benchmarks\data\longmemeval-v2` (451 questions/1,870
   trajectories, Apache-2.0; official adapter and processor found). One-question
-  runtime prepared at `D:\SIC-real-evidence-20261112\lme-runtime-web1`;
+  runtime prepared at `./evidence/real-run-20261112/lme-runtime-web1`;
   preparation is documented in `research/f73/longmemeval-v2.md`.
 - Physical/cryptographic erasure (F54/F67): skipped.
 - Real DSH/Editor: use DSH Headless.
@@ -49,13 +49,24 @@ the evidence that cannot be produced from this isolated checkout alone.
 - F45/F49: CTFy tools/task inventory found; installed task payloads and a
   long-run watcher are not yet confirmed.
 
-## 1. Real DSH native tool + real Editor overlap (F31–F33)
+## 1. Real DSH native tool + real Editor overlap (F30–F33)
 
 Local evidence exists for three orderings with a real external `pwsh` process
 and a mock Editor Provider. It does not prove the DSH native tool interval and
 the real Editor Provider interval overlap. Needed: an isolated DSH run whose
 native tool call is slow enough to observe, a real fixed-model Editor call, and
 both intervals plus the frozen WB input in the same trace.
+
+**Scheduling mechanism is no longer the blocker (2026-11-13).** The scheduler
+now accepts `wait`/`advance`/`adaptive`, stores host-declared waits apart from
+measured tool intervals (`runtime.wait`, `predicts_tool_start=false`), reads a
+host-declared `editor_estimate_ms` (reporting null rather than inventing one),
+and records which advance it chose (`overlap-declared-wait`, `wait-editor`,
+`wait-budget-exhausted`). `tests/scheduler_boundary_wait.rs` covers 11 cases.
+What remains is evidence, not code: (a) a real DSH run where a slow native tool
+interval actually intersects a real Editor Provider interval, (b) a side-by-side
+of the scheduler's prediction and the actual completion times on the same trace.
+A mock Provider is sufficient for (b) mechanics but not for (a).
 
 ## 2. Watcher long run / more business tools (F45/F49)
 

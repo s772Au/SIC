@@ -4,7 +4,7 @@ Status: **local backend probe**, not F52 GUI acceptance.
 
 - Official LangGraph API 0.17.1, langgraph_py 1.2.20, local Agent Server:
   `127.0.0.1:12027`, PID 47884.
-- Data dir: `D:\SIC-real-evidence-20261112\langgraph-core-owned`
+- Data dir: `./evidence/real-run-20261112/langgraph-core-owned`
 - Environment: `SIC_CORE_URL=http://127.0.0.1:18888`,
   `SIC_CORE_TOKEN` (process-only), `SIC_CORE_ACTOR=host`.
 - `GET /info` returned version 0.17.1 and self-hosted host info.
@@ -26,7 +26,7 @@ and health without printing the bearer:
 - Core 18888: listening, PID 41968, health ok, api_version 2
 - Langflow 7868: listening, health ok
 - LangGraph 12027: listening, health ok
-- exit 0; JSON saved as `D:\SIC-real-evidence-20261112\runtime-status.json`
+- exit 0; JSON saved as `./evidence/real-run-20261112/runtime-status.json`
 
 ## Official Studio web UI
 

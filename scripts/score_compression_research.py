@@ -8,6 +8,9 @@ from research_scoring import score_answer,score_annotations,score_task_rubric,di
 def read(p):return json.loads(p.read_text(encoding='utf-8-sig'))
 def verify(folder):
     folder=Path(folder).resolve();manifest=read(folder/'manifest.json')
+    if manifest.get('schema')=='sic-rust-v2-research-run-v1':
+        from rust_v2_research import verify as verify_rust
+        return verify_rust(folder)
     if manifest['schema']!='sic-compression-research-run-v2':raise ValueError('Unsupported schema')
     for name,spec in manifest['files'].items():
         rel=PurePosixPath(name)
@@ -53,7 +56,11 @@ def verify(folder):
     return {'status':'passed','files_checked':len(manifest['files']),'accounting_recomputed':True,'editor_calls':counts,'model_quality_inferred':False}
 
 def score(folder,annotations=None):
-    folder=Path(folder);valid=verify(folder);m=read(folder/'manifest.json');config=read(folder/'configuration.json');task=read(folder/'task.json');results={}
+    folder=Path(folder);m=read(folder/'manifest.json')
+    if m.get('schema')=='sic-rust-v2-research-run-v1':
+        from rust_v2_research import score as score_rust
+        return score_rust(folder,annotations)
+    valid=verify(folder);config=read(folder/'configuration.json');task=read(folder/'task.json');results={}
     for item in (annotations or {}).values():
         for criterion in item.get('criteria',[]):
             for evidence in criterion.get('evidence',[]):

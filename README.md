@@ -2,17 +2,17 @@
 
 **Streaming incremental context editing for continuing agent work.** Worker models, semantic Editor models and deterministic programs maintain one Agent's working context. Compression is one available edit.
 
-This repository contains the Python **v0.1 prerelease** and the separate **Rust v0.1.2 lean preview**. Pin a source commit and artifact SHA256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)). Paper DOI: **10.5281/zenodo.24051713**.
+The current Rust release is **v0.1.3**. This repository also contains the historical Python v0.1 prerelease. Pin a source commit and artifact SHA-256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)).
 
-Source code and experimental-materials archive: [Zenodo v0.1](https://doi.org/10.5281/zenodo.24052123). That archive is a fixed snapshot of v0.1 and does not contain the later Rust v0.1.2 implementation.
+The [Zenodo v0.1 archive](https://doi.org/10.5281/zenodo.24052123) preserves the original source and experimental materials for that version.
 
-## Rust v0.1.2 lean preview
+## Rust v0.1.3
 
-The independent [`rust-core/`](rust-core/) implements a single Editor with a waiting Worker, a common logical prefix with role-specific I activation, dynamic tool expansion and reclamation, a decision tree, and Socket-based peer communication. Its SQLite store is separate from the Python store. See the [Rust quick start](rust-core/快速开始.md), [acceptance scope](rust-core/LEAN-ACCEPTANCE.md), and [v0.1.2 release](https://github.com/s772Au/SIC/releases/tag/v0.1.2).
+The Rust Core implements recursive CB publication and automatic adoption of a common Worker/Editor cut. Its opt-in DSH SDK integration uses the original provider adapters and supports native media, four-stage image editing and source recall, and durable goal and peer lifecycle state.
 
-v0.1.2 is a development release, not full F01–F73 acceptance: the current audit is 23 implemented / 49 partial / 1 other (F63), with 43 live status rows and 92 cited files. The complete Rust suite passes 417/417 after a Windows test-name portability fix. F53 (same-Core Langflow/LangGraph runtime binding and one-click status) is accepted; F51/F52 official GUI editing and peer/tool/accounting evidence remain partial.
+The downloadable runtime targets Windows ARM64. The reviewed DSH integration uses the 0.2.1-rc.2 source with the supplied native patches and a fresh, explicitly bound session. See the [v0.1.3 download](https://github.com/s772Au/SIC/releases/tag/v0.1.3), [release notes](RELEASE-v0.1.3.md), [deployment and recovery guide](docs/rust-v2-production-operations.md), and [DSH integration instructions](rust-core/dsh-plugin/transparent/INSTALL.md).
 
-Real DSH and the fixed OpenDesign model completed bounded read-only synthetic tool roundtrips for a main Agent and a single peer. An opt-in serial peer watcher also completed a DSH built-in `read` roundtrip with a local mock model. These results do not establish production readiness, arbitrary external-tool safety, comprehensive migration of Python history or a physical provider cache hit. The Windows ARM64 release bundle includes both Rust source and executable binaries; other platforms can build from source but are not covered by that binary acceptance.
+The [v0.1.2 tag](https://github.com/s772Au/SIC/tree/v0.1.2) preserves the lean preview and its [acceptance scope](rust-core/LEAN-ACCEPTANCE.md).
 
 ## Video demo
 
@@ -20,7 +20,7 @@ Real DSH and the fixed OpenDesign model completed bounded read-only synthetic to
 
 The video illustrates the mechanism; the acceptance reports below define the verified implementation scope.
 
-## Current results
+## Python v0.1 research results
 
 | Area | Included and verified scope |
 |---|---|
@@ -33,7 +33,7 @@ The video illustrates the mechanism; the acceptance reports below define the ver
 
 The [functional acceptance ledger](docs/functional-acceptance.md), [runtime evidence](docs/runtime-acceptance-current.md) and [real DSH exploration](docs/dsh-live-results-20261108.md) preserve build boundaries and failed runs. Small synthetic tasks and owned loopback SDK tests do not establish a fixed physical model, a physical cache hit, cost parity or SIC superiority.
 
-## Core and APIs
+## Python v0.1 Core and APIs
 
 [`sic_core/`](sic_core/) can be embedded in a Harness/provider or exposed through its authenticated HTTP API. Native API bodies are decoded into editable text plus protected protocol metadata. Outbound calls use LiteLLM with explicit profiles. Credentials stay in host environment variables and never belong in flow exports.
 

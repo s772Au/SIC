@@ -1,6 +1,7 @@
 //! Host-authenticated scheduling for model-requested dynamic tool calls.
 //!
-//! This module parses the frozen `sic_tool_*` tool names and arguments, then
+//! This module accepts native host tool names and the compatibility
+//! `sic_tool_*` names and arguments, then
 //! delegates authorization and lease state to `ToolStore`. It does not invoke
 //! DSH or validate full JSON Schema arguments; it returns a lease to a trusted
 //! host runner and persists that runner's result before releasing the lease.
@@ -10,10 +11,82 @@ use serde_json::Value;
 use sqlx::{Row, Sqlite, Transaction};
 
 use crate::{
+    core::{Core, OperationContext},
     error::{CoreError, Result},
     tool_store::ToolStore,
-    toolset::{ExecutionLease, ToolDescriptor, ToolSummary},
+    toolset::{ExecutionLease, ToolDescriptor, ToolUpdate},
 };
+
+/// A host-issued capability for native tools operating on one candidate.
+/// It is deliberately not deserializable from model tool arguments. Worker
+/// execution scopes cannot be used as Editor capabilities.
+#[derive(Clone, Debug)]
+pub struct AuthenticatedEditorScope {
+    actor: String,
+    chain_id: Option<String>,
+    source_id: String,
+    source_digest: String,
+    version: u64,
+    unit_ids: Vec<String>,
+    native_tools: Vec<String>,
+}
+
+impl AuthenticatedEditorScope {
+    pub fn from_authenticated_host(
+        context: &OperationContext,
+        source_id: impl Into<String>,
+        source_digest: impl Into<String>,
+        version: u64,
+        unit_ids: Vec<String>,
+        native_tools: Vec<String>,
+    ) -> Result<Self> {
+        let source_id = source_id.into();
+        let source_digest = source_digest.into();
+        if !context.allow_write || context.actor.trim().is_empty()
+            || source_id.trim().is_empty() || source_digest.trim().is_empty()
+            || unit_ids.is_empty() || native_tools.is_empty()
+            || unit_ids.iter().chain(&native_tools).any(|id| id.trim().is_empty())
+        {
+            return Err(CoreError::forbidden("host candidate editing authorization required"));
+        }
+        Ok(Self { actor: context.actor.clone(), chain_id: context.chain_id.clone(),
+            source_id, source_digest, version, unit_ids, native_tools })
+    }
+}
+
+/// Execute the edit purpose of a native invocation without renaming its tool
+/// or changing its parameters. The trusted Harness mapper interprets the
+/// original invocation against its candidate workspace; it must not execute
+/// task side effects. Its result is restricted to the granted text anchors
+/// before the atomic, persistent native.commit operation sees it.
+pub async fn dispatch_editor_native_tool<F>(
+    core: &Core,
+    context: &OperationContext,
+    scope: &AuthenticatedEditorScope,
+    tool_name: &str,
+    arguments: &Value,
+    map_candidate: F,
+) -> Result<Value>
+where F: FnOnce(&str, &Value) -> Result<Vec<crate::transparent::TextEdit>>,
+{
+    if !context.allow_write || context.actor != scope.actor || context.chain_id != scope.chain_id
+        || !scope.native_tools.iter().any(|name| name == tool_name)
+    {
+        return Err(CoreError::forbidden("native tool is outside the host Editor scope"));
+    }
+    let edits = map_candidate(tool_name, arguments)?;
+    if edits.iter().any(|edit| !scope.unit_ids.contains(&edit.unit_id)) {
+        return Err(CoreError::forbidden("native edit targets an unassigned candidate unit"));
+    }
+    let edits: Vec<Value> = edits.iter().map(|edit| serde_json::json!({
+        "unit_id":edit.unit_id,"expected_text":edit.expected_text,"replacement":edit.replacement,
+    })).collect();
+    core.operate("native.commit", context, &serde_json::json!({
+        "source_id":scope.source_id,"expected_source_digest":scope.source_digest,
+        "expected_version":scope.version,"edits":edits,
+        "native_tool":{"name":tool_name,"arguments_sha256":crate::storage::digest(arguments)?},
+    })).await
+}
 
 const RESULTS_SQL: &str = "CREATE TABLE IF NOT EXISTS sic_tool_dispatch_results (
     lease_id TEXT NOT NULL,
@@ -73,17 +146,8 @@ impl AuthenticatedWorkerScope {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToolDispatch {
-    Search {
-        tools: Vec<ToolSummary>,
-        offset: usize,
-        total: usize,
-        next_offset: Option<usize>,
-    },
-    Expanded {
-        expansion: crate::toolset::Expansion,
-    },
-    Reclaimed {
-        reclaimed: bool,
+    Updated {
+        update: ToolUpdate,
     },
     /// The host must execute this descriptor/argument pair and persist the
     /// outcome with `persist_tool_result`; the model never executes it itself.
@@ -111,7 +175,8 @@ pub struct WorkerRoundCompletion {
 }
 
 /// Dispatch one model tool call inside the caller's SQLite transaction.
-/// `tool_name` is the fixed top-level SIC name; `arguments` are untrusted model
+/// `tool_name` is the advertised native name or compatibility SIC name;
+/// `arguments` are untrusted model
 /// data and can never modify ACL, identity, chain, schema, or lease state.
 pub async fn dispatch_model_tool_in_transaction(
     tx: &mut Transaction<'_, Sqlite>,
@@ -124,61 +189,32 @@ pub async fn dispatch_model_tool_in_transaction(
         .as_object()
         .ok_or_else(|| CoreError::invalid("tool arguments must be an object"))?;
     match tool_name {
-        "sic_tool_search" => {
-            if obj
-                .keys()
-                .any(|key| !["query", "offset", "limit"].contains(&key.as_str()))
-            {
-                return Err(CoreError::invalid(
-                    "tool arguments contain an unsupported field",
+        "sic_tool_update" => {
+            exact_keys_optional(obj, &["select", "fold"])?;
+            let select = string_array(obj, "select")?;
+            let fold = string_array(obj, "fold")?;
+            // The only real bound on select is the dynamic schema window; fold
+            // never consumes a schema slot. Exceeding the window is not an error:
+            // the host folds least-recently-used tools and names them in the
+            // result, which is the documented capacity path.
+            let capacity = crate::tool_store::dynamic_schema_capacity()?;
+            if select.len() > capacity {
+                return Err(CoreError::new(
+                    "tool_window_exceeded",
+                    format!(
+                        "select has {} names but the dynamic schema window holds at most {capacity}; split the request or rely on folding",
+                        select.len()
+                    ),
+                    422,
                 ));
             }
-            let query = required_string(arguments, "query")?;
-            let offset = optional_nonnegative_usize(obj, "offset", 0)?;
-            let limit = optional_nonnegative_usize(obj, "limit", 20)?;
-            if !(1..=100).contains(&limit) {
-                return Err(CoreError::invalid("limit must be between 1 and 100"));
+            if select.is_empty() && fold.is_empty() {
+                return Err(CoreError::invalid("tool update requires select or fold"));
             }
-            let all_tools = ToolStore::search_descriptions_in_transaction(
-                tx,
-                &scope.chain_id,
-                &scope.actor,
-                query,
-            )
-            .await?;
-            let total = all_tools.len();
-            let tools = all_tools
-                .into_iter()
-                .skip(offset)
-                .take(limit)
-                .collect::<Vec<_>>();
-            let next_offset = (offset + tools.len() < total).then_some(offset + tools.len());
-            Ok(ToolDispatch::Search {
-                tools,
-                offset,
-                total,
-                next_offset,
-            })
-        }
-        "sic_tool_expand" => {
-            exact_keys(obj, &["name"])?;
-            let name = required_string(arguments, "name")?;
-            let expansion = ToolStore::request_expansion_in_transaction(
-                tx,
-                &scope.chain_id,
-                &scope.actor,
-                name,
-            )
-            .await?;
-            Ok(ToolDispatch::Expanded { expansion })
-        }
-        "sic_tool_reclaim" => {
-            exact_keys(obj, &["name"])?;
-            let name = required_string(arguments, "name")?;
-            let reclaimed =
-                ToolStore::request_reclaim_in_transaction(tx, &scope.chain_id, &scope.actor, name)
+            let update =
+                ToolStore::update_in_transaction(tx, &scope.chain_id, &scope.actor, &select, &fold)
                     .await?;
-            Ok(ToolDispatch::Reclaimed { reclaimed })
+            Ok(ToolDispatch::Updated { update })
         }
         "sic_tool_call" => {
             exact_keys(obj, &["name", "arguments"])?;
@@ -197,11 +233,17 @@ pub async fn dispatch_model_tool_in_transaction(
                 evicted: started.evicted,
             })
         }
-        _ => Err(CoreError::new(
-            "unknown_tool_operation",
-            "unsupported SIC tool operation",
-            501,
-        )),
+        _ => {
+            let started = ToolStore::begin_execution_in_transaction(
+                tx, &scope.chain_id, &scope.actor, tool_name,
+            ).await?;
+            Ok(ToolDispatch::HostExecutionRequired {
+                lease: started.lease,
+                descriptor: started.descriptor,
+                arguments: arguments.clone(),
+                evicted: started.evicted,
+            })
+        }
     }
 }
 
@@ -368,17 +410,40 @@ fn exact_keys(obj: &serde_json::Map<String, Value>, allowed: &[&str]) -> Result<
     Ok(())
 }
 
-fn optional_nonnegative_usize(
-    obj: &serde_json::Map<String, Value>,
-    key: &str,
-    default: usize,
-) -> Result<usize> {
-    let Some(value) = obj.get(key) else {
-        return Ok(default);
-    };
-    let parsed = value
-        .as_u64()
-        .ok_or_else(|| CoreError::invalid(format!("{key} must be a non-negative integer")))?;
-    usize::try_from(parsed)
-        .map_err(|_| CoreError::invalid(format!("{key} exceeds the supported range")))
+fn exact_keys_optional(obj: &serde_json::Map<String, Value>, allowed: &[&str]) -> Result<()> {
+    if obj.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(CoreError::invalid(
+            "tool arguments contain an unsupported field",
+        ));
+    }
+    Ok(())
 }
+
+/// Read an optional string array. Absent means empty; a wrong shape, empty
+/// entry, or duplicate name is rejected so the model gets a precise error.
+fn string_array(obj: &serde_json::Map<String, Value>, key: &str) -> Result<Vec<String>> {
+    let Some(value) = obj.get(key) else {
+        return Ok(Vec::new());
+    };
+    let items = value
+        .as_array()
+        .ok_or_else(|| CoreError::invalid(format!("{key} must be an array of tool names")))?;
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        let name = item
+            .as_str()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| {
+                CoreError::invalid(format!("{key} entries must be non-empty strings"))
+            })?;
+        if out.iter().any(|existing: &String| existing == name) {
+            return Err(CoreError::invalid(format!(
+                "{key} contains a duplicate tool name"
+            )));
+        }
+        out.push(name.to_owned());
+    }
+    Ok(out)
+}
+

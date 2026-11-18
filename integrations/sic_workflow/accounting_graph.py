@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field,ConfigDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
 from sic_workflow.v2_client import CoreClient
-from sic_workflow.accounting_scope import Price,LedgerScope,ledger_payload,ledger_tables
+from sic_workflow.accounting_scope import Price,LedgerScope,ledger_payload,ledger_tables,read_available_ledger
 
 
 class AccountingInput(LedgerScope):
@@ -73,8 +73,14 @@ def inspect_ledger(state):
             result = {'ok': True, 'result': compare_workflows(baseline['result']['summary'], sic['result']['summary']),
                       'evidence': {'paired_task_verified': False, 'quality': 'not_scored'}}
         else:
-            result = client.execute('ledger.export', context, payload)
+            result = read_available_ledger(client, context, payload)
     body = result.get('result', {})
+    if result.get('operation') == 'accounting.get' and result.get('ok'):
+        rows = [{'kind': kind, 'record': row} for kind in ('attempts', 'groups') for row in body.get(kind, [])]
+        unknown = [{'workflow': 'current', 'item': item} for item in body.get('stats', {}).get('unknowns', [])]
+        return {'result': result, 'charge_rows': rows, 'unknown': unknown,
+                'timing': {'current': body.get('resources', {}).get('timing', {})},
+                'verification': verification, **ledger_tables(body), 'status': 'readonly'}
     summaries = [(name, body[name]) for name in ('baseline', 'sic') if name in body] or [('current', body.get('summary', body))]
     rows, unknown, timing = [], [], {}
     for name, summary in summaries:

@@ -3,7 +3,7 @@
 Status: **runtime probe only**, not F51–F53 acceptance.
 
 - Built `sic-core-rust` release successfully (1m33s) from the worktree.
-- Initialized an isolated DB: `D:\SIC-real-evidence-20261112\rust-core-service\core.db`
+- Initialized an isolated DB: `./evidence/real-run-20261112/rust-core-service\core.db`
 - Started:
   `sic-core-rust serve <db> 127.0.0.1:18888 host SIC_CORE_TOKEN`
 - PID: 41968; log: `server.out`/`server.err`

@@ -63,7 +63,7 @@ async fn wrong_tool_then_edit(State(mock): State<Mock>, Json(body): Json<Value>)
     let mut calls = mock.calls.lock().await;
     calls.push(body);
     let (name, arguments) = if calls.len() == 1 {
-        ("sic_tool_search", json!({"query":"fixture"}))
+        ("sic_tool_update", json!({"query":"fixture"}))
     } else {
         ("sic_edit_blocks", json!({"ops":[],"pvi":{}}))
     };
