@@ -4,11 +4,13 @@ use sic_core_rust::{
     core::{Core, OperationContext},
     storage::Store,
 };
-use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 use tempfile::tempdir;
 use tokio::sync::Mutex;
+
+#[path = "common/delayed_tool.rs"]
+mod delayed_tool;
 
 #[derive(Clone, Default)]
 struct Mock {
@@ -157,13 +159,9 @@ async fn editor_interval_overlaps_a_real_tool_process() {
         .unwrap();
     let dir = tempdir().unwrap();
     let log_path = dir.path().join("tool-process.log");
-    let command = format!(
-        "Start-Sleep -Milliseconds 1600; Set-Content -LiteralPath '{}' -Value REAL-TOOL-DONE",
-        log_path.display()
-    );
+    let mut command = delayed_tool::command(1600, Some((&log_path, "REAL-TOOL-DONE")));
     let status = tokio::task::spawn_blocking(move || {
-        Command::new("pwsh")
-            .args(["-NoProfile", "-Command", &command])
+        command
             .status()
             .expect("real tool process must start")
     })

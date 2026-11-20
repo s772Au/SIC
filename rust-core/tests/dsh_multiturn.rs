@@ -450,28 +450,37 @@ async fn run_turn(
                         "work",
                         "Consider the synthetic next step",
                     )
-                    .await
-                    .unwrap();
-                assert_eq!(changed["decision"]["revision"], 1);
-                assert_eq!(
-                    changed["decision"]["views"]["Working on"][0]["text"],
-                    "Consider the synthetic next step"
-                );
-                assert_eq!(
-                    bridge
+                    .await;
+                if cfg!(feature = "decision-tree") {
+                    let changed = changed.unwrap();
+                    assert_eq!(changed["decision"]["revision"], 1);
+                    assert_eq!(
+                        changed["decision"]["views"]["Working on"][0]["text"],
+                        "Consider the synthetic next step"
+                    );
+                    let stale = bridge
                         .session_decision_event(
                             OWNER,
                             SESSION,
                             0,
                             "fixture-decision-1",
                             "work",
-                            "Consider the synthetic next step"
+                            "Consider the synthetic next step",
                         )
                         .await
-                        .unwrap_err()
-                        .status,
-                    StatusCode::CONFLICT
-                );
+                        .unwrap_err();
+                    assert_eq!(stale.status, StatusCode::CONFLICT);
+                    assert_eq!(stale.code, "decision_changed");
+                } else {
+                    let disabled = changed.unwrap_err();
+                    assert_eq!(disabled.status, StatusCode::CONFLICT);
+                    assert_eq!(disabled.code, "feature_disabled");
+                    let after = bridge
+                        .session_context(OWNER, SESSION, "decision", &json!({}))
+                        .await
+                        .unwrap();
+                    assert_eq!(after["result"]["decision"], before["result"]["decision"]);
+                }
                 assert_eq!(
                     bridge
                         .session_decision_event(

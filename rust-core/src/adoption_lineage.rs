@@ -18,13 +18,14 @@ pub(crate) async fn query_collection_p_lineage(
     // caller-constructed context or an unrelated chain's cut.
     let mut cursor = current.current_cut.clone();
     let mut visited = BTreeSet::new();
+    let mut verified = storage::VerifiedObjects::default();
     let cut = loop {
         let id = cursor
             .ok_or_else(|| CoreError::forbidden("adopted cut is not on this chain's ancestry"))?;
         if !visited.insert(id.clone()) {
             return Err(CoreError::conflict("cut ancestry cycle"));
         }
-        let cut = storage::get_object(tx, &id, Some("cut")).await?;
+        let cut = verified.read(tx, &id, Some("cut")).await?;
         if id == cut_id {
             break cut;
         }
@@ -51,7 +52,7 @@ pub(crate) async fn query_collection_p_lineage(
     let level = field_u64(view, "level")?;
     let level =
         u32::try_from(level).map_err(|_| CoreError::invalid("adopted view level invalid"))?;
-    let selected = ids_for_view_snapshot(tx, &snapshot, context, level).await?;
+    let selected = ids_for_view_snapshot(tx, &snapshot, context, level, &mut verified).await?;
     let mut stack: Vec<(String, Vec<String>)> = selected
         .iter()
         .map(|id| (id.clone(), vec![id.clone()]))
@@ -62,7 +63,7 @@ pub(crate) async fn query_collection_p_lineage(
         if !seen.insert(id.clone()) {
             continue;
         }
-        let cb = storage::get_object(tx, &id, Some("cb")).await?;
+        let cb = verified.read(tx, &id, Some("cb")).await?;
         if id == target {
             paths.push(path);
             continue;
@@ -85,7 +86,7 @@ pub(crate) async fn query_collection_p_lineage(
                 }
                 vec![json!({"anchor":row["anchor"],"via_cb_ids":[]})]
             } else {
-                higher_volatile::p_source_links(tx, &snapshot, &row["anchor"]).await?
+                higher_volatile::p_source_links(tx, &snapshot, &row["anchor"], &mut verified).await?
             };
             for link in links {
                 let Some(child) = link["anchor"]["native"]["cb_id"].as_str() else {

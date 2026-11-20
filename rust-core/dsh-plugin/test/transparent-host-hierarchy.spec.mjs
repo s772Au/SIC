@@ -34,7 +34,7 @@ async function setup(){
       if(behavior==='error')throw Error('original Harness adapter interrupted');
       if(behavior==='stale')await server.core.operate('source.ingest',{request:{messages:[{role:'user',content:'arrived after the frozen Editor request'}]}});
       const wb=JSON.parse(request.messages.at(-1).content[0].text);
-      yield {type:'tool-call-delta',index:0,id:'higher-'+requests.length,name:'sic_edit_blocks',argumentsDelta:JSON.stringify({ops:wb.units.map(unit=>({op:'COMPRESS',target:unit.unit_id,content:unit.text})),pvi:{I:{higher:'actual Harness Editor'}}})};
+      yield {type:'tool-call-delta',index:0,id:'higher-'+requests.length,name:'sic_edit_blocks',argumentsDelta:JSON.stringify({ops:wb.units.map(unit=>({op:'KEEP',target:unit.unit_id})),pvi:{I:{higher:'actual Harness Editor'}}})};
       yield {type:'finish',reason:{kind:'tool-calls'}};
     }
   }

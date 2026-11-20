@@ -41,7 +41,7 @@ for(const protocol of ['messages','chat','responses'])test('actual '+protocol+' 
     }
     editorCount++;
     let pvi={};
-    if(editNext){
+    if(editNext||negativeOffload){
       editNext=false;
       const instructions=texts.find(text=>text.includes('Optional visual compression.'));
       assert.ok(instructions?.includes(IMAGE_VIEW)&&instructions.includes(recipe.crops.at(-1).message_id));
@@ -89,7 +89,7 @@ for(const protocol of ['messages','chat','responses'])test('actual '+protocol+' 
   async function send(history){
     const call=await ctx.llm.prepareCall({provider:route.provider,model:route.model,maxTokens:1024});
     const assembler=new api.BlockAssembler();
-    for await(const chunk of call.stream({...call.config,sessionId:agent.id,messages:history,tools:ctx.tools.schemas(agent)})){
+    for await(const chunk of call.stream({...call.config,sessionId:agent.id,messages:history,tools:(await ctx.systemPrompt.assemble({scope:agent})).tools})){
       assembler.push(chunk);
       if(chunk.type==='finish')assert.notEqual(chunk.reason.kind,'error',JSON.stringify(chunk));
     }
@@ -215,7 +215,9 @@ for(const protocol of ['messages','chat','responses'])test('actual '+protocol+' 
     const priorCut=(await host.core.operate('cut.get',{})).sequence,wireCount=server.requests.length;
     await assert.rejects(send([...fallback,api.createUserMessage({source:{kind:'user'},content:[{type:'text',text:'Try the offloaded source.'}]})]),/image crop source is outside this native assignment or offloaded/);
     assert.equal((await host.core.operate('cut.get',{})).sequence,priorCut);
-    assert.equal(server.requests.length,wireCount+1,'invalid delivery never reaches Worker');
+    assert.equal(server.requests.length,wireCount+2,'one correction was offered and invalid delivery never reached Worker');
+    assert.ok(strings(server.requests.at(-1).body).some(text=>text.includes('or omit the optional image recipe')));
+    negativeOffload=false;
 
     const rollbackEvents=(await readFile(sessionFile,'utf8')).trim().split('\n').map(JSON.parse);
     await scope.dispose();scope=null;await ctx.fiber.dispose();ctx=null;

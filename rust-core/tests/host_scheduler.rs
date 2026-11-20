@@ -221,6 +221,45 @@ async fn claims_survive_reopen_never_redispatch_and_stale_or_unknown_delivery_ne
 }
 
 #[tokio::test]
+async fn failed_external_editor_requires_explicit_recovery_and_a_new_claim() {
+    let (core, a) = setup().await;
+    ingest(&core, &a, "recoverable fact").await;
+    let report = op(&core, &a, "runtime.schedule", policy(1)).await;
+    let id = &report["host_jobs"][0]["job_id"];
+    let first = json!({"job_id":id,"editor":"editor-1","claim_id":"first"});
+    op(&core, &a, "edit.host.claim", first.clone()).await;
+    let mut failure = first.clone();
+    failure["reason"] = json!("known local delivery failure");
+    op(&core, &a, "edit.host.fail", failure.clone()).await;
+    assert_eq!(core.operate("edit.host.reopen", &a, &failure).await.unwrap_err().status, 422);
+    failure["confirm"] = json!(true);
+    let reopened = op(&core, &a, "edit.host.reopen", failure.clone()).await;
+    assert_eq!(reopened["status"], "open");
+    assert_eq!(reopened["host_editor"]["recovered_attempts"]["editor-1"]["claim_id"], "first");
+    assert_eq!(core.operate("edit.host.claim", &a, &first).await.unwrap_err().status, 409);
+    let new = json!({"job_id":id,"editor":"editor-1","claim_id":"second"});
+    assert_eq!(op(&core, &a, "edit.host.claim", new.clone()).await["execute"], true);
+    assert_eq!(op(&core, &a, "edit.host.reopen", failure.clone()).await["status"], "inflight");
+    assert_eq!(op(&core, &a, "edit.host.claim", new.clone()).await["execute"], false);
+    let mut again = new.clone();
+    again["reason"] = json!("distinct verified failure on the second claim");
+    op(&core, &a, "edit.host.fail", again.clone()).await;
+    again["confirm"] = json!(true);
+    let recovered = op(&core, &a, "edit.host.reopen", again).await;
+    assert_eq!(recovered["host_editor"]["recovered_attempts"]["editor-1"]["claim_id"], "second");
+    assert_eq!(recovered["host_editor"]["recovery_history"]["editor-1"][0]["claim_id"], "first");
+    assert_eq!(op(&core, &a, "edit.host.reopen", failure).await["status"], "open");
+    assert_eq!(core.operate("edit.host.claim", &a, &first).await.unwrap_err().status, 409);
+    assert_eq!(core.operate("edit.host.claim", &a, &new).await.unwrap_err().status, 409);
+    let mut submission = json!({"job_id":id,"editor":"editor-1","claim_id":"third"});
+    assert_eq!(op(&core, &a, "edit.host.claim", submission.clone()).await["execute"], true);
+    submission["ops"] = json!([]);
+    assert_eq!(op(&core, &a, "edit.host.submit", submission).await["status"], "ready");
+    let published = op(&core, &a, "runtime.schedule", policy(1)).await;
+    assert_eq!(published["published"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn higher_volatile_pending_is_preserved_and_cannot_be_skipped_to_form_a_later_wb() {
     let (core, a) = setup().await;
     for i in 0..2 {

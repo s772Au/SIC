@@ -301,7 +301,7 @@ async fn paused_editor_does_not_adopt_its_late_candidate() {
     });
     gate.started.notified().await;
     let blocked_edit = core.operate("decision.update", &alice, &json!({"expected_revision":0,"events":[{"id":"during-editor","kind":"work","text":"concurrent change","evidence":[]}]})).await.unwrap_err();
-    assert_eq!(blocked_edit.code, "conflict");
+    assert_eq!(blocked_edit.code, if cfg!(feature = "decision-tree") { "conflict" } else { "feature_disabled" });
     call(
         &core,
         &bob,
@@ -342,7 +342,7 @@ async fn host_abandon_allows_new_worker_and_rejects_old_claim_result() {
     });
     gate.started.notified().await;
     let blocked_edit = core.operate("decision.update", &alice, &json!({"expected_revision":0,"events":[{"id":"during-worker","kind":"work","text":"concurrent change","evidence":[]}]})).await.unwrap_err();
-    assert_eq!(blocked_edit.code, "conflict");
+    assert_eq!(blocked_edit.code, if cfg!(feature = "decision-tree") { "conflict" } else { "feature_disabled" });
 
     let abandoned = call(&core, &alice, "runtime.abandon", json!({"kind":"worker"})).await;
     assert!(abandoned["abandoned_claim_id"].is_string());

@@ -4,11 +4,13 @@ use sic_core_rust::{
     core::{Core, OperationContext},
     storage::Store,
 };
-use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 use tempfile::tempdir;
 use tokio::sync::Mutex;
+
+#[path = "common/delayed_tool.rs"]
+mod delayed_tool;
 
 #[derive(Clone, Default)]
 struct Mock {
@@ -162,18 +164,14 @@ async fn editor_ready_before_tool_end_is_adopted_without_another_editor_call() {
     });
     let dir = tempdir().unwrap();
     let log_path = dir.path().join("catchup-tool.log");
-    let command = format!(
-        "Start-Sleep -Milliseconds 2500; Set-Content -LiteralPath '{}' -Value REAL-CATCHUP-TOOL-DONE",
-        log_path.display()
-    );
+    let mut command = delayed_tool::command(2500, Some((&log_path, "REAL-CATCHUP-TOOL-DONE")));
     let tool_completion = tokio::spawn({
         let core = core.clone();
         let ctx = ctx.clone();
         let task_id = task_id.clone();
         async move {
             let status = tokio::task::spawn_blocking(move || {
-                Command::new("pwsh")
-                    .args(["-NoProfile", "-Command", &command])
+                command
                     .status()
                     .expect("real catchup tool process must start")
             })

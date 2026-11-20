@@ -1,0 +1,55 @@
+--- a/agent/context_engine.py
++++ b/agent/context_engine.py
+@@ -64,6 +64,9 @@
+     @abstractmethod
+     def name(self) -> str:
+         """Short identifier (e.g. 'compressor', 'lcm')."""
++
++    # Agents with an authoritative projection cannot safely dispatch the native fallback.
++    require_context_selection: bool = False
+
+     # Token state: engines MUST maintain these; run_agent.py reads them directly.
+     last_prompt_tokens: int = 0
+--- a/agent/conversation_loop.py
++++ b/agent/conversation_loop.py
+@@ -1360,10 +1360,12 @@
+     agent: Any, api_messages: list[dict[str, Any]], conversation_messages: list[dict[str, Any]],
+     incoming_message: Optional[dict[str, Any]], *, logger: Any,
+ ) -> list[dict[str, Any]]:
+-    """Run the optional per-turn ``ContextEngine.select_context()`` hook, fail-open: any
+-    exception or invalid return yields ``api_messages`` unchanged; history is never mutated."""
++    """Select request-local context. Optional engines retain native fallback."""
+     engine = getattr(agent, "context_compressor", None)
++    selection_required = getattr(engine, "require_context_selection", False) is True
+     if not _engine_overrides_hook(engine, "select_context"):
++        if selection_required:
++            raise RuntimeError("Required context engine has no selection hook")
+         return api_messages
+
+     session_label = getattr(agent, "session_id", None) or "-"
+@@ -1383,13 +1385,15 @@
+             budget_tokens=getattr(engine, "context_length", 0) or 0,
+         )
+     except Exception:
++        if selection_required:
++            raise RuntimeError("Required context selection failed; model request was stopped") from None
+         logger.warning(
+             "Context engine select_context hook failed; using unmodified request messages (session=%s)",
+             session_label, exc_info=True,
+         )
+         return api_messages
+
+-    if selected is None:
++    if selected is None and not selection_required:
+         return api_messages
+     # Require a NON-EMPTY list of dicts: ``all([])`` is ``True``, so a ``[]`` from a
+     # buggy engine would otherwise replace the request instead of failing open.
+@@ -1399,6 +1403,8 @@
+         # selection too or those fields reach the provider. Dicts without them pass through as-is.
+         stripped = [without_persistence_fields(m) for m in selected]
+         return selected if all(a is b for a, b in zip(stripped, selected)) else stripped
++    if selection_required:
++        raise RuntimeError("Required context selection was missing or invalid; model request was stopped")
+     logger.warning(
+         "Context engine select_context returned an invalid value "
+         "(not a non-empty list of dicts); ignoring (session=%s)", session_label,

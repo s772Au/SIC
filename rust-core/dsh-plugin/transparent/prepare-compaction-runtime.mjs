@@ -110,7 +110,7 @@ export class ToolResultPruner extends Service {
     Object.freeze(messages)
     const options = Object.freeze({ ...resolved.config, sessionId: this.session.id,
       messages, toolHistory: this.session.toolHistory(),
-      tools: this.loopCtx.tools.schemas(this), signal })
+      tools: (await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))).tools, signal })
     return { ...resolved, options }
   }
 

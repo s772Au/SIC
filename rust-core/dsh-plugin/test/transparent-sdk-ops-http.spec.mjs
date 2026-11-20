@@ -42,7 +42,7 @@ test('actual Core HTTP plus common original LlmRuntime SDK route edits private A
   const sys={id:'system',role:'system',content:[{type:'text',text:system}],source:{kind:'system-prompt'}},runtime={id:'runtime',role:'user',content:[{type:'text',text:'runtime'}],source:{kind:'runtime-context',sections:[{name:'sic:activation',text:JSON.stringify(authorization)}]}};
   const first={id:'human-first',role:'user',content:[...'ABCDEFG'].map(text=>({type:'text',text})),source:{kind:'user'}},second={id:'human-second',role:'user',content:[{type:'text',text:'second'}],source:{kind:'user'}};
   async function send(history,provider='private-a'){
-   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:ctx.tools.schemas(agent),vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
+   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:(await ctx.systemPrompt.assemble({scope:agent})).tools,vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
    for await(const chunk of prepared.stream(options))if(chunk.type==='finish')assert.equal(chunk.reason.kind,'stop',JSON.stringify(chunk));return sent.at(-1);
   }
   const actual=await send([sys,runtime,first]),body=actual.frames.find(m=>m.source?.kind==='sic-cb').data[0].text;assert.match(body,/^F/);for(const text of ['BR','CC','review E','added','permanent'])assert.ok(body.includes(text));assert.ok(!body.includes('\nD\n'));assert.equal(editorCalls,1);assert.equal((await server.core.operate('cut.get',{})).instant_views.phase,'seven');

@@ -109,6 +109,152 @@ async fn all_routes_require_bearer_and_errors_do_not_echo_or_log_secrets() {
 }
 
 #[tokio::test]
+async fn native_host_grants_pin_the_chain_and_exclude_administration_and_model_execution() {
+    const HOST: &str = "synthetic-native-host-grant-00000001";
+    const ARCHIVE: &str = "synthetic-archive-only-grant-00000001";
+    let core = core().await;
+    let mut owner = core::OperationContext {
+        actor: ACTOR.into(), allow_write: true, ..Default::default()
+    };
+    let chain = core.operate("chain.create", &owner, &json!({})).await.unwrap()
+        ["result"]["chain_id"].as_str().unwrap().to_owned();
+    let other = core.operate("chain.create", &owner, &json!({})).await.unwrap()
+        ["result"]["chain_id"].as_str().unwrap().to_owned();
+    owner.chain_id = Some(other.clone());
+    let foreign_source = core.operate("native.begin", &owner, &json!({"format":"pi-messages",
+        "request":{"messages":[{"role":"user","content":"different chain"}]}
+    })).await.unwrap()["result"]["source_id"].clone();
+    let auth = auth(true, true, true).with_harness_grant(HOST, chain.clone()).unwrap();
+    assert!(auth.clone().with_archive_grant(HOST, other.clone()).is_err());
+    assert!(auth.clone().with_harness_grant(HOST, other.clone()).is_err());
+    let auth = auth.with_archive_grant(ARCHIVE, chain.clone()).unwrap();
+    assert!(auth.clone().with_harness_grant(ARCHIVE, other.clone()).is_err());
+    let (url, task) = start(core, auth).await;
+    let client = loopback_client();
+    let endpoint = format!("{url}/api/v2/harness/operations");
+    let send = |operation: &str, payload: Value, token: &str| client.post(&endpoint)
+        .bearer_auth(token).json(&json!({"operation":operation,"payload":payload})).send();
+
+    for token in [ARCHIVE, TOKEN, "incorrect-scope"] {
+        assert_eq!(send("cut.get", json!({}), token).await.unwrap().status(), 401);
+    }
+    let begun: Value = send("native.begin", json!({"format":"pi-messages","request":{
+        "messages":[{"role":"user","content":"authorized raw user"}]}}), HOST).await.unwrap()
+        .error_for_status().unwrap().json().await.unwrap();
+    assert_eq!(begun["context"]["chain_id"], chain);
+    let source = &begun["result"];
+    let identity = json!({"source_id":source["source_id"],"expected_source_digest":source["source_digest"]});
+    let mut commit = identity.clone();
+    commit["expected_version"] = json!(0);
+    commit["edits"] = json!([{"unit_id":"u1","expected_text":"authorized raw user","replacement":"short"}]);
+    assert_eq!(send("native.commit", commit, HOST).await.unwrap().status(), 200);
+    let mut publish = identity;
+    publish["expected_version"] = json!(1);
+    publish["expected_cut"] = json!(0);
+    publish["idempotency_key"] = json!("scoped-host-publish");
+    publish["ops"] = json!([{"op":"COMPRESS","target":"u1","content":"short"}]);
+    publish["pvi"] = json!({});
+    let published: Value = send("native.publish", publish, HOST).await.unwrap().error_for_status()
+        .unwrap().json().await.unwrap();
+    let cb = &published["result"]["publication"]["publication"]["cb_id"];
+    assert!(cb.is_string());
+    let lineage: Value = send("hierarchy.expand", json!({"cb_id":cb}), HOST).await.unwrap().error_for_status()
+        .unwrap().json().await.unwrap();
+    assert_eq!(lineage["result"], json!({"cb_id":cb,"level":1,"members":[]}));
+    assert!(!lineage.to_string().contains("authorized raw user"));
+    assert_eq!(send("hierarchy.expand", json!({"wb_id":"unbound"}), HOST).await.unwrap().status(), 403);
+    let denied = send("native.get", json!({"source_id":foreign_source}), HOST).await.unwrap();
+    assert_eq!(denied.status(), 403);
+    assert!(!denied.text().await.unwrap().contains("different chain"));
+    for operation in ["chain.create", "worker.run", "security.revoke", "edit.host.reopen", "memory.source_text_page"] {
+        assert_eq!(send(operation, json!({}), HOST).await.unwrap().status(), 403, "{operation}");
+    }
+    let forbidden_schedule = json!({"context_id":"main","editor_mode":"program_fixture","max_model_calls":0,"program_rules":[]});
+    assert_eq!(send("runtime.schedule", forbidden_schedule, HOST).await.unwrap().status(), 403);
+    let forged = envelope("cut.get", ACTOR, Some(&other), true, true, true, json!({}));
+    let response = client.post(&endpoint).bearer_auth(HOST).json(&forged).send().await.unwrap();
+    assert_eq!(response.status(), 422);
+    assert_eq!(post(&client, &url, &forged, Some(HOST)).await.status(), 401);
+    let archive_endpoint = format!("{url}/api/v2/archive/operations");
+    let response = client.post(&archive_endpoint).bearer_auth(HOST)
+        .json(&json!({"operation":"memory.archive_search","payload":{"query":"raw"}})).send().await.unwrap();
+    assert_eq!(response.status(), 401);
+    for (path, token) in [(&endpoint, HOST), (&archive_endpoint, ARCHIVE)] {
+        let bad = client.post(path).bearer_auth(token)
+            .json(&json!({"operation":"cut.get","payload":{},"private-witness-field":true})).send().await.unwrap();
+        assert_eq!(bad.status(), 422);
+        assert_eq!(bad.headers()[reqwest::header::CACHE_CONTROL], "no-store");
+        assert!(!bad.text().await.unwrap().contains("private-witness-field"));
+    }
+    task.abort();
+}
+
+#[tokio::test]
+async fn archive_credentials_authorize_only_published_reads_on_the_configured_chain() {
+    const ARCHIVE: &str = "synthetic-archive-only-credential-00001";
+    const OTHER: &str = "synthetic-archive-only-credential-00002";
+    let core = core().await;
+    async fn publish(core: &Core, text: &str) -> (String, Value) {
+        let mut context = core::OperationContext {
+            actor: ACTOR.into(), chain_id: None, allow_write: true, allow_model: false, allow_revoke: false,
+        };
+        let created = core.operate("chain.create", &context, &json!({})).await.unwrap();
+        let chain = created["result"]["chain_id"].as_str().unwrap().to_owned();
+        context.chain_id = Some(chain.clone());
+        let started = core.operate("native.begin", &context, &json!({"format":"openai-responses",
+            "editable_unit_ids":["u1"],"request":{"model":"fixture","input":[{"role":"user",
+                "content":[{"type":"input_text","text":text}]}]}})).await.unwrap();
+        let source = &started["result"];
+        core.operate("native.commit", &context, &json!({"source_id":source["source_id"],
+            "expected_source_digest":source["source_digest"],"expected_version":0,
+            "edits":[{"unit_id":"u1","expected_text":text,"replacement":"note"}]})).await.unwrap();
+        core.operate("native.publish", &context, &json!({"source_id":source["source_id"],
+            "expected_source_digest":source["source_digest"],"expected_version":1,"expected_cut":0,
+            "idempotency_key":"fixture","ops":[{"op":"COMPRESS","target":"u1","content":"note"}],
+            "pvi":{}})).await.unwrap();
+        (chain, source["source_id"].clone())
+    }
+    let (chain, source) = publish(&core, "bound archive original").await;
+    let (other_chain, other_source) = publish(&core, "another chain original").await;
+    assert!(HostAuth::new(ARCHIVE, ACTOR, true, false, false).unwrap()
+        .with_archive_grant(ARCHIVE, chain.clone()).is_err());
+    let auth = auth(true, true, true).with_archive_grant(ARCHIVE, chain.clone()).unwrap();
+    assert!(auth.clone().with_archive_grant(ARCHIVE, other_chain.clone()).is_err());
+    let (url, task) = start(core, auth.with_archive_grant(OTHER, other_chain.clone()).unwrap()).await;
+    let client = loopback_client();
+    let endpoint = format!("{url}/api/v2/archive/operations");
+    let search = json!({"operation":"memory.archive_search","payload":{"query":"bound archive"}});
+    let response = client.post(&endpoint).bearer_auth(ARCHIVE).json(&search).send().await.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.headers()[reqwest::header::CACHE_CONTROL], "no-store");
+    let hits: Value = response.json().await.unwrap();
+    assert_eq!(hits["result"]["hits"].as_array().unwrap().len(), 1);
+
+    let page = |id| json!({"operation":"memory.source_text_page","payload":{"source_id":id,"unit_id":"u1"}});
+    let response: Value = client.post(&endpoint).bearer_auth(ARCHIVE).json(&page(source))
+        .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+    assert_eq!(response["result"]["text"], "bound archive original");
+    let forbidden = client.post(&endpoint).bearer_auth(ARCHIVE).json(&page(other_source)).send().await.unwrap();
+    assert_eq!(forbidden.status(), reqwest::StatusCode::FORBIDDEN);
+    let response: Value = client.post(&endpoint).bearer_auth(OTHER).json(&search)
+        .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+    assert_eq!(response["result"]["hits"].as_array().unwrap().len(), 0);
+
+    for op in ["chain.create", "native.publish", "harness.call", "accounting.get", "worker.run", "security.revoke"] {
+        let denied = client.post(&endpoint).bearer_auth(ARCHIVE)
+            .json(&json!({"operation":op,"payload":{}})).send().await.unwrap();
+        assert_eq!(denied.status(), reqwest::StatusCode::FORBIDDEN);
+    }
+    let forged = envelope("memory.archive_search", ACTOR, Some(&other_chain), true, true, true, json!({"query":"original"}));
+    let invalid = client.post(&endpoint).bearer_auth(ARCHIVE).json(&forged).send().await.unwrap();
+    assert_eq!(invalid.status(), reqwest::StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(post(&client, &url, &forged, Some(ARCHIVE)).await.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let read_only = client.post(&endpoint).bearer_auth(TOKEN).json(&search).send().await.unwrap();
+    assert_eq!(read_only.status(), reqwest::StatusCode::UNAUTHORIZED);
+    task.abort();
+}
+
+#[tokio::test]
 async fn actor_must_match_host_identity_even_with_valid_bearer() {
     let (url, task) = start(core().await, auth(true, false, false)).await;
     let client = loopback_client();

@@ -1,7 +1,7 @@
 //! F30: prediction and actual completion recorded in one trace.
 //!
 //! The scheduler's estimate and the host's declared wait are *predictions*.
-//! This test runs a real external `pwsh` process as the tool and a mock
+//! This test runs a real external process as the tool and a mock
 //! Provider as the Editor, then compares what the scheduler predicted with
 //! what actually happened. A mock Editor is enough for the scheduling
 //! *mechanism*; it is explicitly not evidence about a real model or a real
@@ -14,6 +14,9 @@ use sic_core_rust::{
 };
 use std::sync::Arc;
 use std::time::Duration;
+
+#[path = "common/delayed_tool.rs"]
+mod delayed_tool;
 
 fn context(actor: &str, chain: Option<&str>) -> OperationContext {
     OperationContext {
@@ -68,10 +71,9 @@ async fn declared_wait_prediction_is_recorded_next_to_the_real_tool_interval() {
 
     // Real external process: 1.2 seconds of actual work.
     let started = std::time::Instant::now();
-    let status = std::process::Command::new("pwsh")
-        .args(["-NoProfile", "-Command", "Start-Sleep -Milliseconds 1200"])
+    let status = delayed_tool::command(1200, None)
         .status()
-        .expect("pwsh available");
+        .expect("external delay process must start");
     assert!(status.success());
     let actual = started.elapsed();
 

@@ -2,15 +2,15 @@
 
 **Streaming incremental context editing for continuing agent work.** Worker models, semantic Editor models and deterministic programs maintain one Agent's working context. Compression is one available edit.
 
-The current Rust release is **v0.1.3**. This repository also contains the historical Python v0.1 prerelease. Pin a source commit and artifact SHA-256 for reproducibility. The Chinese [preprint v1](https://doi.org/10.5281/zenodo.24051713) describes the mechanism and cost conditions ([source](paper/sic_paper_zh_v1.md)).
+The current Rust release is **v0.1.4**. This repository also contains the historical Python v0.1 prerelease. Pin a source commit and artifact SHA-256 for reproducibility. The Chinese preprint describes the mechanism and cost conditions. [Preprint v1](https://doi.org/10.5281/zenodo.24051713) · [Paper source](paper/sic_paper_zh_v1.md)
 
 The [Zenodo v0.1 archive](https://doi.org/10.5281/zenodo.24052123) preserves the original source and experimental materials for that version.
 
-## Rust v0.1.3
+## Rust v0.1.4
 
 The Rust Core implements recursive CB publication and automatic adoption of a common Worker/Editor cut. Its opt-in DSH SDK integration uses the original provider adapters and supports native media, four-stage image editing and source recall, and durable goal and peer lifecycle state.
 
-The downloadable runtime targets Windows ARM64. The reviewed DSH integration uses the 0.2.1-rc.2 source with the supplied native patches and a fresh, explicitly bound session. See the [v0.1.3 download](https://github.com/s772Au/SIC/releases/tag/v0.1.3), [release notes](RELEASE-v0.1.3.md), [deployment and recovery guide](docs/rust-v2-production-operations.md), and [DSH integration instructions](rust-core/dsh-plugin/transparent/INSTALL.md).
+The downloadable runtimes target Windows and Linux on x86-64 and ARM64. The source includes native context integrations for DSH, Pi, OpenCode, Hermes, Claude Code and Codex App Server. Each manual describes its supported session and provider setup. [v0.1.4 downloads](https://github.com/s772Au/SIC/releases/tag/v0.1.4) · [Release notes and manuals](RELEASE-v0.1.4.md) · [Deployment and recovery](docs/rust-v2-production-operations.md)
 
 The [v0.1.2 tag](https://github.com/s772Au/SIC/tree/v0.1.2) preserves the lean preview and its [acceptance scope](rust-core/LEAN-ACCEPTANCE.md).
 

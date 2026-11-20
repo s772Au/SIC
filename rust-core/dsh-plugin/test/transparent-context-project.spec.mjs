@@ -7,6 +7,15 @@ const api=await load('packages/llm/llm/lib/index.js'),{Context}=await load('vend
 const module=await prepareDeepSeekFixture(dsh,fixturePath('dsh-context-fixture-20261117')),{DeepSeekAdapter,resolveAdapterOptions}=await import(pathToFileURL(module).href);
 function sse(events){return new Response(events.map(e=>`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join(''),{headers:{'content-type':'text/event-stream'}});}
 function reply(editor){return sse([{type:'message_start',message:{id:editor?'e':'w',model:'deepseek-v4-flash',usage:{input_tokens:1,output_tokens:0}}},...editor?[{type:'content_block_start',index:0,content_block:{type:'tool_use',id:'delivery',name:'sic_edit_blocks',input:{}}},{type:'content_block_delta',index:0,delta:{type:'input_json_delta',partial_json:JSON.stringify({ops:[{op:'COMPRESS',target:'new',content:'short'}],pvi:{}})}}]:[{type:'content_block_start',index:0,content_block:{type:'text',text:''}},{type:'content_block_delta',index:0,delta:{type:'text_delta',text:'ok'}}],{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:editor?'tool_use':'end_turn'},usage:{output_tokens:1}},{type:'message_stop'}]);}
+test('Worker archive teaching only names tools mounted on the current route',async()=>{
+ const runtime=api.createUserMessage({source:{kind:'runtime-context',sections:[{name:'sic:activation',text:JSON.stringify({role:'WORKER'})}]},content:[{type:'text',text:'old snapshot'}]});
+ const cut={cut_id:'cut-1',sequence:1,view:{cbs:[{cb_id:'cb-1',body:'saved',level:1}],cb_origin_bindings:[{cb_id:'cb-1',origins:[]}]}};
+ const options={tools:[{name:'sic_hierarchy_expand'}]};
+ const plan=await projectHarnessContext({history:[runtime],options,cut,requestId:'sdk-request',api});
+ const teaching=plan.runtime_sections.find(section=>section.name==='sic:archive-text').text;
+ assert.match(teaching,/sic_hierarchy_expand and cut_id cut-1/);
+ assert.doesNotMatch(teaching,/sic_memory_search|sic_source_text_page|sic_memory_page/);
+});
 test('real DSH serializer sends the same reviewed system/tools/selected CB prefix to Worker and native Editor, with I and role after it',async()=>{
  const ctx=new Context(),system='reviewed common system';let projection,workerWire,editorWire,driver,adoptedWire,finalProjection;
  const old=api.createUserMessage({source:{kind:'user'},content:[{type:'text',text:'archived material'}]}),fresh=api.createUserMessage({source:{kind:'user'},content:[{type:'text',text:'new material'}]}),

@@ -71,12 +71,18 @@ Core current selected CBs and immutable recursive source identities determine th
 
 After publication, the same Worker request adopts canonical new CB/I layout. `candidate_request`, actual `adopted` and `layout_receipt` are distinct. Actual SDK messages pass to the original adapter. Final guards and persisted delivery/Session PluginRecord+flush acknowledgements protect retry and adoption correlation.
 
+In SDK edit mode, a finalized Worker message with formed text and native tool calls can start a first-order Editor before the tool results arrive. The DSH tool scheduler executes and settles its original call group. The Core stages the frozen source with the `native.begin` `tool_wait` scope and publishes it against the same cut and input revision. A staged source is outside the pending WB queue until publication.
+
+The next Worker step joins that edit and sends the complete native result group. Late results and queued steering stay in the native suffix until the Worker receives them. Later editing can include them in a new WB. Session records distinguish the frozen intent, staged source, settlement and any wait at the next step. A failed Editor leaves the original material available for continuation. The projection stage `tool-wait-published` records the early CB publication and the later SDK dispatch has its own admission receipt.
+
 To enable the optional native image compression path, set `"imageCompression": true` in SDK edit mode. Provide the existing DSH attachment service and Sharp through the native loader. See [IMAGE-COMPRESSION.md](IMAGE-COMPRESSION.md) for display choices, the I receipt, and archive recovery.
 
 The host Editor defaults to at most 16 tool continuation rounds and a
 120-second deadline per assignment, including its original native model
 calls. Set `editorLimits.maxToolRounds` and `editorLimits.timeoutMs` to
 change them. A limit aborts the attempt before publishing a partial batch.
+Set `editorLimits.timeoutMs` to `null` to use Harness cancellation and
+Provider timeouts without a separate SIC assignment deadline.
 The model's original request options and Worker limits remain host owned.
 
 The entry composes `createHostHierarchyRuntime` automatically. After low-level publication it drains Core's persistent higher-level jobs through the original Harness Editor, then reads the final selected cut and refreshes I before dispatching that same Worker. Rust retains grouping, thresholds, levels, publication and automatic adoption. `hierarchyPolicy` can supply actual Core policy overrides; `drainHigher` remains an optional Harness extension point. Higher-level V is enabled only when actual Core get/claim capabilities advertise `core-same-level-source-group-v1`. The Core binds the earliest pending V to the next same-level WB with fresh lower CBs (or an explicit flush), preserving original sources and provenance. Waiting for new lower material does not deadlock subsequent Worker input. This is separate from the main-level-1 native continuation helper.
@@ -87,7 +93,15 @@ Primary entry installs the single Goal authority port/facade and actual native J
 
 In edit mode, an existing or later-loaded native compaction service installs the external port automatically. Basic pressure, context overflow and manual `/compact` share the same Core host scheduler; selected sessions do not run a second native summary/pruner policy. A Harness without compaction needs no extra service or configuration. Passthrough preserves its existing compaction behavior. See `COMPACTION-RUNTIME.md`; selected positional region compaction currently rejects requests without a trusted CB-range mapping.
 
-Editor paging defaults to assigned source/units. Extra reads need `editor_readable_sources:[{kind:'native-source',source_id,unit_ids}]`. Independent Editor uses fresh `editor_scope`; Worker needs explicit typed `readable_sources`. Core archive IDs are not native-source IDs. Native read retains original Editor-agent tool guards.
+With DSH TokenMeter available, the SDK estimates the selected context together with the incoming material before freezing the next WB. If it reaches the model window minus the requested output allowance, the SDK asks the existing Core scheduler to flush available lower CBs early. The pressure Editor refers to exact CB text already in its shared prefix and may correct one delivery that failed to shorten the persistent text. The next Editor and Worker use the adopted cut. The Harness adapter still owns request budgeting and serialization.
+
+Editor paging defaults to the assigned source and units. Extra reads need the typed `editor_readable_sources` grant. An independent Editor uses a fresh `editor_scope`. Native file reads retain the original Editor tool guards.
+
+Workers can search original text from published first-order sources on the bound Worker context with `sic_memory_search`. Follow the returned cursor, then request the hit's exact `source_id` and `unit_id` with `sic_source_text_page`. Rust verifies publication, chain and board scope and object revocation before returning bounded Unicode pages. Previously published native source IDs can resolve to their archived unit. Additional explicit native reads still use typed `readable_sources`. The active Worker turn retains successful source lookup results until it finishes. Model-facing decision views are disabled in the standard Core build and the DSH adapter ignores obsolete decision writes from Editor deliveries. The original archives remain readable through the control-plane interfaces.
+
+An invalid or out-of-scope Editor page returns a tool error before any archive lookup. The Editor can correct the arguments or deliver its edit using the assigned material. A stale host claim or persisted scope still stops the assignment.
+
+The Editor SDK translates an unambiguous flat `ADD` target and position to the authorized `anchor` form. The raw model delivery remains in the trace. Native preview validates editable content before commit. One correctable preview rejection can return to the same Editor turn for a revised batch, using the existing tool-round budget. Authentication, stale versions and transport failures retain their original error handling.
 
 Editor input contract `authenticated-wb-origins-v1` links assigned native tool-result leaves to their original immutable SDK role/call/status through Core's host-message origin map. Higher CB units carry the same authenticated retained/derived tool relationships from the shared source view. These facts describe earlier execution, distinct from what this Editor is currently authorized to execute. The Editor preserves that distinction in I without discarding Board/Host constraints or changing original tool/error/signature data. Unknown or user-claimed tool labels do not become execution receipts.
 

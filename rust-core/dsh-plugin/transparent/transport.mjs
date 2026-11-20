@@ -39,6 +39,8 @@ export async function editNativeContext({core,invocation,rawOriginal,signal=new 
       ...(invocation.adopted_i?{adopted_i:invocation.adopted_i}:{}),...(invocation.host_message_origins?{host_message_origins:invocation.host_message_origins}:{}),
       ...(invocation.host_opaque_origins?.length?{host_opaque_origins:invocation.host_opaque_origins}:{}),
       ...(invocation.provenances?.length?{provenances:invocation.provenances}:{}),...(invocation.volatile_source_bindings?.length?{volatile_source_bindings:invocation.volatile_source_bindings}:{})};
+    if(invocation.native_step_id)scope.native_step_id=invocation.native_step_id;
+    if(invocation.tool_wait)scope.tool_wait=invocation.tool_wait;
     const begun=typeof core.beginRaw==='function'
       ?await core.beginRaw(invocation.format,rawOriginal,signal,scope)
       :await core.begin({format:invocation.format,request:body,...scope},signal);
@@ -79,7 +81,7 @@ export async function editNativeContext({core,invocation,rawOriginal,signal=new 
       source_digest:begun.source_digest,units:originalUnits,edits,receipt:committed.receipt,
       original:body,candidate_request:committed.request,adopted,raw_original:rawOriginal,raw_adopted:rawAdopted,layout_receipt:layout,
       adopted_digest:wireDigest(rawAdopted),publication,host_binding:invocation.host_binding??null,
-      stage:readonly?'admitted-readonly':publicationRequired?'admitted':'candidate-only-fixture'};
+      stage:invocation.tool_wait?'tool-wait-published':readonly?'admitted-readonly':publicationRequired?'admitted':'candidate-only-fixture'};
     const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};freeze(projection);
     const ack=await publishProjection(projection,signal);
     if(ack?.recorded!==true||ack.adopted_digest!==projection.adopted_digest)throw Error('actual adopted projection not acknowledged by host');

@@ -1,4 +1,4 @@
-import {dshSourcePath,fixturePath} from './test-paths.mjs';
+import {dshSourcePath,fixtureEditorUnitText,fixturePath} from './test-paths.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,writeFile,open} from 'node:fs/promises';
@@ -60,7 +60,8 @@ for(const highOperation of ['COMPRESS','DELETE']){
       let ops;
       if(higher){
        calls.high++;assert.equal(wb.units.length,2);
-       const seedUnit=wb.units.find(unit=>unit.text===seed.content[0].text),collectionUnit=wb.units.find(unit=>unit.text===collected.result.value.text);
+       const seedUnit=wb.units.find(unit=>fixtureEditorUnitText(request,unit)===seed.content[0].text),
+        collectionUnit=wb.units.find(unit=>fixtureEditorUnitText(request,unit)===collected.result.value.text);
        assert.ok(seedUnit);assert.ok(collectionUnit);
        ops=[{op:'KEEP',target:seedUnit.unit_id},{op:highOperation,target:collectionUnit.unit_id,
         ...highOperation==='COMPRESS'?{content:'higher collection summary'}:{}}];
@@ -121,7 +122,7 @@ for(const highOperation of ['COMPRESS','DELETE']){
    const result=api.createToolResultMessage({callId:'collect-call',isError:false,content:[{type:'text',text:collected.result.value.text}]});
    sessionAPI.appendPluginRecord(session,'plugin:sic/jobs/collection',{...collected.proof,message_id:result.id,call_id:'collect-call',material:{block_index:0,utf8_start:0,utf8_end:Buffer.byteLength(collected.result.value.text)}});
    const prepared=await ctx.llm.prepareCall({provider:'private-final-cut',model:'native-model',temperature:0.3,maxTokens:128});
-   const options={...prepared.config,sessionId:session.id,messages:[api.createSystemMessage(system),runtime,seed,assistant,result],tools:ctx.tools.schemas(agent)};
+   const options={...prepared.config,sessionId:session.id,messages:[api.createSystemMessage(system),runtime,seed,assistant,result],tools:(await ctx.systemPrompt.assemble({scope:agent})).tools};
    const send=async()=>{const call=await ctx.llm.prepareCall(prepared.config);for await(const chunk of call.stream(options))if(chunk.type==='finish')assert.equal(chunk.reason.kind,'stop',JSON.stringify(chunk));};
    await send();assert.deepEqual(calls,{low:1,high:1,worker:1,adopt:highOperation==='COMPRESS'?1:0,publish:1});
    const revision=sent[0].state.revision,cutId=sent[0].cut.cut_id;

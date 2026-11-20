@@ -1,0 +1,21 @@
+--- a/agent/agent_init.py
++++ b/agent/agent_init.py
+@@ -1887,6 +1887,18 @@
+     agent.compression_enabled = cs.enabled
+     agent.compression_in_place = cs.in_place
+     _cc = agent.context_compressor
++    bind_native_editor = getattr(_cc, "bind_native_editor", None)
++    if callable(bind_native_editor) and _requires_context_engine(_agent_cfg):
++        def sic_native_editor(messages):
++            if agent.api_mode == "codex_app_server":
++                raise RuntimeError("Hermes cannot select the authoritative Codex App Server transcript")
++            request = agent._build_api_kwargs(messages)
++            reply = agent._interruptible_api_call(request)
++            choices = getattr(reply, "choices", ())
++            if len(choices) != 1 or choices[0].finish_reason != "stop" or choices[0].message.tool_calls:
++                raise RuntimeError("Hermes native Editor delivery must be one completed text result")
++            return choices[0].message.content
++        bind_native_editor(sic_native_editor)
+     # Micro-compaction has no pre-compress checkpoint hook; suppress it while the gate is
+     # armed (mirrors native_compaction.py).
+     if cs.checkpoint_required and cs.micro_compact:

@@ -20,7 +20,9 @@ test('actual Core HTTP plus common original LlmRuntime SDK route edits private A
   const session=sessionAPI.Session.create('session'),agent={id:'session',status:'idle',session};
   scope=createScope(ctx,agent);agent.ctx=scope.ctx;
   let step=1,editorCalls=0,cut=0,current,sourceCount=0,goal=null,nativeGoalPort,goalChanged=0;const sent=[],operations=[],sources=new Map(),cbs=[],cbOrigins=[];
-  class Model extends api.LlmAdapter{async *stream(request){
+  class Model extends api.LlmAdapter{
+   async resolveModel(provider,id){return {provider,id,name:id,context:{contextWindow:256},defaultMaxTokens:128};}
+   async *stream(request){
    assert.equal(request.temperature,0.3);assert.equal(request.maxTokens,128);
    if(getEditorInvocation()){
     editorCalls++;const wb=JSON.parse(request.messages.at(-1).content[0].text);assert.equal(wb.units.length,editorCalls===1?1:2);if(editorCalls===2)assert.equal(wb.units[0].text,'V summary');
@@ -31,23 +33,26 @@ test('actual Core HTTP plus common original LlmRuntime SDK route edits private A
    yield{type:'text-delta',text:'original adapter success'};yield{type:'finish',reason:{kind:'stop'}};
   }}
   ctx.llm.registerAdapter(['private-a','private-b'],new Model());
-  const handlers=new Map(),binding={chain_id:server.chain_id,scope_id:'scope',role:'WORKER'};
-  const facade={llm:ctx.llm,tools:ctx.tools,agents:{list:()=>[agent],get:id=>id==='session'?agent:null,roots:()=>[agent],currentInitiator:()=>agent},jobs:{externalControlVersion:1,externalExecutorJoinVersion:1,joinExecutor:async()=>{},attachExternalLifecycle:()=>()=>{},externalLaunchKind:()=>null},get:()=>undefined,sessions:{get:id=>id==='session'?agent.session:null,flush:async()=>true},goals:{externalDriverVersion:1,defaultMaxGoalRounds:37,attachExternalState:(_agent,port)=>{nativeGoalPort=port;return()=>{}}},effect:()=>{},emit:()=>{},logger:{warn:()=>{}},
+  const handlers=new Map(),binding={chain_id:server.chain_id,scope_id:'scope',role:'WORKER'},pressure=[];
+  const meter={estimateMessage:message=>message.source?.kind==='sic-volatile'?200:1};
+  const facade={llm:ctx.llm,tools:ctx.tools,agents:{list:()=>[agent],get:id=>id==='session'?agent:null,roots:()=>[agent],currentInitiator:()=>agent},jobs:{externalControlVersion:1,externalExecutorJoinVersion:1,joinExecutor:async()=>{},attachExternalLifecycle:()=>()=>{},externalLaunchKind:()=>null},get:name=>name==='tokenMeter'?meter:undefined,sessions:{get:id=>id==='session'?agent.session:null,flush:async()=>true},goals:{externalDriverVersion:1,defaultMaxGoalRounds:37,attachExternalState:(_agent,port)=>{nativeGoalPort=port;return()=>{}}},effect:()=>{},emit:()=>{},logger:{warn:()=>{}},
    sessionProjections:{stateOf:()=>({openTurnStartSeq:0,lastStepStartSeq:step})},on:(name,fn)=>{handlers.set(name,fn);return ctx.on(name,fn)},
    inject:(_deps,fn)=>_deps.some(d=>['subagents','workflowEngine'].includes(d))?{dispose:()=>{}}:fn({effect:body=>body(),connection:{fetch:{register:()=>()=>{}}}})};
   const installed=await apply(facade,{enabled:true,mode:'edit',actor:'native-http-actor',coreURL:server.baseURL,credential:server.credential,projectionRoot:root,bindings:{session:binding},renderPrompt,
+   drainHigher:async options=>{if(options.trigger==='projected-pressure')pressure.push(options.requestId);return {progressed:false};},
    llmAPI:api,sessionAPI,agentEvents:()=>({emit:()=>{goalChanged++;}})});
   assert.ok(handlers.has('llm/context-dispatch'));assert.equal(ctx.llm.contextDispatchVersion,1);
   const system=await readFile(new URL('../transparent/bundle/fused.md',import.meta.url),'utf8'),authorization={role:'WORKER',scope_id:'scope'};
   const sys={id:'system',role:'system',content:[{type:'text',text:system}],source:{kind:'system-prompt'}},runtime={id:'runtime',role:'user',content:[{type:'text',text:'runtime'}],source:{kind:'runtime-context',sections:[{name:'sic:activation',text:JSON.stringify(authorization)}]}};
   const first={id:'human-first',role:'user',content:[{type:'text',text:'first'}],source:{kind:'user'}},second={id:'human-second',role:'user',content:[{type:'text',text:'second'}],source:{kind:'user'}};
   async function send(history,provider='private-a'){
-   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:ctx.tools.schemas(agent),vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
+   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:(await ctx.systemPrompt.assemble({scope:agent})).tools,vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
    for await(const chunk of prepared.stream(options))if(chunk.type==='finish')assert.equal(chunk.reason.kind,'stop',JSON.stringify(chunk));return sent.at(-1);
   }
   const firstSent=await send([sys,runtime,first]);assert.equal(firstSent.frames.find(m=>m.source?.kind==='sic-cb').data[0].text,'short-first');step=2;
   const secondSent=await send([sys,runtime,first,second],'private-b');assert.deepEqual(secondSent.frames.filter(m=>m.source?.kind==='sic-cb').map(m=>m.data[0].text),['short-first','short-second\nsecond']);assert.ok(JSON.parse(firstSent.serialized_payload).a_dialogue);assert.ok(JSON.parse(secondSent.serialized_payload).b_feed);assert.equal(secondSent.private_route,'private-b');assert.deepEqual(secondSent.opaque,{unknown:9007199254740991,signature:'do not change'});
   await send([sys,runtime,first,second],'private-b');assert.equal(editorCalls,2);
+  assert.equal(pressure.length,1,'pending V must enter the pressure estimate before the native request and stay idempotent on retry');
   assert.deepEqual((await server.core.operate('chain.get',{})).contexts.main.levels['1'].pending,[]);
   let resumed;for(const row of (await installed.store.list('session')).rows){const saved=await installed.store.get('session',row.id);if(saved.host_binding.context_projection.volatile_plan.sources.length)resumed=saved;}
   assert.ok(resumed);assert.equal(resumed.host_binding.context_projection.volatile_plan.sources.length,1);const nativeSource=await server.core.get({source_id:resumed.source_id});assert.equal(nativeSource.binding.volatile_source_bindings.length,1);const archived=await server.core.operate('source.read',{source_id:nativeSource.binding.core_source_id});assert.equal(archived.source.units.filter(u=>u.anchor.volatile_origin).length,1);

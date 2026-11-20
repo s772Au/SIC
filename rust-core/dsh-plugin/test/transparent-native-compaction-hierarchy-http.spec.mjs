@@ -21,9 +21,9 @@ async function setup(trigger){
   async *stream(request){
    if(!getEditorInvocation()){workerCalls++;throw Error('compaction dispatched an unexpected Worker');}
    assert.equal(request.provider,'native-original-route');assert.equal(request.model,'native-original-model');assert.equal(request.temperature,0.29);assert.equal(request.maxTokens,128);assert.deepEqual(request.stop,['END']);
-   const cut=await server.core.operate('cut.get',{}),shared=request.messages.filter(m=>m.source?.kind==='sic-cb');assert.deepEqual(shared.map(m=>m.source.cb_id),cut.view.cbs.map(cb=>cb.cb_id));assert.deepEqual(shared.map(m=>m.content[0].text),cut.view.cbs.map(cb=>cb.body));assert.deepEqual(request.tools,ctx.tools.schemas(agent));
+   const cut=await server.core.operate('cut.get',{}),shared=request.messages.filter(m=>m.source?.kind==='sic-cb');assert.deepEqual(shared.map(m=>m.source.cb_id),cut.view.cbs.map(cb=>cb.cb_id));assert.deepEqual(shared.map(m=>m.content[0].text),cut.view.cbs.map(cb=>cb.body));assert.deepEqual(request.tools,(await ctx.systemPrompt.assemble({scope:agent})).tools);
    requests.push(JSON.parse(JSON.stringify(request)));const wb=JSON.parse(request.messages.at(-1).content[0].text);assert.ok(wb.units.length);
-   yield{type:'tool-call-delta',index:0,id:'actual-higher-editor-'+requests.length,name:'sic_edit_blocks',argumentsDelta:JSON.stringify({ops:wb.units.map(unit=>({op:'COMPRESS',target:unit.unit_id,content:unit.text})),pvi:{}})};yield{type:'finish',reason:{kind:'tool-calls'}};
+   yield{type:'tool-call-delta',index:0,id:'actual-higher-editor-'+requests.length,name:'sic_edit_blocks',argumentsDelta:JSON.stringify({ops:wb.units.map(unit=>({op:'KEEP',target:unit.unit_id})),pvi:{}})};yield{type:'finish',reason:{kind:'tool-calls'}};
   }
  }
  ctx.llm.registerAdapter(['native-original-route'],new Model());ctx.on('agent/request',async(_event,next)=>({...await next(),temperature:0.29,maxTokens:128,stop:['END']}));ctx.on('agent/error',payload=>errors.push(String(payload.error)));

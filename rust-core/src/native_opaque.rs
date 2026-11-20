@@ -44,6 +44,22 @@ fn parts(
         if text_kind && part["text"].is_string() {
             continue;
         }
+        if format == "opencode-messages" && row["role"] == "tool" && part["type"] == "tool-result" {
+            let result = &part["result"];
+            let value = &result["value"];
+            let content = (result["type"] == "content").then(|| value.as_array()).flatten();
+            let editable = (result["type"] == "text" || result["type"] == "error") && value.is_string();
+            if editable || content.is_some() {
+                let mut identity = anchor.clone();
+                identity.push(json!("id"));
+                append(out, &part["id"], identity, row, Some("tool-result-id"))?;
+                if let Some(content) = content {
+                    anchor.extend([json!("result"), json!("value")]);
+                    parts(out, format, content, &anchor, part)?;
+                }
+                continue;
+            }
+        }
         if format == "anthropic-messages" && part["type"] == "tool_result" {
             if let Some(nested) = part["content"].as_array() {
                 anchor.push(json!("content"));
@@ -61,7 +77,7 @@ fn parts(
 pub fn describe(format: &str, request: &Value) -> Result<Vec<Value>> {
     let key = match format {
         "openai-responses" => "input",
-        "openai-chat" | "anthropic-messages" | "dsh-messages" => "messages",
+        "openai-chat" | "anthropic-messages" | "dsh-messages" | "pi-messages" | "opencode-messages" => "messages",
         _ => return Err(CoreError::invalid("unsupported native carrier format")),
     };
     let mut out = Vec::new();
@@ -216,9 +232,18 @@ fn occurrence_identity(block: &Value, format: &Value) -> Result<Option<String>> 
     .transpose()
 }
 
-pub(crate) async fn from_sources(
+#[cfg(test)]
+async fn from_sources(
     conn: &mut SqliteConnection,
     source_ids: &[String],
+) -> Result<Vec<Value>> {
+    from_sources_verified(conn, source_ids, &mut storage::VerifiedObjects::default()).await
+}
+
+pub(crate) async fn from_sources_verified(
+    conn: &mut SqliteConnection,
+    source_ids: &[String],
+    verified: &mut storage::VerifiedObjects,
 ) -> Result<Vec<Value>> {
     let mut pending: Vec<_> = source_ids
         .iter()
@@ -232,7 +257,7 @@ pub(crate) async fn from_sources(
         if !visited.insert((id.clone(), kind)) {
             continue;
         }
-        let value = storage::get_object(conn, &id, Some(kind)).await?;
+        let value = verified.read(conn, &id, Some(kind)).await?;
         if kind == "source" {
             for mut block in source_blocks(&value)? {
                 let identity = occurrence_identity(&block, &value["format"])?;

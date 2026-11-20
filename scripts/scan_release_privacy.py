@@ -76,6 +76,35 @@ def pe_identity(data):
     return {"machine": f"0x{machine:04x}", "coff_symbols_absent": symbols_at == 0 and symbols_count == 0}
 
 
+def elf_identity(data):
+    if len(data) < 64 or data[:7] != b"\x7fELF\x02\x01\x01":
+        return None
+    kind, machine = struct.unpack_from("<HH", data, 16)
+    program_at, sections_at = struct.unpack_from("<QQ", data, 32)
+    header_size, program_size, programs, section_size, sections = struct.unpack_from("<HHHHH", data, 52)
+    if (kind not in (2, 3) or header_size != 64 or program_size != 56 or section_size != 64
+            or not programs or not sections or program_at < 64 or sections_at < 64
+            or program_at + programs * program_size > len(data)
+            or sections_at + sections * section_size > len(data)):
+        return None
+    section_types = [struct.unpack_from("<I", data, sections_at + i * section_size + 4)[0]
+                     for i in range(sections)]
+    interpreter = None
+    for i in range(programs):
+        at = program_at + i * program_size
+        if struct.unpack_from("<I", data, at)[0] != 3:  # PT_INTERP
+            continue
+        path_at, = struct.unpack_from("<Q", data, at + 8)
+        path_size, = struct.unpack_from("<Q", data, at + 32)
+        value = data[path_at:path_at + path_size]
+        if (interpreter is not None or path_size < 2 or len(value) != path_size
+                or value[-1:] != b"\0" or b"\0" in value[:-1] or not value.isascii()):
+            return None
+        interpreter = value[:-1].decode("ascii")
+    return {"machine": f"0x{machine:04x}", "symtab_absent": 2 not in section_types,
+            "interpreter": interpreter}
+
+
 def default_roots():
     roots = [Path(__file__).resolve().parents[1], Path.home()]
     for name in ("USERPROFILE", "HOME", "CARGO_HOME", "RUSTUP_HOME", "SIC_TOOLCHAIN_ROOT"):
@@ -88,11 +117,13 @@ def scan_file(path, forbidden_roots=(), require_stripped=False):
     data = path.read_bytes()
     scan = scan_bytes(data, list(default_roots()) + list(forbidden_roots))
     findings = scan["findings"]
-    identity = pe_identity(data)
-    if require_stripped and (identity is None or not identity["coff_symbols_absent"]):
-        findings.append({"category": "coff-symbols-or-non-pe", "encoding": "pe-header"})
+    pe = pe_identity(data)
+    elf = elf_identity(data)
+    stripped = (pe and pe["coff_symbols_absent"]) or (elf and elf["symtab_absent"])
+    if require_stripped and not stripped:
+        findings.append({"category": "symbols-or-unsupported-binary", "encoding": "binary-header"})
     return {"file": path.name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
-            "findings": findings, "observations": scan["observations"], "pe": identity, "passed": not findings}
+            "findings": findings, "observations": scan["observations"], "pe": pe, "elf": elf, "passed": not findings}
 
 
 def main():

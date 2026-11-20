@@ -46,6 +46,44 @@ async fn publish(core: &Core, context: &OperationContext, source: &Value, key: &
 }
 
 #[tokio::test]
+async fn worker_archive_pages_are_published_scoped_revocation_checked_and_search_keeps_its_boundary() {
+    let core = Core::new(Store::memory().await.unwrap());
+    let chain = new_chain(&core, "alice").await;
+    let mut alice = ctx("alice", Some(&chain));
+    alice.allow_revoke = true;
+    let other_chain = new_chain(&core, "alice").await;
+    let other = ctx("alice", Some(&other_chain));
+    let mut archived = Vec::new();
+    let ingest = |content: &str| json!({"request":{"messages":[{"role":"user","content":content}]}});
+    for (index, content) in ["needle early", "needle 😀晚"].into_iter().enumerate() {
+        let row = op(&core, &alice, "source.ingest", ingest(content)).await;
+        publish(&core, &alice, &row["source_id"], &format!("archive-{index}")).await;
+        archived.push(row["source_id"].clone());
+    }
+    let first = op(&core, &alice, "memory.archive_search", json!({"query":"needle","limit":1})).await;
+    assert_eq!(first["next_cursor"]["archive_size"], 2);
+    assert_eq!(first["hits"][0]["source_id"], archived[0]);
+    let private = op(&core, &alice, "source.ingest", ingest("needle pending")).await;
+    let args = json!({"source_id":private["source_id"],"unit_id":"u1"});
+    assert_eq!(core.operate("memory.source_text_page", &alice, &args).await.unwrap_err().status, 403);
+    publish(&core, &alice, &private["source_id"], "now-published").await;
+    let continued = op(&core, &alice, "memory.archive_search",
+        json!({"query":"needle","limit":1,"cursor":first["next_cursor"]})).await;
+    assert_eq!(continued["hits"][0]["source_id"], archived[1]);
+    assert_eq!(continued["complete"], true);
+    let hit = &continued["hits"][0];
+    let args = json!({"source_id":hit["source_id"],"unit_id":hit["unit_id"],"offset":7,"limit":1});
+    let page = op(&core, &alice, "memory.source_text_page", args.clone()).await;
+    assert_eq!(page["text"], "😀");
+    assert_eq!(page["next_offset"], 8);
+    assert_eq!(core.operate("memory.source_text_page", &other, &args).await.unwrap_err().status, 403);
+    assert_eq!(core.operate("memory.archive_search", &alice,
+        &json!({"query":"different","cursor":first["next_cursor"]})).await.unwrap_err().code, "search_cursor_stale");
+    op(&core, &alice, "security.revoke", json!({"source_id":hit["source_id"]})).await;
+    assert_eq!(core.operate("memory.source_text_page", &alice, &args).await.unwrap_err().status, 403);
+}
+
+#[tokio::test]
 async fn search_preserves_cb_wb_provenance_paging_and_late_source_membership() {
     let core = Core::new(Store::memory().await.unwrap());
     let chain = new_chain(&core, "alice").await;
@@ -126,6 +164,18 @@ async fn search_preserves_cb_wb_provenance_paging_and_late_source_membership() {
     assert!(page2["hits"][0]["operation_index_count"].as_u64().unwrap() > 0);
     assert_eq!(page2["complete"], true);
     assert!(page2["next_cursor"].is_null());
+    let expanded = op(&core, &alice, "memory.archive_expand",
+        json!({"wb_id":cut["wb_id"],"limit":1})).await;
+    assert_eq!(expanded["cb_id"], cut["cb_id"]);
+    assert_eq!(expanded["source_units"][0]["frozen_in_wb"], true);
+    let expanded = op(&core, &alice, "memory.archive_expand",
+        json!({"cb_id":cut["cb_id"],"offset":expanded["next_offset"],"limit":1})).await;
+    assert_eq!(expanded["source_units"][0]["source_id"], late["part_source_id"]);
+    assert_eq!(expanded["source_units"][0]["frozen_in_wb"], false);
+    assert_eq!(expanded["source_units"][0]["materialized_unit_id"], combined_id);
+    let recovered = op(&core, &alice, "memory.source_text_page",
+        json!({"source_id":late["part_source_id"],"unit_id":expanded["source_units"][0]["unit_id"]})).await;
+    assert_eq!(recovered["text"], "迟到 needle 输出");
     let full = op(
         &core,
         &alice,
@@ -184,6 +234,36 @@ async fn search_preserves_cb_wb_provenance_paging_and_late_source_membership() {
         .code,
         "forbidden"
     );
+}
+
+#[tokio::test]
+async fn archive_directory_pages_the_adopted_cut_after_new_blocks_arrive() {
+    let core = Core::new(Store::memory().await.unwrap());
+    let chain = new_chain(&core, "alice").await;
+    let alice = ctx("alice", Some(&chain));
+    let other_chain = new_chain(&core, "alice").await;
+    let other = ctx("alice", Some(&other_chain));
+    let mut blocks = Vec::new();
+    for index in 1..=3 {
+        let source = op(&core, &alice, "source.ingest",
+            json!({"request":{"messages":[{"role":"user","content":format!("part-{index}")}]}})).await;
+        blocks.push(publish(&core, &alice, &source["source_id"], &format!("page-{index}")).await);
+        if index == 2 {
+            let first = op(&core, &alice, "memory.archive_expand",
+                json!({"cut_id":blocks[1]["cut_id"],"limit":1})).await;
+            assert_eq!(first["active_blocks"][0]["cb_id"], blocks[0]["cb_id"]);
+            assert_eq!(first["next_offset"], 1);
+        }
+    }
+    let args = json!({"cut_id":blocks[1]["cut_id"],"offset":1,"limit":1});
+    let second = op(&core, &alice, "memory.archive_expand", args.clone()).await;
+    assert_eq!(second["active_blocks"][0]["cb_id"], blocks[1]["cb_id"]);
+    assert!(second["next_offset"].is_null());
+    assert_eq!(core.operate("memory.archive_expand", &other, &args).await.unwrap_err().status, 403);
+    let ops_args = json!({"kind":"ops","object_id":blocks[0]["cb_id"],"limit":1});
+    let ops = op(&core, &alice, "memory.archive_ops", ops_args.clone()).await;
+    assert!(ops["next_offset"].is_number());
+    assert_eq!(core.operate("memory.archive_ops", &other, &ops_args).await.unwrap_err().status, 403);
 }
 
 #[tokio::test]

@@ -1,4 +1,4 @@
-import {dshSourcePath,fixturePath} from './test-paths.mjs';
+import {dshSourcePath,fixtureEditorUnitText,fixturePath} from './test-paths.mjs';
 import{test}from'node:test';import assert from'node:assert/strict';import{readFile,mkdtemp,rm}from'node:fs/promises';import{tmpdir}from'node:os';import{join}from'node:path';import{pathToFileURL}from'node:url';
 import{apply}from'../transparent/plugin.mjs';import{isolated}from'./isolated-core-fixture.mjs';import{prepareSdkRuntime}from'../transparent/prepare-sdk-runtime.mjs';import{getEditorInvocation}from'../transparent/editor-invocation.mjs';import{nativeExchange}from'../transparent/native-boundary.mjs';import{digest}from'../transparent/transport.mjs';
 const dsh=dshSourcePath();
@@ -23,7 +23,7 @@ test('actual SDK Worker continues after higher V and consumes that V once with f
   class Model extends api.LlmAdapter{async *stream(request){
    assert.equal(request.temperature,0.3);assert.equal(request.maxTokens,128);
    if(getEditorInvocation()){
-    editorCalls++;const wb=JSON.parse(request.messages.at(-1).content[0].text),auth=JSON.parse(request.messages.findLast(m=>m.source?.kind==='runtime-context').source.sections.find(s=>s.name==='sic:activation').text);assert.ok(wb.units.length>0);let ops=[];if(auth.level===2){higherCalls++;assert.ok(auth.edit_capabilities.pvi.includes('V'));if(higherCalls===1)ops=wb.units.map(u=>({op:'COMPRESS',target:u.unit_id,content:'deferred '+u.text,lifecycle:'V'}));else assert.deepEqual(wb.units.map(u=>u.text),['deferred material-1','deferred material-2','material-3','material-4']);}
+    editorCalls++;const wb=JSON.parse(request.messages.at(-1).content[0].text),auth=JSON.parse(request.messages.findLast(m=>m.source?.kind==='runtime-context').source.sections.find(s=>s.name==='sic:activation').text);assert.ok(wb.units.length>0);let ops=[];if(auth.level===2){higherCalls++;assert.ok(auth.edit_capabilities.pvi.includes('V'));if(higherCalls===1)ops=wb.units.map(u=>({op:'COMPRESS',target:u.unit_id,content:'deferred '+fixtureEditorUnitText(request,u),lifecycle:'V'}));else assert.deepEqual(wb.units.map(u=>fixtureEditorUnitText(request,u)),['deferred material-1','deferred material-2','material-3','material-4']);}
     yield{type:'tool-call-delta',index:0,id:'editor-'+editorCalls,name:'sic_edit_blocks',argumentsDelta:JSON.stringify({ops,pvi:{}})};yield{type:'finish',reason:{kind:'tool-calls'}};return;
    }
    const selected=await server.core.operate('cut.get',{}),active=request.messages.filter(m=>m.source?.kind==='sic-cb');assert.deepEqual(active.map(m=>m.source.cb_id),selected.view.cbs.map(cb=>cb.cb_id));assert.deepEqual(active.map(m=>m.content[0].text),selected.view.cbs.map(cb=>cb.body));
@@ -43,7 +43,7 @@ test('actual SDK Worker continues after higher V and consumes that V once with f
   const sys={id:'system',role:'system',content:[{type:'text',text:system}],source:{kind:'system-prompt'}},runtime={id:'runtime',role:'user',content:[{type:'text',text:'runtime'}],source:{kind:'runtime-context',sections:[{name:'sic:activation',text:JSON.stringify(authorization)}]}};
   const first={id:'human-first',role:'user',content:[{type:'text',text:'first'}],source:{kind:'user'}},second={id:'human-second',role:'user',content:[{type:'text',text:'second'}],source:{kind:'user'}};
   async function send(history,provider='private-a'){
-   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:ctx.tools.schemas(agent),vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
+   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:(await ctx.systemPrompt.assemble({scope:agent})).tools,vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
    lastOptions=options;for await(const chunk of prepared.stream(options))if(chunk.type==='finish')assert.equal(chunk.reason.kind,'stop',JSON.stringify(chunk));return sent.at(-1);
   }
   const materials=[];for(let round=1;round<=4;round++){

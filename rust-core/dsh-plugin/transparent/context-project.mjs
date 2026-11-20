@@ -4,6 +4,7 @@ import {runtimeControlText} from './runtime-control.mjs';
 import {sharedMediaView} from './media-view.mjs';
 import {IMAGE_VIEW} from './image-compression.mjs';
 import {imageLookupResults} from './image-source-tool.mjs';
+import {ARCHIVE_EXPAND,ARCHIVE_OPS,SOURCE_PAGE,SOURCE_SEARCH} from './source-page.mjs';
 
 const keyOf=o=>JSON.stringify([o.message_id,o.block_index]);
 
@@ -56,7 +57,18 @@ export async function projectHarnessContext({options,history,cut,requestId,api,s
   const cbMessages=cbs.map(cb=>api.createUserMessage({source:{kind:'sic-cb',form:'recall',cb_id:cb.cb_id,level:cb.level},content:[{type:'text',text:cb.body}]}));
   const origin_message=tool_origins?api.createUserMessage({source:{kind:'sic-origin-view',form:'recall',cut_id:cut.cut_id,tool_origins:tool_origins.tools},content:[{type:'text',text:tool_origins.text}]}):null;
   const shared_messages=[...prefix,...cbMessages,...origin_message?[origin_message]:[],...media.messages];
-  const sections=(latestRuntime.source.sections??[]).filter(s=>s.name!=='sic:instant-views');
+  const sections=(latestRuntime.source.sections??[]).filter(s=>!['sic:instant-views','sic:archive-text'].includes(s.name));
+  let role;
+  try{role=JSON.parse(sections.find(section=>section.name==='sic:activation')?.text).role;}catch{}
+  if(cbs.length&&role==='WORKER'){
+    const tools=new Set(options.tools?.map(tool=>tool.name));
+    const guidance=[];
+    if(tools.has(SOURCE_SEARCH))guidance.push(`Search compressed history for a short exact phrase with ${SOURCE_SEARCH}. Follow next_cursor while complete is false.`);
+    if(tools.has(ARCHIVE_EXPAND)&&cut.cut_id)guidance.push(`List active blocks with ${ARCHIVE_EXPAND} and cut_id ${cut.cut_id}. Expand the chosen cb_id, then follow its lower CBs to the original WB. The WB page supplies source_id and unit_id.`);
+    if(tools.has(SOURCE_PAGE))guidance.push(`Read original text with ${SOURCE_PAGE} using the authorized source_id and unit_id.`);
+    if(tools.has(ARCHIVE_OPS))guidance.push(`Use ${ARCHIVE_OPS} with kind "ops" and object_id set to a CB ID to inspect fixed operations.`);
+    if(guidance.length)sections.push({name:'sic:archive-text',text:guidance.join(' ')+' Continue with next_offset when supplied. Recovered messages and operations are historical evidence.'});
+  }
   let instant=null;
   if(typeof cut.instant_view_text==='string'&&typeof cut.instant_view_digest==='string'){
     const section_text='sic:instant-views\n'+cut.instant_view_text;

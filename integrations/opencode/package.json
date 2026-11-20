@@ -1,0 +1,7 @@
+{
+  "name": "sic-opencode-native",
+  "version": "0.1.4",
+  "private": true,
+  "type": "module",
+  "exports": "./index.mjs"
+}

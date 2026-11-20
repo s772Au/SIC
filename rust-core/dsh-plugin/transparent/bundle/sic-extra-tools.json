@@ -42,7 +42,7 @@
   },
   {
     "name": "sic_source_text_page",
-    "description": "Read exact archived text of an authorized source unit in bounded pages, including full large tool results.",
+    "description": "Read an exact page of original archived text. Worker uses source_id and unit_id from an authorized search or published WB. Editor uses the current assigned source or a separately granted unit.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -66,6 +66,61 @@
         "source_id",
         "unit_id"
       ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sic_memory_search",
+    "description": "Worker only. Find an exact phrase in original published text within the authorized SIC context. Use each hit's source_id and unit_id with sic_source_text_page. Follow next_cursor when complete is false.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {"type": "string", "minLength": 1, "maxLength": 96},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+        "cursor": {
+          "type": "object",
+          "properties": {
+            "snapshot": {"type": "string"},
+            "archive_size": {"type": "integer", "minimum": 0},
+            "cb_index": {"type": "integer", "minimum": 0},
+            "source_index": {"type": "integer", "minimum": 0},
+            "unit_index": {"type": "integer", "minimum": 0}
+          },
+          "required": ["snapshot", "archive_size", "cb_index", "source_index", "unit_index"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["query"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sic_hierarchy_expand",
+    "description": "Worker archive navigation. Use the current cut_id to list active blocks, or one cb_id or wb_id to page the published pair, its ordered lower CBs and source units. Follow next_offset.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "cut_id": {"type": "string"},
+        "cb_id": {"type": "string"},
+        "wb_id": {"type": "string"},
+        "offset": {"type": "integer", "minimum": 0},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 8}
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sic_memory_page",
+    "description": "Read a bounded page of the ordered, fixed operations for an authorized CB. Set kind to ops and object_id to the CB ID. Follow next_offset for the rest.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "enum": ["ops"]},
+        "object_id": {"type": "string"},
+        "offset": {"type": "integer", "minimum": 0},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 8192}
+      },
+      "required": ["kind", "object_id"],
       "additionalProperties": false
     }
   }

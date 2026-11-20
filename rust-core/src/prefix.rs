@@ -140,7 +140,7 @@ fn validate_common_tools(tools: &[Value]) -> Result<(), String> {
 }
 
 fn build_common_tool_registry() -> Vec<Value> {
-    vec![
+    let mut tools = vec![
         tool(
             EDIT_TOOL,
             "Deliver one validated SIC edit batch for the currently authorized Editor WB units.",
@@ -354,7 +354,11 @@ fn build_common_tool_registry() -> Vec<Value> {
                    "offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":8}}),
             &[],
         ),
-    ]
+    ];
+    if !cfg!(feature = "decision-tree") {
+        tools.retain(|tool| !matches!(tool["function"]["name"].as_str(), Some("sic_decision_read" | "sic_decision_write")));
+    }
+    tools
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -95,7 +95,54 @@ impl Core {
             return Err(CoreError::invalid("claim_id must be bounded text"));
         }
         let attempt = &job.host_editor["attempts"][&editor];
+        let last_recovery = &job.host_editor["recovered_attempts"][&editor];
+        let prior_recoveries = job.host_editor["recovery_history"][&editor].as_array().into_iter().flatten();
+        let recorded = std::iter::once(last_recovery).chain(prior_recoveries).find(|recorded| recorded["claim_id"] == claim);
+        if op == "edit.host.reopen" {
+            let reason = required_str(p, "reason")?;
+            if p["confirm"] != true || reason.trim().is_empty() || reason.len() > 512 {
+                return Err(CoreError::invalid("explicit confirmation and a bounded recovery reason required"));
+            }
+            if let Some(recorded) = recorded {
+                if recorded["actor"] != auth.actor || recorded["recovery_reason"] != reason {
+                    return Err(CoreError::conflict("host Editor recovery already recorded"));
+                }
+                *replayed = true;
+                return host_view(agent, &job, Some(&editor));
+            }
+            if attempt["claim_id"] != claim || attempt["actor"] != auth.actor {
+                return Err(CoreError::forbidden("host Editor recovery does not own this claim"));
+            }
+            if job.status != "failed" || attempt["status"] != "unknown" || job.candidate.is_some()
+                || job.cb_id.is_some() || !job.editor_claims.is_empty() || job.claim_id.is_some()
+                || !job.assignments.as_array().is_some_and(|rows| rows.len() == 1)
+                || agent.worker_claim.is_some() || job.base_cut != agent.cut_seq || agent.run_state != "running"
+                || job.host_editor["control_epoch"] != agent.control_epoch
+                || job.host_editor["input_epoch"] != agent.input_epoch
+            {
+                return Err(CoreError::conflict("host Editor recovery requires a current failed single-Editor job with no candidate"));
+            }
+            let target = agent.jobs.get_mut(&id).expect("existing job");
+            let mut recovered = attempt.clone();
+            recovered["recovery_reason"] = json!(reason);
+            recovered["recovered_at"] = json!(now());
+            if last_recovery.is_object() {
+                let history = &mut target.host_editor["recovery_history"][&editor];
+                if history.is_null() {
+                    *history = json!([]);
+                }
+                history.as_array_mut().ok_or_else(|| CoreError::invalid("archived Editor recovery history is invalid"))?
+                    .push(last_recovery.clone());
+            }
+            target.host_editor["recovered_attempts"] = json!({(editor.clone()): recovered});
+            target.host_editor["attempts"] = json!({});
+            target.status = "open".into();
+            return host_view(agent, agent.jobs.get(&id).expect("existing job"), Some(&editor));
+        }
         if op == "edit.host.claim" {
+            if recorded.is_some() {
+                return Err(CoreError::conflict("a recovered Editor job requires a new claim identity"));
+            }
             if attempt.is_object() {
                 if attempt["claim_id"] != claim || attempt["actor"] != auth.actor {
                     return Err(CoreError::conflict(

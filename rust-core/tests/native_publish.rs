@@ -160,6 +160,8 @@ async fn unresolved_native_tool_groups_are_not_frozen_as_published_cbs() {
             {"type":"function_call","call_id":"call-a","name":"original","arguments":"{}"}]})),
         ("anthropic-messages",json!({"messages":[{"role":"user","content":"before"},
             {"role":"assistant","content":[{"type":"tool_use","id":"call-a","name":"original","input":{}}]}]})),
+        ("pi-messages",json!({"messages":[{"role":"user","content":"before"},
+            {"role":"assistant","content":[{"type":"toolCall","id":"call-a","name":"read","arguments":{"path":"proof"}}]}]})),
     ];
     for (format,raw) in fixtures {
         let core = Core::new(Store::memory().await.unwrap());
@@ -170,6 +172,139 @@ async fn unresolved_native_tool_groups_are_not_frozen_as_published_cbs() {
         assert_eq!(state["result"]["contexts"]["main"]["levels"]["1"]["wbs"],json!([]));
         assert_eq!(state["result"]["contexts"]["main"]["levels"]["1"]["pending"],json!([]));
     }
+}
+
+#[tokio::test]
+async fn pi_tool_wait_stages_a_real_native_boundary_and_preserves_opaque_blocks() {
+    let core = Core::new(Store::memory().await.unwrap());
+    let auth = chain(&core).await;
+    let raw = json!({"provider":"pi-route","model":"pi-model","messages":[
+        {"role":"system","content":[{"type":"text","text":"protected"}],"tools":[{"name":"read"}]},
+        {"role":"assistant","provider":"pi-route","model":"pi-model","stopReason":"toolUse","timestamp":1,
+         "content":[{"type":"text","text":"before"},{"type":"thinking","thinking":"opaque","thinkingSignature":"untouched"},
+         {"type":"toolCall","id":"pi-read","name":"read","arguments":{"path":"proof"}},
+         {"type":"toolCall","id":"pi-list","name":"ls","arguments":{"path":"parent"}}]}
+    ]});
+    let payload = json!({"format":"pi-messages","request":raw,"native_step_id":"a".repeat(64),
+        "idempotency_key":"pi-first-boundary","editable_anchors":[["messages",1,"content",0,"text"]],
+        "host_message_origins":[{"message_id":"native-session-entry","block_index":0,
+                                 "native_anchor":["messages",1,"content",0,"text"]}],
+        "tool_wait":{"assistant_message_id":"native-session-entry","assistant_event_seq":2,"call_ids":["pi-read","pi-list"]}});
+    let mut wrong = payload.clone();
+    wrong["tool_wait"]["call_ids"] = json!(["pi-list", "pi-read"]);
+    let error = core.operate("native.begin", &auth, &wrong).await.unwrap_err();
+    assert_eq!(error.status, 403, "{error:?}");
+    let mut wrong_origin = payload.clone();
+    wrong_origin["host_message_origins"][0]["message_id"] = json!("different-entry");
+    let error = core.operate("native.begin", &auth, &wrong_origin).await.unwrap_err();
+    assert_eq!(error.status, 403, "{error:?}");
+
+    let mut premature = payload.clone();
+    premature["request"]["messages"].as_array_mut().unwrap().push(json!({"role":"toolResult",
+        "toolCallId":"pi-read","toolName":"read","isError":false,"timestamp":2,
+        "content":[{"type":"text","text":"late evidence"}]}));
+    let error = core.operate("native.begin", &auth, &premature).await.unwrap_err();
+    assert_eq!(error.status, 403, "{error:?}");
+
+    let begin = core.operate("native.begin", &auth, &payload).await.unwrap();
+    let binding = &begin["result"];
+    let state = core.operate("chain.get", &auth, &json!({})).await.unwrap();
+    assert_eq!(state["result"]["contexts"]["main"]["levels"]["1"]["pending"], json!([]));
+    edit(&core, &auth, binding).await;
+    let publication = core.operate("native.publish", &auth, &publish(binding)).await.unwrap();
+    let mut expected = raw.clone();
+    expected["messages"][1]["content"][0]["text"] = json!("after");
+    assert_eq!(publication["result"]["request"], expected);
+    assert_eq!(publication["result"]["source_request"], raw);
+    assert_eq!(publication["result"]["binding"]["tool_wait"]["boundary"]["assistant_message_id"], "native-session-entry");
+
+    let selected = core.operate("cut.get", &auth, &json!({})).await.unwrap();
+    let mut continuation = expected;
+    continuation["messages"].as_array_mut().unwrap().extend([
+        json!({"role":"toolResult","toolCallId":"pi-read","toolName":"read","content":[{"type":"text","text":"late evidence"}]}),
+        json!({"role":"toolResult","toolCallId":"pi-list","toolName":"ls","content":[{"type":"text","text":"another result"}]}),
+    ]);
+    let continued = core.operate("native.begin", &auth, &json!({"format":"pi-messages","request":continuation,
+        "editable_anchors":[["messages",2,"content",0,"text"]],"protected_cb_bindings":[{
+            "cb_id":selected["result"]["view"]["cbs"][0]["cb_id"],"native_anchors":[["messages",1,"content",0,"text"]]
+        }]})).await.unwrap();
+    assert_eq!(continued["result"]["source_request"], continuation);
+    let after_late_result = core.operate("cut.get", &auth, &json!({})).await.unwrap();
+    assert_eq!(after_late_result["result"]["cut"], selected["result"]["cut"]);
+    assert_eq!(after_late_result["result"]["view"], selected["result"]["view"]);
+    assert_eq!(after_late_result["result"]["pending"], json!([continued["result"]["binding"]["core_source_id"]]));
+}
+
+#[tokio::test]
+async fn malformed_pi_tool_results_cannot_enter_the_live_working_buffer() {
+    let core = Core::new(Store::memory().await.unwrap());
+    let owner = chain(&core).await;
+    let first = json!({"role":"assistant","content":[{"type":"toolCall","id":"1","name":"read"}]});
+    let result = json!({"role":"toolResult","toolCallId":"1","toolName":"read",
+        "content":[{"type":"text","text":"evidence"}]});
+    let wrong_name = json!({"role":"toolResult","toolCallId":"1","toolName":"different",
+        "content":[{"type":"text","text":"unverified evidence"}]});
+    let user = json!({"role":"user","content":"next task"});
+    let mut duplicate = first.clone();
+    let extra = duplicate["content"][0].clone();
+    duplicate["content"].as_array_mut().unwrap().push(extra);
+    for messages in [
+        json!([result, user]),
+        json!([first, result, result, user]),
+        json!([first, wrong_name, user]),
+        json!([first, user, result]),
+        json!([duplicate, result, user]),
+    ] {
+        let error = core.operate("native.begin", &owner, &json!({
+            "format":"pi-messages","request":{"messages":messages}
+        })).await.unwrap_err();
+        assert_eq!(error.status, 403);
+    }
+    let cut = core.operate("cut.get", &owner, &json!({})).await.unwrap();
+    assert_eq!(cut["result"]["pending"], json!([]));
+}
+
+#[tokio::test]
+async fn a_tool_wait_candidate_can_be_retired_after_restart_without_changing_the_next_boundary() {
+    let temporary = tempfile::tempdir().unwrap();
+    let path = temporary.path().join("pi-recovery.db");
+    let db = Store::create(&path).await.unwrap();
+    let core = Core::new(db.clone());
+    let owner = chain(&core).await;
+    let step = "e".repeat(64);
+    let payload = json!({"format":"pi-messages","native_step_id":step,"idempotency_key":"frozen-pi",
+        "request":{"provider":"local","model":"fixture","messages":[
+            {"role":"assistant","provider":"local","model":"fixture","stopReason":"toolUse","content":[
+                {"type":"text","text":"before"},{"type":"toolCall","id":"read-id","name":"read","arguments":{}} ]}
+        ]},"editable_unit_ids":["u1"],"host_message_origins":[{"message_id":"entry","block_index":0,
+        "native_anchor":["messages",0,"content",0,"text"]}],
+        "tool_wait":{"assistant_message_id":"entry","assistant_event_seq":1,"call_ids":["read-id"]}});
+    let started = core.operate("native.begin", &owner, &payload).await.unwrap();
+    let staged = &started["result"];
+    edit(&core, &owner, staged).await;
+    let late = begin(&core, &owner, "openai-chat", json!({"messages":[
+        {"role":"user","content":"belongs to next work block"}
+    ]})).await;
+    let before = core.operate("cut.get", &owner, &json!({})).await.unwrap();
+    assert_eq!(before["result"]["pending"], json!([late["binding"]["core_source_id"]]));
+    drop(core);
+    db.close().await;
+    let db = Store::open(&path).await.unwrap();
+    let core = Core::new(db.clone());
+    let proof = json!({"source_id":staged["source_id"],"expected_source_digest":staged["source_digest"],
+        "expected_version":1});
+    let abandon = json!({"native_step_id":step,"sources":[proof]});
+    let mut stale = abandon.clone();
+    stale["sources"][0]["expected_version"] = json!(0);
+    assert_eq!(core.operate("native.abandon", &owner, &stale).await.unwrap_err().status, 409);
+    let retired = core.operate("native.abandon", &owner, &abandon).await.unwrap();
+    let replay = core.operate("native.abandon", &owner, &abandon).await.unwrap();
+    assert_eq!(retired["result"], replay["result"]);
+    assert_eq!(replay["evidence"]["replayed"], true);
+    assert_eq!(core.operate("cut.get", &owner, &json!({})).await.unwrap()["result"], before["result"]);
+    assert_eq!(core.operate("native.publish", &owner, &publish(staged)).await.unwrap_err().status, 409);
+    assert_eq!(core.operate("native.begin", &owner, &payload).await.unwrap_err().status, 409);
+    db.close().await;
 }
 
 #[tokio::test]

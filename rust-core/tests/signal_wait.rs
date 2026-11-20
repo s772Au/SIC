@@ -502,8 +502,8 @@ async fn completion(State(mock): State<Mock>, Json(body): Json<Value>) -> Json<V
             "arguments":arguments.to_string()}}),
         ];
         if mock.mixed {
-            calls.push(json!({"id":"decision-tool","type":"function","function":{"name":"sic_decision_read",
-            "arguments":"{\"view\":\"Working on\"}"}}));
+            calls.push(json!({"id":"status-tool","type":"function","function":{"name":"sic_signal_status",
+            "arguments":"{}"}}));
         }
         json!({"role":"assistant","content":null,"tool_calls":calls})
     } else {

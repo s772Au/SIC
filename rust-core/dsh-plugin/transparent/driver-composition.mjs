@@ -1,6 +1,6 @@
 import {createHarnessEditorDriver} from './editor-driver.mjs';
 import {jsonSnapshot} from './session-records.mjs';
-import {readNativeSourcePage} from './source-page.mjs';
+import {ARCHIVE_OPS,readEditorOperations,readNativeSourcePage,sharedOperationIds,sourcePageToolResult} from './source-page.mjs';
 import {editorCapabilities} from './edit-capabilities.mjs';
 
 export async function composeEditorDriver({ctx,cfg,store,clientFor,bindingFor,recordSession}){
@@ -12,8 +12,11 @@ export async function composeEditorDriver({ctx,cfg,store,clientFor,bindingFor,re
       if(!binding?.chain_id||!binding.scope_id)throw Error('Editor host binding revoked');
       const source=await clientFor(binding).get({source_id:assignment.source.source_id},assignment.signal),ids=source.binding?.editable_unit_ids;
       if(!Array.isArray(ids))throw Error('Core persistent Editor scope missing');
+      const readOnly=sharedOperationIds((assignment.originalOptions??assignment.options)?.tools,assignment.shared_messages);
+      const allowed=binding.editor_allowed_tools??cfg.editorAllowedTools??['sic_edit_blocks','sic_source_text_page',...(readOnly.length?[ARCHIVE_OPS]:[])];
       return{role:'EDITOR',scope_id:source.source_id,source_id:source.source_id,source_digest:source.source_digest,
-        expected_version:source.version,assigned_unit_ids:ids,allowed_tool_names:binding.editor_allowed_tools??cfg.editorAllowedTools??['sic_edit_blocks','sic_source_text_page'],
+        expected_version:source.version,assigned_unit_ids:ids,allowed_tool_names:allowed,
+        ...(allowed.includes(ARCHIVE_OPS)?{read_only_cb_ids:readOnly}:{}),
         edit_capabilities:editorCapabilities(binding,source),readable_sources:binding.editor_readable_sources??[]};
     },
     record:async event=>{
@@ -27,7 +30,11 @@ export async function composeEditorDriver({ctx,cfg,store,clientFor,bindingFor,re
       if(!auth.allowed_tool_names.includes(execution.name))throw Error('Editor tool not activated');
       if(execution.name==='sic_source_text_page'){
         const core=clientFor(bindingFor(assignment.invocation.session_id));
-        return{isError:false,content:[{type:'text',text:JSON.stringify(await readNativeSourcePage({core,authority:auth,args,signal:execution.signal}))}]};
+        return sourcePageToolResult(()=>readNativeSourcePage({core,authority:auth,args,signal:execution.signal}));
+      }
+      if(execution.name===ARCHIVE_OPS){
+        const core=clientFor(bindingFor(assignment.invocation.session_id));
+        return sourcePageToolResult(()=>readEditorOperations({core,authority:auth,args,signal:execution.signal}));
       }
       const editorAgent=cfg.actualEditorAgent?.(auth,assignment);
       if(!editorAgent||bindingFor(editorAgent.session.id,editorAgent)?.role!=='EDITOR')throw Error('actual authorized Editor Agent required for native execution');

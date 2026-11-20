@@ -3,8 +3,10 @@ import {digest,wireDigest} from './transport.mjs';
 import {jsonSnapshot} from './session-records.mjs';
 import {projectHarnessContext} from './context-project.mjs';
 import {createHarnessEditorDriver} from './editor-driver.mjs';
-import {pageSourceText} from './source-page.mjs';
+import {ARCHIVE_OPS,pageSourceText,readEditorOperations,sharedOperationIds,SourcePageRequestError,sourcePageToolResult} from './source-page.mjs';
 import {assertImageDeliveryDisabled} from './image-compression.mjs';
+import {materializeWithEditor} from './edit-capabilities.mjs';
+import {normalizeEditorDelivery} from './editor-delivery.mjs';
 
 const OPS=['KEEP','DELETE','FLAG','REORDER','COMPRESS','REPLACE','ADD'];
 const CHANNELS=['P','I'];
@@ -32,12 +34,12 @@ export function createHostHierarchyRuntime({ctx,cfg,api,system,store,clientFor,b
     if(options.system!==undefined&&options.system!==system)throw Error('unreviewed one-shot hierarchy system prompt');
     if(options.system===undefined&&!history.some(message=>message.role==='system'))history.unshift(api.freezeMessage({id:randomUUID(),role:'system',source:{kind:'system-prompt'},content:[{type:'text',text:system}]}));
     if(!history.some(message=>message.source?.kind==='runtime-context'))history.push(api.createUserMessage({source:{kind:'runtime-context',form:'snapshot',sections:[]},content:[{type:'text',text:'Current Harness context.'}]}));
-    return {...options,sessionId:agent.session.id,messages:history,tools:options.tools??ctx.tools.schemas(agent),signal};
+    return {...options,sessionId:agent.session.id,messages:history,tools:options.tools??(await ctx.systemPrompt.assemble({scope:agent})).tools,signal};
   }
   function policyFor(input,intent){
     const configured=cfg.hierarchyPolicy??{},max=configured.max_level??8;
     if(!Number.isSafeInteger(max)||max<2||max>128)throw Error('hierarchy max_level must be between 2 and 128');
-    const flush=['manual','context-overflow'].includes(input.trigger);
+    const flush=['manual','context-overflow','projected-pressure'].includes(input.trigger);
     const max_level=flush?Math.min(max,Math.max(2,intent.active_level+1)):max;
     const level_batch_sizes={};
     for(let level=2;level<=max_level;level++)level_batch_sizes[level]=configured.level_batch_sizes?.[level]??8;
@@ -80,7 +82,11 @@ export function createHostHierarchyRuntime({ctx,cfg,api,system,store,clientFor,b
             if(dispatched>=maximum)throw Error('hierarchy Host Editor work budget exhausted; durable plan retained');
             const options=await optionsFor(),cut=await core.operate('cut.get',{},signal);
             const layout=await projectHarnessContext({options,history:options.messages,cut,requestId,api,system,imageCompression});
-            const claim_id=digest(['hierarchy-editor',binding.chain_id,requestId,job.job_id,editor]);
+            const readOnly=sharedOperationIds(options.tools,layout.shared_messages);
+            const claimParts=['hierarchy-editor',binding.chain_id,requestId,job.job_id,editor];
+            const recovered=view.host_editor?.recovered_attempts?.[editor];
+            if(recovered)claimParts.push(recovered.claim_id);
+            const claim_id=digest(claimParts);
             await store.recordTrace(sessionId,traceSource,{stage:'hierarchy-plan',job_id:job.job_id,editor,claim_id,source_id:view.source_id,level:view.level,base_cut:view.base_cut});
             const claimed=await core.operate('edit.host.claim',{job_id:job.job_id,editor,claim_id},signal);
             if(claimed.execute!==true){
@@ -96,7 +102,9 @@ export function createHostHierarchyRuntime({ctx,cfg,api,system,store,clientFor,b
               const current=await core.operate('edit.host.get',{job_id:job.job_id,editor},signal),attempt=attemptOf(current,editor);
               if(!current.fresh||attempt?.claim_id!==claim_id||attempt.status!=='claimed'||current.source_digest!==source.source_digest||current.version!==source.version)throw Error('hierarchy Editor scope or claim is stale');
               return {role:'EDITOR',scope_id:job.job_id+':'+editor,source_id:source.source_id,source_digest:source.source_digest,
-                expected_version:source.version,assigned_unit_ids:current.assigned_unit_ids,allowed_tool_names:['sic_edit_blocks','sic_source_text_page'],
+                expected_version:source.version,assigned_unit_ids:current.assigned_unit_ids,
+                allowed_tool_names:['sic_edit_blocks','sic_source_text_page',...(readOnly.length?[ARCHIVE_OPS]:[])],
+                ...(readOnly.length?{read_only_cb_ids:readOnly}:{}),
                 edit_capabilities:capabilitiesFor(current,currentBinding),job_id:job.job_id,editor,level:current.level,claim_id,
                 editor_instructions:Object.fromEntries(Object.entries(current.editor_instructions??{}).filter(([_key,value])=>value!==null&&value!==undefined))};
             };
@@ -106,23 +114,45 @@ export function createHostHierarchyRuntime({ctx,cfg,api,system,store,clientFor,b
                   await store.recordTrace(sessionId,traceSource,{...jsonSnapshot(event),job_id:job.job_id,editor,level:claimed.level});
                   if(event.stage!=='editor-chunk')await recordSession(agent.session,'sic/hierarchy-editor',{job_id:job.job_id,editor,source_id:source.source_id,trace_source_id:traceSource,stage:event.stage,round:event.round});
                 },executeNativeTool:async execution=>{
-                  await authorize();const args=execution.arguments;
-                  if(execution.name!=='sic_source_text_page'||args.source_id!==source.source_id||!claimed.assigned_unit_ids.includes(args.unit_id))throw Error('hierarchy source page outside assigned frozen WB');
-                  const offset=args.offset??0,limit=args.limit??4096;
-                  if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>8192)throw Error('invalid hierarchy source page');
-                  const unit=source.units.find(unit=>unit.unit_id===args.unit_id),text=unit.text;
-                  return {isError:false,content:[{type:'text',text:JSON.stringify({source_id:source.source_id,unit_id:args.unit_id,offset,...pageSourceText(text,offset,limit)})}]};
+                  const authority=await authorize(),args=execution.arguments;
+                  return sourcePageToolResult(async()=>{
+                    if(execution.name===ARCHIVE_OPS)return readEditorOperations({core,authority,args,signal:execution.signal});
+                    if(execution.name!=='sic_source_text_page'||args?.source_id!==source.source_id||!claimed.assigned_unit_ids.includes(args?.unit_id))throw new SourcePageRequestError('The requested hierarchy page is outside the assigned frozen WB.');
+                    const offset=args.offset??0,limit=args.limit??4096;
+                    if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>8192)throw new SourcePageRequestError('Invalid hierarchy source page arguments.');
+                    const unit=source.units.find(unit=>unit.unit_id===args.unit_id);
+                    return {source_id:source.source_id,unit_id:args.unit_id,offset,...pageSourceText(unit.text,offset,limit)};
+                  });
                 }});
-              const proposed=await driver({source,invocation:{actor:cfg.actor,session_id:sessionId,request_id:requestId,role:'EDITOR'},signal,
+              const materialize=(args,signal)=>imageCompression?imageCompression.prepare({args,history:options.messages,sessionId,signal}):assertImageDeliveryDisabled(args);
+              const archived=input.recoveredDelivery;
+              let delivery;
+              if(archived?.job_id===job.job_id&&archived.editor===editor){
+                const authority=await authorize();
+                if(archived.source_id!==authority.source_id||archived.source_digest!==authority.source_digest
+                  ||JSON.stringify(archived.assigned_unit_ids)!==JSON.stringify(authority.assigned_unit_ids))throw Error('Archived hierarchy delivery does not match the reclaimed Editor scope');
+                delivery=await materialize(normalizeEditorDelivery(archived.arguments),signal);
+                await store.recordTrace(sessionId,traceSource,{stage:'editor-delivery-recovered',job_id:job.job_id,editor,source_id:source.source_id,claim_id});
+              }else delivery=await materializeWithEditor(driver,{source,invocation:{actor:cfg.actor,session_id:sessionId,request_id:requestId,role:'EDITOR'},signal,
                 originalOptions:options,shared_messages:layout.shared_messages,runtime_sections:layout.runtime_sections,instant_message:layout.instant_message,
-                image_compression:imageCompression?.offer(options.messages)});
-              const delivery=imageCompression?await imageCompression.prepare({args:proposed,history:options.messages,sessionId,signal}):assertImageDeliveryDisabled(proposed);
+                image_compression:imageCompression?.offer(options.messages),reference_shared:true,capacity_pressure:input.trigger==='projected-pressure'},materialize);
               await authorize();
               try{await core.operate('edit.host.submit',{job_id:job.job_id,editor,claim_id,ops:delivery.ops,pvi:delivery.pvi},signal);}
               catch(error){const current=await core.operate('edit.host.get',{job_id:job.job_id,editor});if(attemptOf(current,editor)?.status!=='completed')throw error;}
               jobs.push({job_id:job.job_id,editor,source_id:source.source_id,claim_id,level:claimed.level});
             }catch(error){
-              try{const current=await core.operate('edit.host.get',{job_id:job.job_id,editor});if(attemptOf(current,editor)?.status==='claimed')await core.operate('edit.host.fail',{job_id:job.job_id,editor,claim_id,reason:'original Harness Editor did not deliver an acknowledged valid submission'});}catch{}
+              try{
+                const current=await core.operate('edit.host.get',{job_id:job.job_id,editor});
+                if(attemptOf(current,editor)?.status==='claimed'){
+                  await core.operate('edit.host.fail',{job_id:job.job_id,editor,claim_id,reason:'original Harness Editor did not deliver an acknowledged valid submission'});
+                  // This DSH adapter outcome is produced during local request
+                  // preparation. The next native attempt uses offloaded images.
+                  const failure=error instanceof api.LlmError?error.failure:null;
+                  if(failure&&failure.code===api.IMAGE_OFFLOAD_REQUIRED_CODE&&Number.isSafeInteger(failure.offloadImages)&&failure.offloadImages>0){
+                    await core.operate('edit.host.reopen',{job_id:job.job_id,editor,claim_id,confirm:true,reason:'Native adapter requested image offload before Provider dispatch'});
+                  }
+                }
+              }catch{}
               throw error;
             }
           }

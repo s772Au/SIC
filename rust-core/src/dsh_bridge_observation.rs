@@ -310,6 +310,9 @@ impl DshBridge {
                     "decision_changed",
                     "Decision revision changed or a model call is active",
                 ),
+                "feature_disabled" => {
+                    DshBridgeError::conflict("feature_disabled", "Decision tree is disabled")
+                }
                 "invalid" => DshBridgeError::invalid("Decision event was rejected"),
                 "forbidden" => DshBridgeError {
                     status: StatusCode::FORBIDDEN,

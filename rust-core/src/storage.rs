@@ -1,6 +1,7 @@
 //! Transactional storage for the Rust core. Legacy databases are never opened
 //! for writing implicitly; import must be an explicit, separately verified step.
 use crate::error::{CoreError, Result};
+use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{
@@ -8,7 +9,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
 };
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     fs::{File, OpenOptions},
     path::{Path, PathBuf},
     sync::{
@@ -97,6 +98,13 @@ const SCHEMA: &[&str] = &[
     "CREATE TABLE IF NOT EXISTS bridge_turns(actor TEXT NOT NULL,session_key TEXT NOT NULL,fingerprint TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(actor,session_key,fingerprint))",
     "CREATE TABLE IF NOT EXISTS host_tool_hosts(id TEXT PRIMARY KEY,state TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS host_tool_tasks(id TEXT PRIMARY KEY,state TEXT NOT NULL)",
+];
+
+const NATIVE_OBJECT_INDEXES: &[&str] = &[
+    "CREATE INDEX IF NOT EXISTS native_versions_by_source ON objects(json_extract(data,'$.source_id'), CAST(json_extract(data,'$.version') AS INTEGER) DESC) WHERE kind='native_version'",
+    "CREATE INDEX IF NOT EXISTS native_publications_by_source ON objects(json_extract(data,'$.source_id')) WHERE kind='native_publication'",
+    "CREATE INDEX IF NOT EXISTS native_projections_by_source ON objects(json_extract(data,'$.source_id')) WHERE kind='native_i_projection'",
+    "CREATE INDEX IF NOT EXISTS native_sources_by_core_root ON objects(json_extract(data,'$.core_source_id')) WHERE kind='native_source'",
 ];
 
 impl Store {
@@ -220,13 +228,21 @@ impl Store {
         let canonical_path = path
             .canonicalize()
             .map_err(|_| CoreError::invalid("cannot resolve database path"))?;
-        Ok(Self {
+        let store = Self {
             pool: SqlitePoolOptions::new()
                 .max_connections(max_connections)
                 .connect_with(options)
                 .await?,
             bridge_guard_state: bridge_guard_state(Some(bridge_lock_path(&canonical_path))),
-        })
+        };
+        // This is a verified Rust database. Index creation changes neither
+        // immutable records nor their digests and is safe to repeat on reopen.
+        let mut tx = store.begin().await?;
+        for statement in NATIVE_OBJECT_INDEXES {
+            sqlx::query(statement).execute(&mut *tx).await?;
+        }
+        tx.commit().await?;
+        Ok(store)
     }
 
     /// Acquire the single DSH bridge owner for this Store. Construction of a
@@ -272,7 +288,7 @@ impl Store {
 
     async fn initialize(&self) -> Result<()> {
         let mut tx = self.begin().await?;
-        for statement in SCHEMA {
+        for statement in SCHEMA.iter().chain(NATIVE_OBJECT_INDEXES) {
             sqlx::query(statement).execute(&mut *tx).await?;
         }
         sqlx::query("INSERT INTO sic_rust_meta(key,value) VALUES('schema','sic-rust-core-v1')")
@@ -331,118 +347,227 @@ pub async fn get_object(
     id: &str,
     expected_kind: Option<&str>,
 ) -> Result<Value> {
-    let mut stack = vec![(id.to_owned(), expected_kind.map(str::to_owned))];
-    let mut visited = HashSet::new();
-    let mut root = None;
-    while let Some((current, expected)) = stack.pop() {
-        if !visited.insert(current.clone()) {
-            continue;
+    VerifiedObjects::default().read(conn, id, expected_kind).await
+}
+
+/// Reuse dependency checks within one read snapshot. A caller must never carry
+/// this across transactions or a revocation write. JSON bodies are not cached.
+#[derive(Default)]
+pub(crate) struct VerifiedObjects {
+    kinds: HashMap<String, String>,
+    archive_board: Option<Option<String>>,
+}
+
+#[derive(Deserialize)]
+struct SourceDependencies {
+    #[serde(default)]
+    dependencies: Vec<String>,
+    #[serde(default)]
+    cb_dependencies: Vec<String>,
+    #[serde(default)]
+    native_source_dependencies: Vec<String>,
+    #[serde(default)]
+    native_i_board_id: Option<String>,
+}
+
+impl VerifiedObjects {
+    pub(crate) fn in_archive_scope(board: Option<&str>) -> Self {
+        Self { kinds: HashMap::new(), archive_board: Some(board.map(str::to_owned)) }
+    }
+
+    fn check_archive_board(&self, origin: Option<&str>) -> Result<()> {
+        if let (Some(current), Some(origin)) = (&self.archive_board, origin)
+            && current.as_deref() != Some(origin)
+        {
+            return Err(CoreError::forbidden("archived source board is no longer bound"));
         }
-        let revoked: Option<i64> = sqlx::query_scalar("SELECT 1 FROM revocations WHERE id=?")
-            .bind(&current)
-            .fetch_optional(&mut *conn)
-            .await?;
-        if revoked.is_some() {
-            return Err(CoreError::forbidden("object or dependency access revoked"));
+        Ok(())
+    }
+
+    pub(crate) async fn verify(
+        &mut self,
+        conn: &mut SqliteConnection,
+        id: &str,
+        kind: &str,
+    ) -> Result<()> {
+        match self.kinds.get(id) {
+            Some(verified) if verified != kind => Err(CoreError::new("not_found", "object kind mismatch", 404)),
+            Some(_) => Ok(()),
+            None => self.walk(conn, id, Some(kind), false).await.map(|_| ()),
         }
-        let row = sqlx::query("SELECT kind,data,digest FROM objects WHERE id=?")
-            .bind(&current)
-            .fetch_optional(&mut *conn)
-            .await?
-            .ok_or_else(|| CoreError::new("not_found", "object not found", 404))?;
-        let kind: String = row.try_get("kind")?;
-        let data: String = row.try_get("data")?;
-        let checksum: String = row.try_get("digest")?;
-        if expected.as_ref().is_some_and(|value| value != &kind) {
-            return Err(CoreError::new("not_found", "object kind mismatch", 404));
-        }
-        if sha256(data.as_bytes()) != checksum {
-            return Err(CoreError::new(
-                "integrity_error",
-                "stored object digest mismatch",
-                500,
-            ));
-        }
-        let value: Value = serde_json::from_str(&data)?;
-        if root.is_none() {
-            root = Some(value.clone());
-        }
-        let mut push_values = |key: &str, dep_kind: Option<&str>| -> Result<()> {
-            if let Some(values) = value.get(key) {
-                let values = values
-                    .as_array()
-                    .ok_or_else(|| CoreError::invalid("invalid object dependency list"))?;
-                for value in values {
-                    let dep = value
-                        .as_str()
-                        .ok_or_else(|| CoreError::invalid("invalid object dependency identity"))?;
-                    stack.push((dep.to_owned(), dep_kind.map(str::to_owned)));
+    }
+
+    pub(crate) async fn read(
+        &mut self,
+        conn: &mut SqliteConnection,
+        id: &str,
+        expected_kind: Option<&str>,
+    ) -> Result<Value> {
+        self.walk(conn, id, expected_kind, true).await
+    }
+
+    async fn walk(
+        &mut self,
+        conn: &mut SqliteConnection,
+        id: &str,
+        expected_kind: Option<&str>,
+        return_root: bool,
+    ) -> Result<Value> {
+        let mut stack = vec![(id.to_owned(), expected_kind.map(str::to_owned))];
+        let mut visited = HashMap::<String, String>::new();
+        let mut root = None;
+        let mut first = true;
+        while let Some((current, expected)) = stack.pop() {
+            let needs_value = first && return_root;
+            first = false;
+            let known = visited.get(&current).or_else(|| self.kinds.get(&current));
+            if let Some(kind) = known {
+                if expected.as_ref().is_some_and(|value| value != kind) {
+                    return Err(CoreError::new("not_found", "object kind mismatch", 404));
                 }
             }
-            Ok(())
-        };
-        match kind.as_str() {
-            "native_source" => {
-                push_values("protected_cb_ids", Some("cb"))?;
-                if let Some(cut)=value["adopted_i"]["cut_id"].as_str() {stack.push((cut.to_owned(),Some("cut".into())));}
-                for provenance in native_collection_proofs(&value) {
-                    for (key,kind) in [("lifecycle_object_id","harness_object"),("collection_receipt_id","harness_event")] {
-                        let id = provenance[key].as_str().ok_or_else(||CoreError::invalid("native provenance dependency missing"))?;
-                        stack.push((id.to_owned(),Some(kind.into())));
+            if !needs_value && known.is_some() {
+                continue;
+            }
+            let revoked: Option<i64> = sqlx::query_scalar("SELECT 1 FROM revocations WHERE id=?")
+                .bind(&current)
+                .fetch_optional(&mut *conn)
+                .await?;
+            if revoked.is_some() {
+                return Err(CoreError::forbidden("object or dependency access revoked"));
+            }
+            let row = sqlx::query("SELECT kind,data,digest FROM objects WHERE id=?")
+                .bind(&current)
+                .fetch_optional(&mut *conn)
+                .await?
+                .ok_or_else(|| CoreError::new("not_found", "object not found", 404))?;
+            let kind: String = row.try_get("kind")?;
+            let data: String = row.try_get("data")?;
+            let checksum: String = row.try_get("digest")?;
+            if expected.as_ref().is_some_and(|value| value != &kind) {
+                return Err(CoreError::new("not_found", "object kind mismatch", 404));
+            }
+            if sha256(data.as_bytes()) != checksum {
+                return Err(CoreError::new(
+                    "integrity_error",
+                    "stored object digest mismatch",
+                    500,
+                ));
+            }
+            // Verify the entire immutable JSON digest even when only its
+            // dependency references are needed. Large native sidecars stay
+            // out of the Value tree when traversing archived source links.
+            if kind == "source" && !needs_value {
+                let dependencies: SourceDependencies = serde_json::from_str(&data)?;
+                self.check_archive_board(dependencies.native_i_board_id.as_deref())?;
+                for (ids, child_kind) in [
+                    (dependencies.dependencies, "source"),
+                    (dependencies.cb_dependencies, "cb"),
+                    (dependencies.native_source_dependencies, "native_source"),
+                ] {
+                    stack.extend(ids.into_iter().map(|id| (id, Some(child_kind.to_owned()))));
+                }
+                visited.insert(current, kind);
+                continue;
+            }
+            let value: Value = serde_json::from_str(&data)?;
+            self.check_archive_board(match kind.as_str() {
+                "source" => value["native_i_board_id"].as_str(),
+                "native_source" => value["adopted_i"]["board_id"].as_str(),
+                "cut" => value["board_id"].as_str(),
+                _ => None,
+            })?;
+            if known.is_some() {
+                root = Some(value);
+                continue;
+            }
+            visited.insert(current, kind.clone());
+            let mut push_values = |key: &str, dep_kind: Option<&str>| -> Result<()> {
+                if let Some(values) = value.get(key) {
+                    let values = values
+                        .as_array()
+                        .ok_or_else(|| CoreError::invalid("invalid object dependency list"))?;
+                    for value in values {
+                        let dep = value
+                            .as_str()
+                            .ok_or_else(|| CoreError::invalid("invalid object dependency identity"))?;
+                        stack.push((dep.to_owned(), dep_kind.map(str::to_owned)));
                     }
                 }
-                if let Some(dep) = value.get("core_source_id").and_then(Value::as_str) {
-                    stack.push((dep.to_owned(), Some("source".into())));
+                Ok(())
+            };
+            match kind.as_str() {
+                "native_source" => {
+                    push_values("protected_cb_ids", Some("cb"))?;
+                    if let Some(cut)=value["adopted_i"]["cut_id"].as_str() {stack.push((cut.to_owned(),Some("cut".into())));}
+                    for provenance in native_collection_proofs(&value) {
+                        for (key,kind) in [("lifecycle_object_id","harness_object"),("collection_receipt_id","harness_event")] {
+                            let id = provenance[key].as_str().ok_or_else(||CoreError::invalid("native provenance dependency missing"))?;
+                            stack.push((id.to_owned(),Some(kind.into())));
+                        }
+                    }
+                    if let Some(dep) = value.get("core_source_id").and_then(Value::as_str) {
+                        stack.push((dep.to_owned(), Some("source".into())));
+                    }
                 }
-            }
-            "native_i_projection" => {
-                for (key,kind) in [("source_id","native_source"),("publication_id","native_publication"),("cut_id","cut")] {
-                    if let Some(id)=value[key].as_str() {stack.push((id.to_owned(),Some(kind.into())));}
+                "native_i_projection" => {
+                    for (key,kind) in [("source_id","native_source"),("publication_id","native_publication"),("cut_id","cut")] {
+                        if let Some(id)=value[key].as_str() {stack.push((id.to_owned(),Some(kind.into())));}
+                    }
                 }
-            }
-            "native_version" | "native_publication" => {
-                let source = value.get("source_id").and_then(Value::as_str)
-                    .ok_or_else(|| CoreError::invalid("native source dependency missing"))?;
-                stack.push((source.to_owned(), Some("native_source".into())));
-                if let Some(cb) = value.get("cb_id").and_then(Value::as_str) {
-                    stack.push((cb.to_owned(), Some("cb".into())));
+                "native_version" | "native_publication" => {
+                    let source = value.get("source_id").and_then(Value::as_str)
+                        .ok_or_else(|| CoreError::invalid("native source dependency missing"))?;
+                    stack.push((source.to_owned(), Some("native_source".into())));
+                    if let Some(cb) = value.get("cb_id").and_then(Value::as_str) {
+                        stack.push((cb.to_owned(), Some("cb".into())));
+                    }
                 }
-            }
-            "source" => {
-                push_values("dependencies", Some("source"))?;
-                push_values("cb_dependencies", Some("cb"))?;
-                push_values("native_source_dependencies", Some("native_source"))?;
-            }
-            "cb" => push_values("source_ids", Some("source"))?,
-            "checkpoint" => {
-                let cut = value
-                    .get("cut_id")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| CoreError::invalid("checkpoint cut missing"))?;
-                stack.push((cut.to_owned(), Some("cut".into())));
-            }
-            "cut" => {
-                if let Some(groups) = value.get("groups") {
-                    let groups = groups
-                        .as_object()
-                        .ok_or_else(|| CoreError::invalid("invalid cut groups"))?;
-                    for values in groups.values() {
-                        for source in values
-                            .as_array()
-                            .ok_or_else(|| CoreError::invalid("invalid cut sources"))?
-                        {
-                            let source = source
-                                .as_str()
-                                .ok_or_else(|| CoreError::invalid("invalid cut source identity"))?;
-                            stack.push((source.to_owned(), Some("source".into())));
+                "source" => {
+                    push_values("dependencies", Some("source"))?;
+                    push_values("cb_dependencies", Some("cb"))?;
+                    push_values("native_source_dependencies", Some("native_source"))?;
+                }
+                "cb" => push_values("source_ids", Some("source"))?,
+                "wb" if self.archive_board.is_some() => push_values("source_ids", Some("source"))?,
+                "checkpoint" => {
+                    let cut = value
+                        .get("cut_id")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| CoreError::invalid("checkpoint cut missing"))?;
+                    stack.push((cut.to_owned(), Some("cut".into())));
+                }
+                "cut" => {
+                    if let Some(groups) = value.get("groups") {
+                        let groups = groups
+                            .as_object()
+                            .ok_or_else(|| CoreError::invalid("invalid cut groups"))?;
+                        for values in groups.values() {
+                            for source in values
+                                .as_array()
+                                .ok_or_else(|| CoreError::invalid("invalid cut sources"))?
+                            {
+                                let source = source
+                                    .as_str()
+                                    .ok_or_else(|| CoreError::invalid("invalid cut source identity"))?;
+                                stack.push((source.to_owned(), Some("source".into())));
+                            }
                         }
                     }
                 }
+                _ => {}
             }
-            _ => {}
+            if needs_value {
+                root = Some(value);
+            }
+        }
+        self.kinds.extend(visited);
+        if return_root {
+            root.ok_or_else(|| CoreError::new("not_found", "object not found", 404))
+        } else {
+            Ok(Value::Null)
         }
     }
-    root.ok_or_else(|| CoreError::new("not_found", "object not found", 404))
 }
 
 pub async fn get_chain(conn: &mut SqliteConnection, id: &str, actor: &str) -> Result<Value> {
@@ -471,4 +596,30 @@ pub async fn save_chain(conn: &mut SqliteConnection, value: &Value) -> Result<()
     sqlx::query("INSERT INTO chains(id,state) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state")
         .bind(id).bind(json_text(value)?).execute(conn).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn verified_existing_store_rebuilds_native_lookup_indexes() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("existing-core.db");
+        let store = Store::create(&path).await.unwrap();
+        sqlx::query("DROP INDEX native_versions_by_source")
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        store.close().await;
+
+        let reopened = Store::open(&path).await.unwrap();
+        let steps = sqlx::query("EXPLAIN QUERY PLAN SELECT id FROM objects WHERE kind='native_version' AND json_extract(data,'$.source_id')=? ORDER BY CAST(json_extract(data,'$.version') AS INTEGER) DESC LIMIT 1")
+            .bind("native-source")
+            .fetch_all(&reopened.pool)
+            .await
+            .unwrap();
+        assert!(steps.iter().any(|step| step.get::<String, _>("detail").contains("native_versions_by_source")));
+        reopened.close().await;
+    }
 }

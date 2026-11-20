@@ -771,7 +771,7 @@ pub fn decode_host_owned(format: &str, request: &Value) -> Result<DecodedRequest
     // Keep persisted uN identities stable when adding native tool-output leaves.
     let mut tool_output_units = Vec::new();
     let (key, messages) = match format {
-        "openai-chat" | "anthropic-messages" | "dsh-messages" => ("messages", request.get("messages")),
+        "openai-chat" | "anthropic-messages" | "dsh-messages" | "pi-messages" | "opencode-messages" => ("messages", request.get("messages")),
         "openai-responses" => {
             if request.get("input").is_some_and(Value::is_string) {
                 add_unit(&mut units, &request["input"], vec![json!("input")])?;
@@ -817,7 +817,7 @@ pub fn decode_host_owned(format: &str, request: &Value) -> Result<DecodedRequest
             }
         }
         let role = message["role"].as_str().unwrap_or("");
-        if !matches!(role, "user" | "assistant" | "tool") {
+        if !matches!(role, "user" | "assistant" | "tool") && !(format == "pi-messages" && role == "toolResult") {
             continue; // system/developer/unknown roles are protected sidecar.
         }
         let content_path = path(&base, "content");
@@ -834,6 +834,22 @@ pub fn decode_host_owned(format: &str, request: &Value) -> Result<DecodedRequest
                 };
                 if text_kind && block["text"].is_string() {
                     add_unit(&mut units, &block["text"], path(&block_path, "text"))?;
+                } else if format == "opencode-messages" && role == "tool" && kind == "tool-result" {
+                    let result = &block["result"];
+                    let value_path = path(&path(&block_path, "result"), "value");
+                    match result["type"].as_str() {
+                        Some("text" | "error") if result["value"].is_string() => {
+                            add_unit(&mut units, &result["value"], value_path)?;
+                        }
+                        Some("content") => {
+                            for (part_index, part) in result["value"].as_array().into_iter().flatten().enumerate() {
+                                if part["type"] == "text" && part["text"].is_string() {
+                                    add_unit(&mut units, &part["text"], path(&path(&value_path, part_index), "text"))?;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 } else if format == "anthropic-messages" && role == "user" && kind == "tool_result"
                 {
                     let output = &block["content"];
@@ -871,7 +887,7 @@ pub fn decode_host_owned(format: &str, request: &Value) -> Result<DecodedRequest
 pub fn encode(decoded: &DecodedRequest) -> Result<Value, String> {
     if !matches!(
         decoded.format.as_str(),
-        "openai-chat" | "openai-responses" | "anthropic-messages" | "dsh-messages"
+        "openai-chat" | "openai-responses" | "anthropic-messages" | "dsh-messages" | "pi-messages" | "opencode-messages"
     ) {
         return Err(err("unsupported protocol format"));
     }

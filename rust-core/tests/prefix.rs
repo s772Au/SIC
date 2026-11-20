@@ -623,9 +623,7 @@ fn common_schema_contains_required_shared_operations_in_fixed_order() {
         .iter()
         .map(|tool| tool["function"]["name"].as_str().unwrap().to_owned())
         .collect();
-    assert_eq!(
-        names,
-        vec![
+    let mut expected = vec![
             "sic_edit_blocks",
             "sic_tool_update",
             "sic_tool_call",
@@ -656,8 +654,14 @@ fn common_schema_contains_required_shared_operations_in_fixed_order() {
             "sic_memory_replay",
             "sic_hierarchy_timeline",
             "sic_hierarchy_expand"
-        ]
-    );
+        ];
+    if !cfg!(feature = "decision-tree") {
+        expected.retain(|name| !matches!(*name, "sic_decision_read" | "sic_decision_write"));
+    }
+    assert_eq!(names, expected);
+    if !cfg!(feature = "decision-tree") {
+        return;
+    }
     let decision_read = tools
         .iter()
         .find(|tool| tool["function"]["name"] == "sic_decision_read")

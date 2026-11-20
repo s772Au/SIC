@@ -132,6 +132,7 @@ async fn configure_tool(core: &Core, ctx: &OperationContext) {
 }
 
 #[tokio::test]
+#[cfg(feature = "decision-tree")]
 async fn worker_can_record_a_decision_without_asserting_completion() {
     let response = tool_response(vec![tool_call(
         "decision-add",
@@ -154,6 +155,7 @@ async fn worker_can_record_a_decision_without_asserting_completion() {
 }
 
 #[tokio::test]
+#[cfg(feature = "decision-tree")]
 async fn worker_cannot_mark_decision_item_completed_without_host_attestation() {
     let response = tool_response(vec![tool_call(
         "decision-1",

@@ -209,15 +209,16 @@ pub(super) async fn derivations(
     make_derivations(&source, &material["volatile_index"], owner)
 }
 
-pub(super) async fn p_row_derivation(
+async fn p_row_derivation(
     conn: &mut SqliteConnection,
     agent: &Agent,
     row: &Value,
+    verified: &mut storage::VerifiedObjects,
 ) -> Result<Option<Value>> {
     let Some(id) = row["anchor"]["source_id"].as_str() else {
         return Ok(None);
     };
-    let source = storage::get_object(conn, id, Some("source")).await?;
+    let source = verified.read(conn, id, Some("source")).await?;
     if source["origin"]["kind"] != "volatile-continuation" {
         return Ok(None);
     }
@@ -249,6 +250,7 @@ pub(super) async fn p_source_links(
     conn: &mut SqliteConnection,
     agent: &Agent,
     anchor: &Value,
+    verified: &mut storage::VerifiedObjects,
 ) -> Result<Vec<Value>> {
     let mut stack = vec![(anchor.clone(), Vec::<String>::new())];
     let mut seen = BTreeSet::new();
@@ -258,7 +260,7 @@ pub(super) async fn p_source_links(
             links.push(json!({"anchor":anchor,"via_cb_ids":via}));
             continue;
         }
-        let Some(proof) = p_row_derivation(conn, agent, &json!({"anchor":anchor})).await? else {
+        let Some(proof) = p_row_derivation(conn, agent, &json!({"anchor":anchor}), verified).await? else {
             continue;
         };
         let identity = storage::digest(&json!([anchor["source_id"], proof["unit_id"]]))?;
@@ -266,7 +268,7 @@ pub(super) async fn p_source_links(
             return Err(CoreError::conflict("volatile derivation cycle"));
         }
         let owner = required_str(&proof, "owner_cb_id")?;
-        let owner_cb = storage::get_object(conn, owner, Some("cb")).await?;
+        let owner_cb = verified.read(conn, owner, Some("cb")).await?;
         let mut next = via;
         next.push(owner.to_owned());
         for source_anchor in proof["source_anchors"]

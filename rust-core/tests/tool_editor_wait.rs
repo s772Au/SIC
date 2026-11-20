@@ -4,11 +4,13 @@ use sic_core_rust::{
     core::{Core, OperationContext},
     storage::Store,
 };
-use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 use tempfile::tempdir;
 use tokio::sync::{Mutex, Notify};
+
+#[path = "common/delayed_tool.rs"]
+mod delayed_tool;
 
 #[derive(Clone, Default)]
 struct Mock {
@@ -168,13 +170,9 @@ async fn tool_finishing_first_waits_for_the_inflight_editor_before_worker_contin
         .expect("the Editor must reach the mock provider before the tool finishes");
     let dir = tempdir().unwrap();
     let log_path = dir.path().join("tool-wait.log");
-    let command = format!(
-        "Start-Sleep -Milliseconds 300; Set-Content -LiteralPath '{}' -Value REAL-WAIT-TOOL-DONE",
-        log_path.display()
-    );
+    let mut command = delayed_tool::command(300, Some((&log_path, "REAL-WAIT-TOOL-DONE")));
     let status = tokio::task::spawn_blocking(move || {
-        Command::new("pwsh")
-            .args(["-NoProfile", "-Command", &command])
+        command
             .status()
             .expect("real wait tool process must start")
     })

@@ -47,6 +47,7 @@ pub(super) async fn bindings(
     conn: &mut SqliteConnection,
     agent: &Agent,
     root: &str,
+    verified: &mut storage::VerifiedObjects,
 ) -> Result<Value> {
     let mut pending = vec![root.to_owned()];
     let mut visited = BTreeSet::new();
@@ -59,7 +60,7 @@ pub(super) async fn bindings(
         if !visited.insert(id.clone()) {
             continue;
         }
-        let cb = storage::get_object(conn, &id, Some("cb")).await?;
+        let cb = verified.read(conn, &id, Some("cb")).await?;
         let members = cb["members"]
             .as_array()
             .ok_or_else(|| CoreError::invalid("CB members missing"))?;
@@ -83,7 +84,7 @@ pub(super) async fn bindings(
             if !source_ids.insert(source_id.to_owned()) {
                 continue;
             }
-            let source = storage::get_object(conn, source_id, Some("source")).await?;
+            let source = verified.read(conn, source_id, Some("source")).await?;
             if source["origin"]["kind"] == "volatile-continuation" {
                 let owner = required_str(&source["origin"], "cb_id")?;
                 pending.push(owner.to_owned());
@@ -127,7 +128,7 @@ pub(super) async fn bindings(
         if !visited.insert(storage::digest(&json!([id, path, frame, scope]))?) {
             continue;
         }
-        let cb = storage::get_object(conn, &id, Some("cb")).await?;
+        let cb = verified.read(conn, &id, Some("cb")).await?;
         let index = material_index(conn, agent, &cb).await?;
         for row in index
             .as_array()
@@ -156,7 +157,7 @@ pub(super) async fn bindings(
             } else if key(&row["anchor"]["native"]["host_origin"])?.is_some() {
                 vec![json!({"anchor":row["anchor"],"via_cb_ids":[]})]
             } else {
-                higher_volatile::p_source_links(conn, agent, &row["anchor"]).await?
+                higher_volatile::p_source_links(conn, agent, &row["anchor"], verified).await?
             };
             for link in links {
                 let mut next = path.clone();
@@ -173,7 +174,7 @@ pub(super) async fn bindings(
                     if next.iter().any(|item| item == child) {
                         return Err(CoreError::conflict("CB P ancestry cycle"));
                     }
-                    let child_cb = storage::get_object(conn, child, Some("cb")).await?;
+                    let child_cb = verified.read(conn, child, Some("cb")).await?;
                     let child_frame = if direct_child.is_some() && local.len() == 1 {
                         let start = field_u64(&local[0], "utf8_start")? as usize;
                         let end = field_u64(&local[0], "utf8_end")? as usize;

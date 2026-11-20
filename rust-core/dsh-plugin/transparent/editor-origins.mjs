@@ -1,8 +1,9 @@
 // Source identity belongs to the host/Core, not to the Editor's current role.
 import {nativeToolResults} from './tool-linkage.mjs';
-export function assignedEditorUnits(source,units,options,shared){
+export function assignedEditorUnits(source,units,options,shared,{referenceShared=false}={}){
  const history=options.messages??[],records=source.binding?.host_message_origins??[],pairs=nativeToolResults(history);
  const views=shared.filter(message=>message.source?.kind==='sic-origin-view').flatMap(message=>message.source.tool_origins??[]);
+ const sharedBlocks=referenceShared?shared.filter(message=>message.source?.kind==='sic-cb'):[];
  return units.map(unit=>{
   const origin=records.find(record=>record.unit_id===unit.unit_id);
   if(origin){
@@ -18,6 +19,11 @@ export function assignedEditorUnits(source,units,options,shared){
    return{...unit,host_origin};
   }
   const cb=unit.anchor?.native?.cb_id;
+  const position=cb===undefined?-1:sharedBlocks.findIndex(message=>message.source.cb_id===cb&&message.content.length===1&&message.content[0].text===unit.text);
+  if(position>=0){
+   const {text,...reference}=unit;
+   return{...reference,text_ref:{kind:'shared-cb',cb_id:cb,ordinal:position+1},host_origin:{kind:'adopted-context-block',cb_id:cb,tool_origins:views.filter(view=>view.cb_id===cb)}};
+  }
   return cb?{...unit,host_origin:{kind:'adopted-context-block',cb_id:cb,tool_origins:views.filter(view=>view.cb_id===cb)}}:unit;
  });
 }

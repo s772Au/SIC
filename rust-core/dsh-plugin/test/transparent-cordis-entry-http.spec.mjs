@@ -44,10 +44,11 @@ async function mountOriginalLoader(ctx,modules){
  assert.equal((await peer('@deepseek-ai/dsh-system-prompt')).renderPrompt,(await load('packages/core/system-prompt/lib/index.js')).renderPrompt);
  if(!process.env.SIC_TRANSPARENT_TEST_PACKAGE)assert.equal(await readFile(join(modules.folder,'cordis-entry.mjs'),'utf8'),await readFile(new URL('../transparent/cordis-entry.mjs',import.meta.url),'utf8'));
 }
-test('declarative Cordis JSON configuration loads the primary SDK plugin, persists binding and reopens without creating a second chain or Editor',{timeout:20000},async()=>{
+test('declarative Cordis SDK corrects a rejected edit before publishing once and reopens without replaying the Editor',{timeout:20000},async()=>{
  const host=await isolated({evidenceRoot:evidencePath('production-readiness-20261118/sdk-live/declarative')}),modules=await installedModules(),envName='SIC_DECLARATIVE_FIXTURE_'+randomUUID().replaceAll('-','');
  process.env[envName]=host.credential();const config={enabled:true,imageCompression:true,actor:'native-http-actor',coreURL:host.baseURL,credentialEnv:envName,projectionRoot:join(host.root,'projections'),bindingsFile:join(host.root,'bindings.json')};
- const human=api.createUserMessage({source:{kind:'user'},content:[{type:'text',text:'a durable native user task'}]});let events,editors=0,workers=0;
+ const human=api.createUserMessage({source:{kind:'user'},content:[{type:'text',text:'a durable native user task'}]});let events,boundChain,editors=0,workers=0;
+ const echoedDecision={revision:99,event_ids:['model-authored-id'],discovery_prompt:'model-authored prompt',views:{'Working on':['a real edit']}};
  async function run(resume,legacy=false){
   const ctx=new Context();let scope;try{
    await ctx.plugin(Runtime);await ctx.plugin(SystemPrompt,{includeHarnessIdentity:false});await ctx.plugin(ToolRuntime);
@@ -63,7 +64,20 @@ test('declarative Cordis JSON configuration loads the primary SDK plugin, persis
    ctx.provide('sessions',{get:id=>id===session.id?session:null,flush:async()=>{const file=await open(join(host.root,'session.jsonl'),'w');try{await file.writeFile(session.snapshotEvents().map(row=>JSON.stringify(row)).join('\n'));await file.sync();}finally{await file.close();}return true;}});
    await mountOriginalLoader(ctx,modules);
    class Model extends api.LlmAdapter{async *stream(options){
-    if(modules.editor.getEditorInvocation()){editors++;yield{type:'tool-call-delta',index:0,id:'delivery',name:'sic_edit_blocks',argumentsDelta:'{"ops":[],"pvi":{}}'};yield{type:'finish',reason:{kind:'tool-calls'}};return;}
+    if(modules.editor.getEditorInvocation()){
+      const wb=options.messages.find(message=>message.source?.kind==='sic-editor-wb');
+      const target=JSON.parse(wb.content[0].text).units[0].unit_id;
+      const append={op:'ADD',target,position:'after',content:'authorized insertion'};
+      if(++editors===1)append.unsupported_native_field=true;
+      else{
+       assert.equal(options.messages.at(-1).isError,true);
+       assert.match(options.messages.at(-1).content[0].text,/unknown editing field/);
+       const pending=await hostControlClient(declarativeHostConfig(config),boundChain).operate('cut.get',{});
+       assert.equal(pending.sequence,0);
+      }
+      yield{type:'tool-call-delta',index:0,id:'delivery-'+editors,name:'sic_edit_blocks',argumentsDelta:JSON.stringify({ops:[append],pvi:{I:{decision_tree:echoedDecision}}})};
+      yield{type:'finish',reason:{kind:'tool-calls'}};return;
+    }
     workers++;assert.equal(options.provider,'original-route');yield{type:'text-delta',text:'declarative SDK works'};yield{type:'finish',reason:{kind:'stop'}};
    }}ctx.llm.registerAdapter(['original-route'],new Model());
    if(legacy){const before=session.snapshotEvents();await assert.rejects(()=>modules.entry.apply(ctx,config),/independent explicit SIC migration/);assert.deepEqual(session.snapshotEvents(),before);return;}
@@ -71,15 +85,26 @@ test('declarative Cordis JSON configuration loads the primary SDK plugin, persis
    if(!resume)session.append('user/message',human,{surfaceOp:'append'});
    const system=await readFile(new URL('../transparent/bundle/fused.md',import.meta.url),'utf8'),activation=api.createUserMessage({source:{kind:'runtime-context',sections:[{name:'sic:activation',text:JSON.stringify({role:'WORKER',scope_id:'dsh:declarative-session'})}]},content:[{type:'text',text:'current'}]});
    const call=await ctx.llm.prepareCall({provider:'original-route',model:'original-model',maxTokens:128});
-   for await(const chunk of call.stream({...call.config,sessionId:session.id,messages:[api.createSystemMessage(system),activation,human],tools:ctx.tools.schemas(agent)}))if(chunk.type==='finish')assert.equal(chunk.reason.kind,'stop',JSON.stringify(chunk));
+   const {tools}=await ctx.systemPrompt.assemble({scope:agent});
+   assert.notDeepEqual(tools.map(tool=>tool.name),ctx.tools.schemas(agent).map(tool=>tool.name),'the AgentLoop prompt assembly sorts the native registry');
+   for await(const chunk of call.stream({...call.config,sessionId:session.id,messages:[api.createSystemMessage(system),activation,human],tools}))if(chunk.type==='finish')assert.equal(chunk.reason.kind,'stop',JSON.stringify(chunk));
    assert.equal(await ctx.sessions.flush(session),true);events=(await readFile(join(host.root,'session.jsonl'),'utf8')).split('\n').map(JSON.parse);
   }finally{if(scope)await scope.dispose();await ctx.fiber.dispose();}
  }
  try{
-  const first=await bindNativeSession(config,{sessionId:'declarative-session',create:true});assert.equal(first.replayed,false);
+  const first=await bindNativeSession(config,{sessionId:'declarative-session',create:true});boundChain=first.chain_id;assert.equal(first.replayed,false);
   const binding=await readHostBindings(declarativeHostConfig(config));assert.equal(binding.sessions['declarative-session'].chain_id,first.chain_id);
   const before=(await hostControlClient(declarativeHostConfig(config)).operate('chain.list',{})).routes.length;
-  await run(false,true);assert.equal(editors,0);assert.equal(workers,0);await run(false);assert.equal(editors,1);await run(true);assert.equal(editors,1);assert.equal(workers,2);
+  const chain=hostControlClient(declarativeHostConfig(config),first.chain_id),initial=(await chain.operate('chain.get',{})).decision;
+  await run(false,true);assert.equal(editors,0);assert.equal(workers,0);await run(false);assert.equal(editors,2);
+  const {decision}=await chain.operate('chain.get',{});
+  assert.deepEqual(decision,initial);
+  const cut=await chain.operate('cut.get',{});
+  assert.equal(cut.sequence,1);
+  assert.equal(cut.instant_views.decision_tree,undefined);
+  assert.doesNotMatch(cut.instant_view_text,/What have I missed/);
+  assert.match(cut.view.cbs[0].body,/authorized insertion/);
+  await run(true);assert.equal(editors,2);assert.equal(workers,2);
   const replay=await bindNativeSession(config,{sessionId:'declarative-session',create:true});assert.equal(replay.replayed,true);assert.equal(replay.chain_id,first.chain_id);
   assert.equal((await hostControlClient(declarativeHostConfig(config)).operate('chain.list',{})).routes.length,before);
   const configFile=join(host.root,'host-config.json');await writeFile(configFile,JSON.stringify(config));

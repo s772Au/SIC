@@ -8,6 +8,15 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
 const VIEWS: [&str; 4] = ["Working on", "Failed Before", "Not Tried Yet", "Overlooked"];
+pub(crate) const ENABLED: bool = cfg!(feature = "decision-tree");
+
+pub(crate) fn instant_for_model(value: &Map<String, Value>) -> Map<String, Value> {
+    let mut result = value.clone();
+    if !ENABLED {
+        result.remove("decision_tree");
+    }
+    result
+}
 
 fn err(message: &str) -> String {
     message.to_owned()

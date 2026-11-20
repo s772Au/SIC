@@ -45,7 +45,7 @@ test('actual Core HTTP plus common original LlmRuntime SDK route edits private A
   const assistant=api.freezeMessage({id:'caller',role:'assistant',source:{kind:'model',provider:'private-a',model:'model-private-a'},content:[{type:'tool-call',id:'collect-call',name:'job_output',arguments:'{}'}]}),first=api.createToolResultMessage({callId:'collect-call',isError:false,content:[{type:'text',text:collected.result.value.text+'\nfooter'}]}),second={id:'human-second',role:'user',content:[{type:'text',text:'second'}],source:{kind:'user'}};
   sessionAPI.appendPluginRecord(session,'plugin:sic/jobs/collection',{...collected.proof,message_id:first.id,call_id:'collect-call',material:{block_index:0,utf8_start:0,utf8_end:Buffer.byteLength(collected.result.value.text)}});
   async function send(history,provider='private-a'){
-   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:ctx.tools.schemas(agent),vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
+   const prepared=await ctx.llm.prepareCall({provider,model:'model-'+provider,temperature:0.3,maxTokens:128}),options={...prepared.config,sessionId:'session',messages:history,tools:(await ctx.systemPrompt.assemble({scope:agent})).tools,vendorOpaque:{unknown:9007199254740991,signature:'do not change'}};
    for await(const chunk of prepared.stream(options))if(chunk.type==='finish')assert.equal(chunk.reason.kind,'stop',JSON.stringify(chunk));return sent.at(-1);
   }
   const firstSent=await send([sys,runtime,assistant,first]);assert.equal(firstSent.frames.find(m=>m.source?.kind==='sic-cb').data[0].text,'short-first');step=2;

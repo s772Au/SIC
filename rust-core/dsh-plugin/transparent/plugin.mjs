@@ -12,14 +12,14 @@ import {createTurnGrantResolver} from './turn-authority.mjs';
 import {messagesOrigins,messagesBlockOrigins} from './origins.mjs';
 import {projectHarnessContext,contextRequestId} from './context-project.mjs';
 import {createSessionRecorder} from './session-records.mjs';
-import {materializeEditorDelivery} from './edit-capabilities.mjs';
+import {materializeEditorDelivery,materializeWithEditor} from './edit-capabilities.mjs';
 import {composeEditorDriver} from './driver-composition.mjs';
 import {getEditorInvocation} from './editor-invocation.mjs';
 import {repackageNativeContext} from './native-layout.mjs';
 import {nativeCollectionProvenances} from './collection-provenance.mjs';
 import {installSdkContext} from './sdk-context.mjs';
 import {getSdkAdoption} from './sdk-invocation.mjs';
-import {readNativeSourcePage} from './source-page.mjs';
+import {ARCHIVE_EXPAND,ARCHIVE_OPS,hasNativePageGrant,protectedWorkerText,readNativeSourcePage,SOURCE_PAGE,SOURCE_SEARCH} from './source-page.mjs';
 import {assertNativeJobsRuntime,installCoreJobsRuntime} from './jobs-runtime.mjs';
 import {createHostHierarchyRuntime} from './host-hierarchy.mjs';
 import {installCoreCompactionRuntime} from './compaction-runtime.mjs';
@@ -56,6 +56,8 @@ export async function apply(ctx,cfg={}){
   }):null;
   const lifetime=createInstallationLifetime(ctx);
   const clientFor=b=>createCoreClient({baseURL:cfg.coreURL,credential:cfg.credential,
+    requestTimeoutMs:cfg.coreRequestTimeoutMs,
+    operationTimeoutMs:cfg.coreOperationTimeoutMs,
     context:()=>({actor:cfg.actor,chain_id:b?.chain_id??null,allow_write:true,allow_model:false,allow_revoke:false}),fetchImpl:cfg.coreFetch??globalThis.fetch});
   const sessionAPI=cfg.sessionAPI??await import('@deepseek-ai/dsh-session');
   const lifecycleClient=clientFor(null),recordSession=await createSessionRecorder(ctx,sessionAPI);
@@ -125,21 +127,34 @@ export async function apply(ctx,cfg={}){
       if(imageSource)child.tools.register({...IMAGE_SOURCE_DESCRIPTOR,output:{schema:{},render:imageSource.render},execute:imageSource.execute});
       for(const descriptor of extras)child.tools.register({...descriptor,output:{schema:{},render:(_args,value)=>[{type:'text',text:JSON.stringify(value)}]},execute:async(args,exec)=>{
         const current=bindingFor(agent.session.id,agent),core=clientFor(current);
-        if(descriptor.name==='sic_source_text_page'){
+        if(descriptor.name===SOURCE_SEARCH){
+          if((current.role??'WORKER')!=='WORKER')throw Error('published archive search requires an authorized Worker');
+          return core.operate('memory.archive_search',args,exec.signal);
+        }
+        if(descriptor.name===ARCHIVE_EXPAND||descriptor.name===ARCHIVE_OPS){
+          if((current.role??'WORKER')!=='WORKER')throw Error('published archive navigation requires an authorized Worker');
+          return core.operate(descriptor.name===ARCHIVE_EXPAND?'memory.archive_expand':'memory.archive_ops',args,exec.signal);
+        }
+        if(descriptor.name===SOURCE_PAGE){
           const scope=current.role==='EDITOR'?current.editor_scope:null;
+          if(!scope&&current.role!=='EDITOR'&&!hasNativePageGrant(current.readable_sources,args)){
+            return core.operate('memory.source_text_page',args,exec.signal);
+          }
           return readNativeSourcePage({core,authority:{source_id:scope?.source_id,source_digest:scope?.source_digest,expected_version:scope?.version??scope?.expected_version,
             assigned_unit_ids:scope?.assigned_unit_ids??[],readable_sources:scope?.readable_sources??(current.role==='EDITOR'?current.editor_readable_sources:current.readable_sources)??[]},args,signal:exec.signal});
         }
         if(current.role!=='EDITOR'||!current.editor_scope)throw Error('Editor candidate not activated');
         const s=current.editor_scope,source=await core.get({source_id:s.source_id},exec.signal),delivery=await materializeEditorDelivery({core,source,args,allowedAnchors:s.editable_anchors,binding:current,signal:exec.signal});
         assertImageDeliveryDisabled(args);
-        const committed=await core.commit({source_id:s.source_id,expected_source_digest:s.source_digest,expected_version:s.version,edits:delivery.edits,delivery:{ops:args.ops,pvi:args.pvi},native_tool:{name:'sic_edit_blocks',arguments_sha256:digest(args)}},exec.signal);
-        return core.publish({source_id:s.source_id,expected_source_digest:s.source_digest,expected_version:committed.version,expected_cut:s.expected_cut,idempotency_key:s.idempotency_key,ops:args.ops,pvi:args.pvi},exec.signal);
+        const {edits,ops,pvi}=delivery;
+        const committed=await core.commit({source_id:s.source_id,expected_source_digest:s.source_digest,expected_version:s.version,edits,delivery:{ops,pvi},native_tool:{name:'sic_edit_blocks',arguments_sha256:digest(args)}},exec.signal);
+        return core.publish({source_id:s.source_id,expected_source_digest:s.source_digest,expected_version:committed.version,expected_cut:s.expected_cut,idempotency_key:s.idempotency_key,ops,pvi},exec.signal);
       }});
       child.tools.guard(exec=>{const role=auth().role;if(role==='WORKER'&&exec.name==='sic_edit_blocks')return'Editor-only candidate submission';
         if(role==='EDITOR'&&!['sic_edit_blocks','sic_source_text_page','read'].includes(exec.name))return'not authorized for Editor';
         if(role==='EDITOR'&&exec.name==='read'&&!bindingFor(agent.session.id,agent)?.editor_scope?.readable_paths?.includes(exec.arguments.file_path))return'outside Editor source projection';});
-      const tools=child.tools.schemas(agent);guards.set(agent,createAdmissionGuard({system,tools,authorization:auth}));
+      const {tools}=await child.systemPrompt.assemble({scope:agent});
+      guards.set(agent,createAdmissionGuard({system,tools,authorization:auth}));
       resolve();
     })().catch(reject);}));
   }
@@ -210,7 +225,8 @@ export async function apply(ctx,cfg={}){
       if(!leaf)throw Error('selected CB native leaf missing');return{cb_id:b.cb_id,native_anchors:[leaf.anchor]};
     });
     const masked=new Set(projection.masked_origins.map(o=>JSON.stringify([o.message_id,o.block_index])));
-    const editable=mode==='passthrough'?[]:origins.filter(o=>['user','model','tool'].includes(o.source_kind)&&!masked.has(JSON.stringify([o.message_id,o.block_index])));
+    const protectedText=protectedWorkerText(projection.original_history,cfg.preserveLatestWorkerUserMessage?.(agent)===true);
+    const editable=mode==='passthrough'?[]:origins.filter(o=>['user','model','tool'].includes(o.source_kind)&&!protectedText.has(o.message_id)&&!masked.has(JSON.stringify([o.message_id,o.block_index])));
     const mediaPointers=new Set(projection.masked_origins.filter(o=>o.kind==='media-pointer').map(o=>JSON.stringify([o.message_id,o.block_index])));
     const host_opaque_origins=messagesBlockOrigins(exchange.provenance.history,native,projection.media_bindings).filter(o=>o.type==='image').map(o=>{const[message_id,block_index]=JSON.parse(o.identity);return{message_id,block_index,native_anchor:o.anchor};});
     const provenances=nativeCollectionProvenances(projection.collection_records,origins,editable,binding.chain_id);
@@ -226,9 +242,10 @@ export async function apply(ctx,cfg={}){
       host_opaque_origins,host_message_origins:origins.filter(o=>!mediaPointers.has(JSON.stringify([o.message_id,o.block_index]))).map(o=>({message_id:o.message_id,block_index:o.block_index,native_anchor:o.anchor})),
       host_binding:{harness_raw_original:raw,origins,context_projection:projection}};
     const fetcher=createTransparentFetch({core,resolveInvocation:async()=>invocation,
-      selectEdits:async assigned=>materializeEditorDelivery({core,source:assigned.source,args:assertImageDeliveryDisabled(await editorDriver({...assigned,role:'EDITOR',system,provider:options.provider,model:options.model,tools:options.tools,originalOptions:options,
+      selectEdits:async assigned=>materializeWithEditor(editorDriver,{...assigned,role:'EDITOR',system,provider:options.provider,model:options.model,tools:options.tools,originalOptions:options,
         shared_messages:projection.shared_messages,runtime_sections:projection.runtime_sections,instant_message:projection.instant_message,
-        editable_units:assigned.source.units.filter(u=>editable.some(a=>JSON.stringify(a.anchor)===JSON.stringify(u.anchor)))})),allowedAnchors:invocation.editable_anchors,binding:bindingFor(sessionId),signal:assigned.signal}),
+        editable_units:assigned.source.units.filter(u=>editable.some(a=>JSON.stringify(a.anchor)===JSON.stringify(u.anchor)))},
+        (delivery,signal)=>materializeEditorDelivery({core,source:assigned.source,args:assertImageDeliveryDisabled(delivery),allowedAnchors:invocation.editable_anchors,binding:bindingFor(sessionId),signal})),
       adoptPublished:async({source,candidate_request,candidate_version,raw_candidate,publication,signal})=>{
         if(typeof exchange.provenance.serializeHistory!=='function')throw Error('original native serializer re-layout source patch required');
         const layoutId=digest({request_id:requestId,publication_id:publication.publication_id,kind:'published-context'});
@@ -251,5 +268,5 @@ export async function apply(ctx,cfg={}){
       fetchImpl:async request=>{exchange.request=request;await pinDispatch(exchange);return next();}});
     return fetcher(exchange.request);
   }
-  return{nativeFetch,projectContext,mountAgent,store,goalRuntime,jobsRuntime,sdkRuntime,hierarchy,compactionRuns};
+  return{nativeFetch,projectContext,mountAgent,store,goalRuntime,jobsRuntime,sdkRuntime,hierarchy,compactionRuns,imageCompression,editorDriver};
 }

@@ -1,6 +1,6 @@
 [package]
 name = "sic-core-rust"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 description = "Rust implementation of streaming incremental context editing"
 license = "MIT"
@@ -12,6 +12,9 @@ path = "src/lib.rs"
 [[bin]]
 name = "sic-core-rust"
 path = "src/main.rs"
+
+[features]
+decision-tree = []
 
 [dependencies]
 axum = "0.8"

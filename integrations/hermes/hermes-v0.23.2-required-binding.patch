@@ -1,0 +1,52 @@
+--- a/agent/agent_init.py
++++ b/agent/agent_init.py
+@@ -1751,13 +1751,23 @@
++def _requires_context_engine(config):
++    context = config.get("context") if isinstance(config, dict) else None
++    return isinstance(context, dict) and context.get("require_engine") is True
++
++
+ def _select_context_engine(_agent_cfg):
+     """Config-driven context engine: ``context.engine`` → plugins/context_engine/<name>/ →
+     general plugin system → None (built-in ContextCompressor)."""
+     from agent.safe_worker_policy import safe_worker_enabled
+
++    required = _requires_context_engine(_agent_cfg)
+     if safe_worker_enabled():
++        if required:
++            raise RuntimeError("Required context engine is unavailable in safe worker mode")
+         return None
+     _engine_name = "compressor"
+     with suppress(Exception):
+         _ctx_cfg = _agent_cfg.get("context", {}) if isinstance(_agent_cfg, dict) else {}
+         _engine_name = _ctx_cfg.get("engine", "compressor") or "compressor"
+     if _engine_name == "compressor":
++        if required:
++            raise RuntimeError("Required context engine must be explicitly selected")
+         return None  # built-in; don't auto-activate plugins
+@@ -1793,6 +1803,11 @@
+                     _engine_name, _copy_err,
+                 )
+
++    if required and (_selected_engine is None
++                     or getattr(_selected_engine, "require_context_selection", False) is not True
++                     or not callable(getattr(_selected_engine, "bind_session_state", None))):
++        raise RuntimeError("Required context engine is unavailable or lacks authenticated session binding")
++
+     if _selected_engine is None and not _copy_failed:
+         _ra().logger.warning(
+             "Context engine '%s' not found — falling back to built-in compressor", _engine_name
+@@ -1861,7 +1876,12 @@
+             custom_providers=_custom_providers,
+         )
+     _bind_session_state = getattr(agent.context_compressor, "bind_session_state", None)
+-    if callable(_bind_session_state):
++    if _requires_context_engine(_agent_cfg):
++        try:
++            _bind_session_state(session_db=session_db, session_id=agent.session_id)
++        except Exception:
++            raise RuntimeError("Required context engine session binding failed") from None
++    elif callable(_bind_session_state):
+         with suppress(Exception):
+             _bind_session_state(session_db=session_db, session_id=agent.session_id)
+     agent.compression_enabled = cs.enabled

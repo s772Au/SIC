@@ -2,6 +2,8 @@
 //! unsupported capabilities are rejected instead of being reported as done.
 #[path = "host_editor.rs"]
 mod host_editor;
+#[path = "archive_navigation.rs"]
+mod archive_navigation;
 #[path = "adoption_lineage.rs"]
 mod adoption_lineage;
 #[path = "host_origins.rs"]
@@ -278,6 +280,7 @@ const OPERATIONS: &[(&str, bool, bool)] = &[
     ("native.publish", true, false),
     ("native.preview", false, false),
     ("native.refresh_i", true, false),
+    ("native.abandon", true, false),
     ("chain.create", true, false),
     ("chain.list", false, false),
     ("chain.get", false, false),
@@ -330,6 +333,7 @@ const OPERATIONS: &[(&str, bool, bool)] = &[
     ("edit.host.claim", true, false),
     ("edit.host.submit", true, false),
     ("edit.host.fail", true, false),
+    ("edit.host.reopen", true, false),
     ("edit.program", true, false),
     ("edit.submit", true, false),
     ("edit.run", true, true),
@@ -354,6 +358,10 @@ const OPERATIONS: &[(&str, bool, bool)] = &[
     ("cut.get", false, false),
     ("memory.page", false, false),
     ("memory.search", false, false),
+    ("memory.archive_search", false, false),
+    ("memory.archive_expand", false, false),
+    ("memory.archive_ops", false, false),
+    ("memory.source_text_page", false, false),
     ("memory.replay", false, false),
     ("hierarchy.get", false, false),
     ("hierarchy.form", true, false),
@@ -544,7 +552,13 @@ async fn save_agent(conn: &mut SqliteConnection, agent: &Agent) -> Result<()> {
     storage::save_chain(conn, &as_value(agent)?).await
 }
 
-fn native_open_calls(format: &str, request: &Value) -> Vec<String> {
+fn native_open_calls(format: &str, request: &Value) -> Result<Vec<String>> {
+    if format == "pi-messages" {
+        return pi_open_calls(request);
+    }
+    if format == "opencode-messages" {
+        return opencode_open_calls(request);
+    }
     let mut open = BTreeSet::new();
     let rows = match format {
         "openai-responses" => request["input"].as_array(),
@@ -566,13 +580,13 @@ fn native_open_calls(format: &str, request: &Value) -> Vec<String> {
         } else if format == "dsh-messages" {
             if row["role"]=="assistant" {
                 for block in row["content"].as_array().into_iter().flatten() {
-                    if block["type"]=="tool-call" {
+                    if block["type"] == "tool-call" {
                         let id=block["id"].as_str().or_else(||block["toolCallId"].as_str()).unwrap_or("unknown-sdk-tool-call");
                         if !open.insert(id.to_owned()) {open.insert(format!("ambiguous-sdk-tool-call:{id}"));}
                     }
                 }
             }
-            if row["role"]=="tool" {
+            if row["role"] == "tool" {
                 if let Some(id)=row["toolCallId"].as_str() {open.remove(id);}
             }
         } else if format == "anthropic-messages" {
@@ -586,12 +600,67 @@ fn native_open_calls(format: &str, request: &Value) -> Vec<String> {
             }
         }
     }
-    open.into_iter().collect()
+    Ok(open.into_iter().collect())
+}
+
+fn opencode_open_calls(request: &Value) -> Result<Vec<String>> {
+    let mut open = BTreeMap::new();
+    for row in request["messages"].as_array().into_iter().flatten() {
+        if row["role"] != "tool" && !open.is_empty() {
+            return Err(CoreError::forbidden("OpenCode tool results must close the current native call group"));
+        }
+        for part in row["content"].as_array().into_iter().flatten() {
+            match (row["role"].as_str(), part["type"].as_str()) {
+                (Some("assistant"), Some("tool-call")) => {
+                    let id = required_str(part, "id")?;
+                    if open.insert(id, required_str(part, "name")?).is_some() {
+                        return Err(CoreError::forbidden("Duplicate OpenCode tool call ID"));
+                    }
+                }
+                (Some("tool"), Some("tool-result")) => {
+                    if open.remove(required_str(part, "id")?) != Some(required_str(part, "name")?) {
+                        return Err(CoreError::forbidden("OpenCode tool result does not match a native call"));
+                    }
+                }
+                (_, Some("tool-call" | "tool-result")) => {
+                    return Err(CoreError::forbidden("OpenCode tool block is in the wrong native role"));
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(open.into_keys().map(str::to_owned).collect())
+}
+
+fn pi_open_calls(request: &Value) -> Result<Vec<String>> {
+    let mut open = BTreeMap::new();
+    for row in request["messages"].as_array().into_iter().flatten() {
+        if row["role"] == "toolResult" {
+            let id = required_str(row, "toolCallId")?;
+            if open.remove(id) != Some(required_str(row, "toolName")?) {
+                return Err(CoreError::forbidden("Pi tool result must match one unresolved call and its native tool name"));
+            }
+            continue;
+        }
+        if !open.is_empty() {
+            return Err(CoreError::forbidden("Pi tool results must complete the current assistant group before another message"));
+        }
+        if row["role"] == "assistant" {
+            for block in row["content"].as_array().into_iter().flatten().filter(|part| part["type"] == "toolCall") {
+                let id = required_str(block, "id")?;
+                if open.insert(id, required_str(block, "name")?).is_some() {
+                    return Err(CoreError::forbidden("Pi assistant tool call IDs must be unique in their group"));
+                }
+            }
+        }
+    }
+    Ok(open.into_keys().map(str::to_owned).collect())
 }
 async fn check_dependencies(conn: &mut SqliteConnection, agent: &Agent) -> Result<()> {
+    let mut verified = storage::VerifiedObjects::default();
     for sources in agent.groups.values() {
         for id in sources {
-            storage::get_object(conn, id, Some("source")).await?;
+            verified.verify(conn, id, "source").await?;
         }
     }
     Ok(())
@@ -634,6 +703,89 @@ fn native_host_origins(context:&crate::transparent::NativeContext,p:&Value)->Res
         output.push(json!({"message_id":message,"block_index":block,"native_anchor":unit.anchor,"unit_id":unit.unit_id}));
     }
     Ok(json!(output))
+}
+
+fn native_tool_wait_boundary(
+    format: &str,
+    context: &crate::transparent::NativeContext,
+    payload: &Value,
+    editable: &[String],
+    host_origins: &Value,
+    open_calls: &[String],
+) -> Result<Option<Value>> {
+    let Some(boundary) = payload.get("tool_wait") else { return Ok(None); };
+    if !matches!(format, "dsh-messages" | "pi-messages") || payload.get("native_step_id").is_none() {
+        return Err(CoreError::forbidden("tool wait requires a supported native SDK step"));
+    }
+    let message_id = required_str(boundary, "assistant_message_id")?;
+    let seq = field_u64(boundary, "assistant_event_seq")?;
+    if seq == 0 || obj(boundary)?.len() != 3 {
+        return Err(CoreError::invalid("tool wait requires the assistant event and its ordered call IDs"));
+    }
+    let request = context.source_request();
+    let messages = request["messages"].as_array().ok_or_else(|| CoreError::invalid("SDK messages missing"))?;
+    let pi = format == "pi-messages";
+    // Pi gives the durable ID to its Session entry, not the AssistantMessage.
+    // Resolve it through the authenticated host anchors without adding an ID to
+    // Pi's original message or using a model-controlled timestamp as identity.
+    let mut pi_indices = BTreeSet::new();
+    if pi {
+        for origin in host_origins.as_array().into_iter().flatten().filter(|origin| origin["message_id"] == message_id) {
+            if let Some(index) = origin["native_anchor"][1].as_u64() { pi_indices.insert(index); }
+        }
+        if pi_indices.len() != 1 {
+            return Err(CoreError::forbidden("Pi tool wait requires one durable assistant entry binding"));
+        }
+    }
+    let mut matches = messages.iter().enumerate().filter(|(index, message)| {
+        if pi { pi_indices.contains(&(*index as u64)) } else { message["id"] == message_id }
+    });
+    let Some((index, assistant)) = matches.next() else {
+        return Err(CoreError::forbidden("tool wait assistant message missing from the frozen SDK input"));
+    };
+    let route = if pi { assistant } else { &assistant["source"] };
+    let finalized = if pi { assistant["stopReason"] == "toolUse" } else { route["kind"] == "model" };
+    if matches.next().is_some() || assistant["role"] != "assistant" || !finalized
+        || request["provider"].as_str().is_none() || request["model"].as_str().is_none()
+        || route["provider"] != request["provider"] || route["model"] != request["model"]
+    {
+        return Err(CoreError::forbidden("tool wait must bind the exact Worker assistant on the native route"));
+    }
+    let call_type = if pi { "toolCall" } else { "tool-call" };
+    let ids: Vec<&str> = assistant["content"].as_array().into_iter().flatten()
+        .filter(|block| block["type"] == call_type)
+        .map(|block| required_str(block, "id")).collect::<Result<_>>()?;
+    let ordered_open: BTreeSet<&str> = ids.iter().copied().collect();
+    if ids.is_empty() || ids.len() != ordered_open.len() || boundary["call_ids"] != json!(ids)
+        || !ordered_open.into_iter().eq(open_calls.iter().map(String::as_str))
+    {
+        return Err(CoreError::forbidden("tool wait must bind just the unresolved calls of the frozen assistant"));
+    }
+    if messages[index + 1..].iter().any(|message| {
+        pi || message["role"] != "user" || !matches!(message["source"]["kind"].as_str(), Some("sic-instant-view" | "runtime-context"))
+    }) || context.units().iter().filter(|unit| editable.contains(&unit.unit_id)).any(|unit| {
+        unit.anchor[1].as_u64().is_none_or(|message_index| message_index as usize > index)
+    }) {
+        return Err(CoreError::forbidden("material beyond the tool-wait boundary is not in the frozen WB"));
+    }
+    let has_progress = context.units().iter().any(|unit| {
+        unit.anchor[1].as_u64() == Some(index as u64) && !unit.text.trim().is_empty() && editable.contains(&unit.unit_id)
+            && host_origins.as_array().into_iter().flatten().any(|origin| {
+                origin["unit_id"] == unit.unit_id && origin["message_id"] == message_id && origin["block_index"] == unit.anchor[3]
+            })
+    });
+    if !has_progress {
+        return Err(CoreError::forbidden("tool wait requires the Worker's formed and anchored progress text"));
+    }
+    Ok(Some(boundary.clone()))
+}
+
+fn attach_native_source(agent: &mut Agent, source: &str, consumed: usize) -> Result<()> {
+    agent.level_mut("main", 1)?.pending.drain(0..consumed);
+    agent.groups.insert(source.to_owned(), vec![source.to_owned()]);
+    agent.level_mut("main", 1)?.pending.push(source.to_owned());
+    agent.input_epoch = agent.input_epoch.checked_add(1).ok_or_else(|| CoreError::conflict("input revision exhausted"))?;
+    Ok(())
 }
 
 /// True when any source on this chain has an immutable revocation record.
@@ -692,7 +844,7 @@ fn redact_agent_view(value: &mut Value) {
         *decision = json!({"redacted":"revocation","revision":revision});
     }
 }
-async fn ids_for_view_snapshot(conn:&mut SqliteConnection,agent:&Agent,context_id:&str,level:u32)->Result<Vec<String>> {
+async fn ids_for_view_snapshot(conn:&mut SqliteConnection,agent:&Agent,context_id:&str,level:u32,verified:&mut storage::VerifiedObjects)->Result<Vec<String>> {
         let context = agent
             .contexts
             .get(context_id)
@@ -713,7 +865,7 @@ async fn ids_for_view_snapshot(conn:&mut SqliteConnection,agent:&Agent,context_i
         for number in 2..=level {
             if let Some(level) = context.levels.get(&number) {
                 for cid in &level.cbs {
-                    let cb = storage::get_object(conn, cid, Some("cb")).await?;
+                    let cb = verified.read(conn, cid, Some("cb")).await?;
                     let members: Vec<String> = serde_json::from_value(cb["members"].clone())?;
                     if members.is_empty() {
                         ids.push(cid.clone());
@@ -735,6 +887,16 @@ async fn source_snapshot(
     root: &str,
     limited: Option<&[String]>,
 ) -> Result<Value> {
+    source_snapshot_verified(conn, agent, root, limited, &mut storage::VerifiedObjects::default()).await
+}
+
+async fn source_snapshot_verified(
+    conn: &mut SqliteConnection,
+    agent: &Agent,
+    root: &str,
+    limited: Option<&[String]>,
+    verified: &mut storage::VerifiedObjects,
+) -> Result<Value> {
     let ids = agent
         .groups
         .get(root)
@@ -746,7 +908,7 @@ async fn source_snapshot(
     let mut units = Vec::new();
     let mut open = Vec::new();
     for (position, id) in selected.iter().enumerate() {
-        let part = storage::get_object(conn, id, Some("source")).await?;
+        let part = verified.read(conn, id, Some("source")).await?;
         for unit in part["units"]
             .as_array()
             .ok_or_else(|| CoreError::invalid("source units missing"))?
@@ -764,7 +926,7 @@ async fn source_snapshot(
         // fragment; earlier open calls may already have been closed.
         open = part["open_calls"].as_array().cloned().unwrap_or_default();
     }
-    let opaque_blocks=native_opaque::from_sources(conn,selected).await?;
+    let opaque_blocks=native_opaque::from_sources_verified(conn,selected,verified).await?;
     Ok(json!({"units":units,"source_ids":selected,"open_calls":open,"opaque_blocks":opaque_blocks}))
 }
 async fn register_wb(
@@ -954,6 +1116,7 @@ impl Core {
             })
             .collect();
         json!({"api_version":"2","implementation":"sic-rust-core-development","operations":operations,
+               "decision_tree_enabled":decision::ENABLED,
                "feature_scope":"single Editor; implemented operations only; not complete contract acceptance","physical_cache_hit":"unknown"})
     }
     /// Return the canonical fixed SIC tool names for adapters that must reserve
@@ -1054,7 +1217,7 @@ impl Core {
         if operation == "native.history" {
             return crate::native_history::read(self, context, payload).await;
         }
-        if matches!(operation, "native.begin" | "native.get" | "native.commit" | "native.publish" | "native.preview" | "native.refresh_i") {
+        if matches!(operation, "native.begin" | "native.get" | "native.commit" | "native.publish" | "native.preview" | "native.refresh_i" | "native.abandon") {
             return crate::native_transactions::operate(self, operation, context, payload).await;
         }
         if operation == "edit.run" {
@@ -1217,6 +1380,10 @@ impl Core {
                 "experiment.pack",
                 "hierarchy.get",
                 "decision.get",
+                "memory.archive_search",
+                "memory.archive_expand",
+                "memory.archive_ops",
+                "memory.source_text_page",
                 "config.get",
                 "accounting.get",
             ];
@@ -1235,6 +1402,7 @@ impl Core {
                     "edit.host.claim",
                     "edit.host.submit",
                     "edit.host.fail",
+                    "edit.host.reopen",
                     "cut.publish",
                 ];
                 let mut checked_job = false;
@@ -1248,8 +1416,9 @@ impl Core {
                                 .into_iter()
                                 .filter_map(|id| id.as_str().map(str::to_owned))
                                 .collect();
+                            let mut verified = storage::VerifiedObjects::default();
                             for id in ids {
-                                storage::get_object(&mut tx, &id, Some("source")).await?;
+                                verified.verify(&mut tx, &id, "source").await?;
                             }
                             checked_job = true;
                         }
@@ -1312,7 +1481,7 @@ impl Core {
                 self.dispatch_board(&mut tx, &mut agent, operation, payload)
                     .await?
             } else if operation == "cut.publish" {
-                self.publish_with_ipc(&mut tx, &mut agent, payload, &mut replayed)
+                self.publish_with_ipc(&mut tx, &mut agent, payload, &mut replayed, None)
                     .await?
             } else {
                 self.dispatch(&mut tx, &mut agent, operation, payload, &mut replayed)
@@ -1777,6 +1946,10 @@ impl Core {
             "hierarchy.select" => self.select(conn, agent, p).await,
             "memory.page" => self.page(conn, agent, p).await,
             "memory.search" => self.search_memory(conn, agent, p).await,
+            "memory.archive_search" => self.search_archive(conn, agent, p).await,
+            "memory.archive_expand" => self.archive_expand(conn, agent, p).await,
+            "memory.archive_ops" => self.archive_ops(conn, agent, p).await,
+            "memory.source_text_page" => self.archive_text_page(conn, agent, p).await,
             "memory.replay" => self.replay(conn, agent, p).await,
             "decision.get" => {
                 if has_revocation(conn, agent).await? {
@@ -2605,6 +2778,77 @@ async fn combined_material(conn: &mut SqliteConnection, agent: &Agent, job: &Job
 }
 
 impl Core {
+    pub(crate) async fn release_native_candidates(
+        &self, tx: &mut Transaction<'_, Sqlite>, auth: &OperationContext,
+        candidates: &[(String, Value)],
+    ) -> Result<Value> {
+        let chain = auth.chain_id.as_deref().ok_or_else(|| CoreError::forbidden("a native release requires an authenticated chain"))?;
+        let mut agent = load_agent(tx, chain, &auth.actor).await?;
+        self.check_board_access(tx, &agent).await?;
+        if agent.worker_claim.is_some() {
+            return Err(CoreError::conflict("a native release requires an idle Worker boundary"));
+        }
+        let roots: Vec<&str> = candidates.iter().map(|(_, source)| required_str(source, "core_source_id")).collect::<Result<_>>()?;
+        let staged = candidates.iter().all(|(_, source)| source["tool_wait"].is_object());
+        if staged {
+            let unique: BTreeSet<&str> = roots.iter().copied().collect();
+            if unique.len() != roots.len() || roots.iter().any(|root| agent.groups.contains_key(*root)) {
+                return Err(CoreError::conflict("native tool-wait release requires distinct unattached candidates"));
+            }
+            // A tool-wait source hasn't ingested material or consumed V. Retire
+            // the candidate without moving the current input boundary.
+            let id = storage::uid("native_release");
+            let ids: Vec<&str> = candidates.iter().map(|(id, _)| id.as_str()).collect();
+            storage::put_object(tx, "native_release", &id, &json!({
+                "chain_id":chain,"source_ids":ids,"released_core_sources":roots,
+                "restored_volatile_sources":[],"cut_seq":agent.cut_seq,"staged_tool_wait":true
+            })).await?;
+            agent.events.push(json!({"type":"native_candidates_released","record_id":id,"time":now()}));
+            save_agent(tx, &agent).await?;
+            return Ok(json!({"release_id":id,"sources":ids,"restored_volatile_sources":[]}));
+        }
+        let level = agent.level("main", 1)?;
+        if !level.pending.iter().map(String::as_str).eq(roots.iter().copied()) {
+            return Err(CoreError::conflict("native release must match all pending sources in order"));
+        }
+        for root in &roots {
+            if agent.groups.get(*root).is_none_or(|group| group.len() != 1 || group[0] != *root)
+                || agent.jobs.values().any(|job| job.source_id == *root) {
+                return Err(CoreError::conflict("native release source already belongs to a job"));
+            }
+        }
+        for wb_id in &level.wbs {
+            let wb = storage::get_object(tx, wb_id, Some("wb")).await?;
+            if roots.iter().any(|root| wb["source_id"].as_str() == Some(*root)
+                || wb["source_ids"].as_array().is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(*root)))) {
+                return Err(CoreError::conflict("native release source already belongs to a frozen WB"));
+            }
+        }
+        let mut restore = Vec::new();
+        let mut seen = BTreeSet::new();
+        for (_, source) in candidates {
+            for binding in source["volatile_source_bindings"].as_array().into_iter().flatten() {
+                let id = required_str(binding, "source_id")?;
+                let original = storage::get_object(tx, id, Some("source")).await?;
+                if original["origin"]["kind"] != "volatile-continuation" || !agent.groups.contains_key(id)
+                    || roots.contains(&id) || !seen.insert(id.to_owned()) {
+                    return Err(CoreError::conflict("native release cannot restore this volatile source"));
+                }
+                restore.push(id.to_owned());
+            }
+        }
+        let ids: Vec<&str> = candidates.iter().map(|(id, _)| id.as_str()).collect();
+        let audit = json!({"chain_id":chain,"source_ids":ids,"released_core_sources":roots,
+            "restored_volatile_sources":restore,"cut_seq":agent.cut_seq});
+        let id = storage::uid("native_release");
+        storage::put_object(tx, "native_release", &id, &audit).await?;
+        agent.level_mut("main", 1)?.pending = restore;
+        agent.input_epoch = agent.input_epoch.checked_add(1).ok_or_else(|| CoreError::conflict("input revision exhausted"))?;
+        agent.events.push(json!({"type":"native_candidates_released","record_id":id,"time":now()}));
+        save_agent(tx, &agent).await?;
+        Ok(json!({"release_id":id,"sources":audit["source_ids"],"restored_volatile_sources":audit["restored_volatile_sources"]}))
+    }
+
     /// Archive the original native carrier as an ordinary SIC source. Its text
     /// anchors, rather than a Chat conversion, become the first-order WB units.
     pub(crate) async fn register_native_source(
@@ -2615,12 +2859,12 @@ impl Core {
         let opaque_blocks=native_opaque::bind_origins(native_opaque::describe(format,context.source_request())?,p)?;
         let Some(chain) = auth.chain_id.as_deref() else {
             let ids = native_editable_ids(context,p,false)?;
-            if p.get("adopted_i").is_some() || ["protected_cb_bindings","volatile_source_bindings"].iter().any(|key|p.get(key).is_some_and(|value|value.as_array().is_none_or(|rows|!rows.is_empty()))) {
-                return Err(CoreError::forbidden("CB and volatile bindings require an authenticated chain context"));
+            if p.get("adopted_i").is_some() || p.get("tool_wait").is_some() || ["protected_cb_bindings","volatile_source_bindings"].iter().any(|key|p.get(key).is_some_and(|value|value.as_array().is_none_or(|rows|!rows.is_empty()))) {
+                return Err(CoreError::forbidden("CB, volatile and tool-wait bindings require an authenticated chain context"));
             }
             return Ok(json!({"core_source_id":null,"editable_unit_ids":ids,"protected_cb_bindings":[],"host_message_origins":host_origins,"opaque_blocks":opaque_blocks}));
         };
-        let open_calls = native_open_calls(format,context.source_request());
+        let open_calls = native_open_calls(format,context.source_request())?;
         let mut agent = load_agent(tx, chain, &auth.actor).await?;
         check_dependencies(tx,&agent).await?;
         self.check_board_access(tx,&agent).await?;
@@ -2629,28 +2873,41 @@ impl Core {
         let protected = self.verify_native_cb_bindings(tx,context,p,&editable,&selected).await?;
         let volatile = self.verify_native_volatile_bindings(tx,&agent,context,p,&editable).await?;
         let adopted_i = self.verify_native_i_binding(tx,&agent,context,p,&editable).await?;
+        let tool_wait = native_tool_wait_boundary(format, context, p, &editable, &host_origins, &open_calls)?;
         if editable.is_empty() {
             return Ok(json!({"core_source_id":null,"editable_unit_ids":[],"protected_cb_bindings":protected,"volatile_source_bindings":[],"adopted_i":adopted_i,"host_message_origins":host_origins,"opaque_blocks":opaque_blocks}));
         }
-        if !open_calls.is_empty() {
-            return Err(CoreError::new("tool_group_open","freeze a chain-bound native candidate only at a closed tool-group boundary; stage open material with a read-only scope",409));
+        if !open_calls.is_empty() && tool_wait.is_none() {
+            return Err(CoreError::new("tool_group_open","an open native tool group requires an authenticated SDK tool-wait boundary or a read-only scope",409));
         }
         let units: Vec<Value> = context.units().iter().filter(|unit|editable.contains(&unit.unit_id)).map(|unit|json!({
             "unit_id":unit.unit_id,"text":unit.text,"anchor":{"native_path":unit.anchor,"volatile_origin":volatile["origins"][&unit.unit_id],
                 "host_origin":host_origins.as_array().into_iter().flatten().find(|origin|origin["unit_id"]==unit.unit_id)},"kind":"text"
         })).collect();
         let source = storage::uid("source");
-        storage::put_object(tx,"source",&source,&json!({"format":format,"sidecar":context.source_request(),
+        let mut archived = json!({"format":format,"sidecar":context.source_request(),
             "units":units,"protected":[],"cb_dependencies":selected,"dependencies":volatile["source_ids"],"open_calls":open_calls,
-            "opaque_blocks":opaque_blocks,"native_i_board_id":adopted_i["board_id"],"native_i_cut_id":adopted_i["cut_id"]})).await?;
+            "opaque_blocks":opaque_blocks,"native_i_board_id":adopted_i["board_id"],"native_i_cut_id":adopted_i["cut_id"]});
         let consumed = volatile["source_ids"].as_array().map_or(0,Vec::len);
-        agent.level_mut("main",1)?.pending.drain(0..consumed);
-        agent.groups.insert(source.clone(),vec![source.clone()]);
-        agent.level_mut("main",1)?.pending.push(source.clone());
-        agent.input_epoch = agent.input_epoch.checked_add(1).ok_or_else(||CoreError::conflict("input revision exhausted"))?;
-        agent.events.push(json!({"type":"native_source_ingested","source_id":source,"format":format,"time":now()}));
-        save_agent(tx,&agent).await?;
-        Ok(json!({"core_source_id":source,"editable_unit_ids":editable,"protected_cb_bindings":protected,"volatile_source_bindings":volatile["bindings"],"adopted_i":adopted_i,"host_message_origins":host_origins,"opaque_blocks":opaque_blocks}))
+        let mut binding = json!({"core_source_id":source,"editable_unit_ids":editable,"protected_cb_bindings":protected,"volatile_source_bindings":volatile["bindings"],"adopted_i":adopted_i,"host_message_origins":host_origins,"opaque_blocks":opaque_blocks});
+        if let Some(boundary) = tool_wait {
+            if agent.level("main", 1)?.pending.len() != consumed {
+                return Err(CoreError::conflict("earlier pending material must be settled before a native tool-wait edit"));
+            }
+            // An interrupted Editor leaves an archived candidate and retains V.
+            // The source enters the live WB queue only when it is published.
+            let proof = json!({"boundary":boundary,"base_cut":agent.cut_seq,"input_epoch":agent.input_epoch,
+                "result_ownership":"native-host-next-boundary"});
+            archived["tool_wait"] = proof.clone();
+            binding["tool_wait"] = proof;
+        }
+        storage::put_object(tx, "source", &source, &archived).await?;
+        if binding.get("tool_wait").is_none() {
+            attach_native_source(&mut agent, &source, consumed)?;
+            agent.events.push(json!({"type":"native_source_ingested","source_id":source,"format":format,"time":now()}));
+            save_agent(tx,&agent).await?;
+        }
+        Ok(binding)
     }
 
     async fn verify_native_i_binding(
@@ -2827,14 +3084,21 @@ impl Core {
         }
         let original=crate::transparent::NativeContext::new(required_str(source,"format")?,&source["request"]).map_err(err)?;
         let editable:Vec<String>=serde_json::from_value(source["editable_unit_ids"].clone())?;
-        if let Some(chain)=auth.chain_id.as_deref() {
+        let decision = if let Some(chain)=auth.chain_id.as_deref() {
             let agent=load_agent(tx,chain,&auth.actor).await?;
             check_dependencies(tx,&agent).await?;
             self.check_board_access(tx,&agent).await?;
             let selected=self.selected_ids(tx,&agent,"worker").await?;
             self.verify_native_cb_bindings(tx,&original,&json!({"protected_cb_bindings":source["protected_cb_bindings"]}),&editable,&selected).await?;
+            Some(agent.decision)
+        } else { None };
+        let mut projected=crate::native_material::project(&original,&editable,&p["ops"],&p["pvi"])?;
+        if decision::ENABLED && let (Some(decision), Some(tree)) = (decision, projected["material"]["instant"].get("decision_tree")) {
+            decision::from_editor(&decision, field_u64(&decision, "revision")?, tree).map_err(err)?;
         }
-        let projected=crate::native_material::project(&original,&editable,&p["ops"],&p["pvi"])?;
+        if !decision::ENABLED && let Some(instant) = projected["material"]["instant"].as_object_mut() {
+            instant.remove("decision_tree");
+        }
         let edits:Vec<crate::transparent::TextEdit>=current.units().iter().filter(|unit|editable.contains(&unit.unit_id))
             .filter_map(|unit|projected["texts"][&unit.unit_id].as_str().filter(|text|*text!=unit.text).map(|text|
                 crate::transparent::TextEdit{unit_id:unit.unit_id.clone(),expected_text:unit.text.clone(),replacement:text.into()})).collect();
@@ -2897,14 +3161,89 @@ impl Core {
         if candidate.units().iter().filter(|unit|editable.contains(&unit.unit_id)).any(|unit|projection["texts"][&unit.unit_id].as_str() != Some(unit.text.as_str())) {
             return Err(CoreError::conflict("SIC operations do not reproduce the adopted native candidate"));
         }
-        self.form_first_order_wb(tx,&mut agent,&json!({"source_ids":[sid],"reason":"native-publication"})).await?;
+        let tool_wait = source.get("tool_wait");
+        if let Some(proof) = tool_wait {
+            let pending = &agent.level("main", 1)?.pending;
+            let volatile = source["volatile_source_bindings"].as_array().into_iter().flatten()
+                .map(|binding| required_str(binding, "source_id")).collect::<Result<Vec<_>>>()?;
+            if proof["base_cut"].as_u64() != Some(agent.cut_seq) || proof["input_epoch"].as_u64() != Some(agent.input_epoch)
+                || !pending.iter().map(String::as_str).eq(volatile.iter().copied()) || p.get("replace_unpublished_source").is_some()
+            {
+                return Err(CoreError::conflict("native tool-wait boundary changed before publication"));
+            }
+            let archived = storage::get_object(tx, sid, Some("source")).await?;
+            if archived["tool_wait"] != *proof {
+                return Err(CoreError::conflict("native tool-wait source proof changed"));
+            }
+            attach_native_source(&mut agent, sid, volatile.len())?;
+        }
+        let pending = agent.level("main", 1)?.pending.clone();
+        let position = pending.iter().position(|root| root == sid);
+        let mut replacements = Vec::new();
+        if let Some(proof) = p.get("replace_unpublished_source") {
+            if position != Some(1) {
+                return Err(CoreError::conflict("native replacement requires exactly one earlier pending source"));
+            }
+            replacements.push(proof.clone());
+        } else if source["native_step_id"].is_string() {
+            for root in &pending[..position.unwrap_or(0)] {
+                let previous_id: Option<String> = sqlx::query_scalar(
+                    "SELECT id FROM objects WHERE kind='native_source' AND json_extract(data,'$.core_source_id')=? LIMIT 1"
+                ).bind(root).fetch_optional(&mut **tx).await?;
+                let Some(previous_id) = previous_id else { break; };
+                let previous = storage::get_object(tx, &previous_id, Some("native_source")).await?;
+                if previous["native_step_id"] != source["native_step_id"] {
+                    break;
+                }
+                replacements.push(json!({"source_id":previous_id,"expected_source_digest":previous["source_digest"]}));
+            }
+            if Some(replacements.len()) != position {
+                replacements.clear();
+            }
+        }
+        for (index, proof) in replacements.iter().enumerate() {
+            let previous = crate::native_transactions::unpublished_predecessor(tx, auth, proof).await?;
+            let previous_root = required_str(&previous, "core_source_id")?;
+            if pending[index] != previous_root
+                || agent.groups.get(previous_root).is_none_or(|group| group.len() != 1 || group[0] != previous_root)
+                || agent.jobs.values().any(|job| job.source_id == previous_root)
+            {
+                return Err(CoreError::conflict("native predecessor is not the unassigned pending source before this candidate"));
+            }
+            for wb_id in &agent.level("main", 1)?.wbs {
+                let wb = storage::get_object(tx, wb_id, Some("wb")).await?;
+                if wb["source_id"] == previous_root || wb["source_ids"].as_array().is_some_and(|ids| ids.iter().any(|id| id == previous_root)) {
+                    return Err(CoreError::conflict("native predecessor already belongs to a frozen WB"));
+                }
+            }
+            let previous_material = storage::get_object(tx, previous_root, Some("source")).await?;
+            let current_material = storage::get_object(tx, sid, Some("source")).await?;
+            let material_fields = ["format", "units", "cb_dependencies", "dependencies", "open_calls", "native_i_board_id", "native_i_cut_id"];
+            let binding_fields = ["protected_cb_bindings", "volatile_source_bindings", "adopted_i", "provenances"];
+            if material_fields.iter().any(|field| previous_material[*field] != current_material[*field])
+                || binding_fields.iter().any(|field| previous[*field] != source[*field])
+            {
+                return Err(CoreError::conflict("native predecessor differs from the replacement editable material or bindings"));
+            }
+            let record_id = storage::uid("native_source_replacement");
+            storage::put_object(tx, "native_source_replacement", &record_id, &json!({
+                "chain_id":chain,"cut_seq":agent.cut_seq,"previous_source_id":proof["source_id"],
+                "previous_core_source_id":previous_root,"replacement_source_id":p["source_id"],"replacement_core_source_id":sid
+            })).await?;
+            agent.events.push(json!({"type":"native_unpublished_source_replaced","record_id":record_id,"time":now()}));
+        }
+        if !replacements.is_empty() {
+            agent.level_mut("main", 1)?.pending.drain(..replacements.len());
+        }
+        let reason = if tool_wait.is_some() { "native-tool-wait" } else { "native-publication" };
+        self.form_first_order_wb(tx,&mut agent,&json!({"source_ids":[sid],"reason":reason})).await?;
         let prepared = self.prepare_with_profiles(tx,&mut agent,&json!({"source_id":sid}),false,false).await?;
         let job_id = required_str(&prepared,"job_id")?;
         self.submit(tx,&mut agent,&json!({"job_id":job_id,"editor":"editor-1","ops":ops,"pvi":pvi})).await?;
         let material = combined_material(tx,&agent,job(&agent,&json!({"job_id":job_id}))?).await?;
         let mut replayed = false;
         let published = self.publish_with_ipc(tx,&mut agent,&json!({"job_id":job_id,"expected_cut":p["expected_cut"],
-            "idempotency_key":required_str(p,"idempotency_key")?,"expected_candidate_revision":0}),&mut replayed).await?;
+            "idempotency_key":required_str(p,"idempotency_key")?,"expected_candidate_revision":0}),&mut replayed,tool_wait.map(|_| sid)).await?;
         let cb = storage::get_object(tx,required_str(&published,"cb_id")?,Some("cb")).await?;
         if cb["body"] != material["body"] {
             return Err(CoreError::conflict("pending communication needs a native projection before publication"));
@@ -2915,6 +3254,7 @@ impl Core {
         result["core_source_id"] = json!(sid);
         result["native_source_id"] = p["source_id"].clone();
         result["native_version"] = json!(candidate.version());
+        if let Some(proof) = tool_wait { result["tool_wait"] = proof.clone(); }
         result["native_leaf_projection"] = projection["movement"].clone();
         result["native_generated_append"] = projection["generated_append"].clone();
         let mut adoptions=Vec::new();
@@ -2928,7 +3268,7 @@ impl Core {
         }
         result["collection_adoption"]=if adoptions.len()==1 {adoptions[0].clone()}else{Value::Null};
         result["collection_adoptions"]=json!(adoptions);
-        result["instant_views"] = json!(agent.level("main",1)?.instant);
+        result["instant_views"] = json!(decision::instant_for_model(&agent.level("main",1)?.instant));
         result["instant_view_digest"] = json!(storage::digest(&result["instant_views"])?);
         result["instant_views_status"] = json!("Core cut updated; host native activation is required before claiming model adoption");
         result["next_working_material"] = if let Some(sid) = result["volatile_source_id"].as_str() {
@@ -2944,6 +3284,9 @@ impl Core {
         agent: &mut Agent,
         p: &Value,
     ) -> Result<Value> {
+        if !decision::ENABLED {
+            return Err(CoreError::new("feature_disabled", "decision tree is disabled", 409));
+        }
         let expected = field_u64(p, "expected_revision")?;
         if agent.decision["revision"].as_u64() != Some(expected) {
             return Err(CoreError::conflict("decision revision changed"));
@@ -3130,6 +3473,7 @@ impl Core {
         communication: &[crate::ipc::PublishedMessage],
         new_cut_id: &str,
         board_i: Option<&Value>,
+        native_tool_wait_source: Option<&str>,
     ) -> Result<Value> {
         let key = required_str(p, "idempotency_key")?;
         let receipt_key = format!("{}:publish:{key}", agent.chain_id);
@@ -3189,6 +3533,9 @@ impl Core {
         if current["open_calls"]
             .as_array()
             .is_some_and(|a| !a.is_empty())
+            && !native_tool_wait_source.is_some_and(|source| {
+                job.level == 1 && job.source_id == source && current["source_ids"] == json!([source])
+            })
         {
             return Err(CoreError::new(
                 "tool_group_open",
@@ -3227,7 +3574,11 @@ impl Core {
                 },
             }
         }
-        if job.context_id == "main" && job.level == 1 {
+        if !decision::ENABLED {
+            if let Some(instant) = material["instant"].as_object_mut() {
+                instant.remove("decision_tree");
+            }
+        } else if job.context_id == "main" && job.level == 1 {
             if let Some(tree) = material["instant"].get("decision_tree").cloned() {
                 let next = decision::from_editor(&agent.decision, job.decision_revision, &tree)
                     .map_err(err)?;
@@ -3614,8 +3965,9 @@ impl Core {
         let level = agent.level(ctx, number)?;
         let ids = if kind == "wb" { &level.wbs } else { &level.cbs };
         let mut rows = Vec::new();
+        let mut verified = storage::VerifiedObjects::default();
         for (index, id) in ids.iter().enumerate().skip(offset).take(limit) {
-            let value = storage::get_object(conn, id, Some(kind)).await?;
+            let value = verified.read(conn, id, Some(kind)).await?;
             let wb = if kind == "wb" {
                 Some(id.clone())
             } else {
@@ -3646,6 +3998,7 @@ impl Core {
         if cid.is_some() == requested_wb.is_some() {
             return Err(CoreError::invalid("specify exactly one cb_id or wb_id"));
         }
+        let mut verified = storage::VerifiedObjects::in_archive_scope(agent.board_id.as_deref());
         for (ctx, context) in &agent.contexts {
             for (level_num, level) in &context.levels {
                 let wid = if let Some(cb) = cid {
@@ -3659,13 +4012,13 @@ impl Core {
                         .map(str::to_owned)
                 };
                 if let Some(wid) = wid {
-                    let wb = storage::get_object(conn, &wid, Some("wb")).await?;
+                    let wb = verified.read(conn, &wid, Some("wb")).await?;
                     let sid = required_str(&wb, "source_id")?;
                     let ids: Vec<String> = serde_json::from_value(wb["source_ids"].clone())?;
-                    let source = source_snapshot(conn, agent, sid, Some(&ids)).await?;
+                    let source = source_snapshot_verified(conn, agent, sid, Some(&ids), &mut verified).await?;
                     let paired = level.pairs.get(&wid);
                     if let Some(cb) = paired {
-                        storage::get_object(conn, cb, Some("cb")).await?;
+                        verified.verify(conn, cb, "cb").await?;
                     }
                     let members = wb["members"]
                         .as_array()
@@ -3726,7 +4079,7 @@ impl Core {
         context_id: &str,
         level: u32,
     ) -> Result<Vec<String>> {
-        ids_for_view_snapshot(conn,agent,context_id,level).await
+        ids_for_view_snapshot(conn,agent,context_id,level,&mut storage::VerifiedObjects::default()).await
     }
 
     async fn select(
@@ -3834,8 +4187,9 @@ impl Core {
     }
 
     async fn get_cut(&self, conn: &mut SqliteConnection, agent: &Agent) -> Result<Value> {
+        let mut verified=storage::VerifiedObjects::default();
         let cut = if let Some(id) = &agent.current_cut {
-            let archived = storage::get_object(conn, id, Some("cut")).await?;
+            let archived = verified.read(conn, id, Some("cut")).await?;
             // A cut can reference an earlier, now-unbound board. Returning its
             // raw contexts after ACL revocation would leak old I snapshots.
             if archived["board_id"].as_str() != agent.board_id.as_deref() {
@@ -3851,30 +4205,30 @@ impl Core {
         } else {
             None
         };
-        let ids = self.selected_ids(conn, agent, "worker").await?;
-        let mut cbs = Vec::new();
-        let mut origin_bindings = Vec::new();
-        let mut opaque_context_bindings = Vec::new();
-        for id in ids {
-            origin_bindings.push(host_origins::bindings(conn, agent, &id).await?);
-            let cb=storage::get_object(conn,&id,Some("cb")).await?;
-            let source_ids:Vec<String>=serde_json::from_value(cb["source_ids"].clone())?;
-            opaque_context_bindings.push(json!({"cb_id":id,"blocks":native_opaque::from_sources(conn,&source_ids).await?,"representation":"immutable-native","editable_by_pvi":false,"scope":"historical-native-reference"}));
-            cbs.push(storage::get_object(conn, &id, Some("cb")).await?);
-        }
         let view = agent
             .role_views
             .get("worker")
             .ok_or_else(|| CoreError::invalid("Worker view missing"))?;
+        let ids = ids_for_view_snapshot(conn,agent,&view.context_id,view.level,&mut verified).await?;
+        let mut cbs = Vec::new();
+        let mut origin_bindings = Vec::new();
+        let mut opaque_context_bindings = Vec::new();
+        for id in ids {
+            origin_bindings.push(host_origins::bindings(conn, agent, &id, &mut verified).await?);
+            let cb=verified.read(conn,&id,Some("cb")).await?;
+            let source_ids:Vec<String>=serde_json::from_value(cb["source_ids"].clone())?;
+            opaque_context_bindings.push(json!({"cb_id":id,"blocks":native_opaque::from_sources_verified(conn,&source_ids,&mut verified).await?,"representation":"immutable-native","editable_by_pvi":false,"scope":"historical-native-reference"}));
+            cbs.push(cb);
+        }
         let level = agent.level(&view.context_id, view.level)?;
-        let instant_views=json!(level.instant);
+        let instant_views=json!(decision::instant_for_model(&level.instant));
         let instant_view_digest=storage::digest(&instant_views)?;
         let instant_view_text=storage::json_text(&json!({"cut_id":agent.current_cut,"views":instant_views}))?;
         Ok(
             json!({"cut":cut,"cut_id":agent.current_cut,"sequence":agent.cut_seq,
                   "instant_views":instant_views,"instant_view_digest":instant_view_digest,"instant_view_text":instant_view_text,
                   "instant_scope":{"context_id":view.context_id,"level":view.level,"board_id":agent.board_id},
-                  "view":{"protected":agent.protected,"cbs":cbs,"instant":level.instant,"cb_origin_bindings":origin_bindings,"opaque_context_bindings":opaque_context_bindings},"pending":level.pending}),
+                  "view":{"protected":agent.protected,"cbs":cbs,"instant":instant_views,"cb_origin_bindings":origin_bindings,"opaque_context_bindings":opaque_context_bindings},"pending":level.pending}),
         )
     }
 
@@ -3990,7 +4344,20 @@ impl Core {
             return Err(CoreError::forbidden("source is not on this chain"));
         }
         let (offset, limit) = Self::worker_page_bounds(args, 2048, 8192)?;
-        let source = storage::get_object(conn, source_id, Some("source")).await?;
+        let mut verified = storage::VerifiedObjects::in_archive_scope(agent.board_id.as_deref());
+        self.authorized_source_page(conn, &mut verified, source_id, unit_id, offset, limit).await
+    }
+
+    async fn authorized_source_page(
+        &self,
+        conn: &mut SqliteConnection,
+        verified: &mut storage::VerifiedObjects,
+        source_id: &str,
+        unit_id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Value> {
+        let source = verified.read(conn, source_id, Some("source")).await?;
         let matches: Vec<&Value> = source["units"]
             .as_array()
             .ok_or_else(|| CoreError::invalid("source units missing"))?
@@ -4013,7 +4380,8 @@ impl Core {
         Ok(
             json!({"source_id":source_id,"unit_id":unit_id,"text":text,"offset":offset,"total":total,
             "next_offset":if end < total {Some(end)} else {None},"offset_unit":"unicode-codepoints",
-            "full_digest":storage::sha256(content.as_bytes())}),
+            "full_digest":storage::sha256(content.as_bytes()),
+            "original_message":archive_navigation::original_message(&source,matches[0])}),
         )
     }
 
@@ -4088,6 +4456,66 @@ impl Core {
         )
     }
 
+    async fn archive_text_page(&self, conn: &mut SqliteConnection, agent: &Agent, args: &Value) -> Result<Value> {
+        if obj(args)?.keys().any(|key| !["source_id", "unit_id", "offset", "limit"].contains(&key.as_str())) {
+            return Err(CoreError::invalid("unknown source text argument"));
+        }
+        let id = required_str(args, "source_id")?;
+        let unit_id = required_str(args, "unit_id")?;
+        let (offset, limit) = Self::worker_page_bounds(args, 2048, 8192)?;
+        let mut verified = storage::VerifiedObjects::in_archive_scope(agent.board_id.as_deref());
+        let core_id = if id.starts_with("native_source_") {
+            sqlx::query_scalar::<_, String>("SELECT json_extract(data,'$.core_source_id') FROM objects WHERE id=? AND kind='native_source' AND json_extract(data,'$.chain_id')=? AND json_type(data,'$.core_source_id')='text'")
+                .bind(id).bind(&agent.chain_id).fetch_optional(&mut *conn).await?
+                .ok_or_else(|| CoreError::forbidden("source is outside the Worker published archive"))?
+        } else {
+            id.to_owned()
+        };
+        let first = agent.level(self.worker_context(agent)?, 1)?;
+        let mut published = false;
+        for cb_id in &first.cbs {
+            let contains: Option<i64> = sqlx::query_scalar(
+                "SELECT 1 FROM objects, json_each(objects.data,'$.source_ids') AS member WHERE objects.id=? AND objects.kind='cb' AND member.value=?",
+            ).bind(cb_id).bind(&core_id).fetch_optional(&mut *conn).await?;
+            if contains.is_some() {
+                verified.verify(conn, cb_id, "cb").await?;
+                published = true;
+                break;
+            }
+        }
+        if !published {
+            return Err(CoreError::forbidden("source is outside the Worker published archive"));
+        }
+        if id != core_id {
+            verified.verify(conn, id, "native_source").await?;
+        }
+        let mut page = self.authorized_source_page(conn, &mut verified, &core_id, unit_id, offset, limit).await?;
+        page["source_id"] = json!(id);
+        Ok(page)
+    }
+
+    async fn search_archive(&self, conn: &mut SqliteConnection, agent: &Agent, args: &Value) -> Result<Value> {
+        if obj(args)?.keys().any(|key| !["query", "limit", "cursor"].contains(&key.as_str())) {
+            return Err(CoreError::invalid("unknown archive search argument"));
+        }
+        let level = agent.level(self.worker_context(agent)?, 1)?;
+        let end = match args.get("cursor") {
+            Some(cursor) => usize::try_from(field_u64(cursor, "archive_size")?)
+                .ok().filter(|size| *size <= level.cbs.len())
+                .ok_or_else(|| CoreError::conflict("published archive changed; restart the search"))?,
+            None => level.cbs.len(),
+        };
+        let mut scoped = args.clone();
+        if let Some(cursor) = scoped.get_mut("cursor").and_then(Value::as_object_mut) {
+            cursor.remove("archive_size");
+        }
+        let mut found = self.search_memory_with_boundary(conn, agent, &scoped, Some(end)).await?;
+        if let Some(cursor) = found["next_cursor"].as_object_mut() {
+            cursor.insert("archive_size".into(), json!(end));
+        }
+        Ok(found)
+    }
+
     /// Search pending sources, published sources, or CB bodies at one level of
     /// the current Worker context. A cursor pins the query and selected state;
     /// it never silently continues across a change to that state.
@@ -4096,6 +4524,16 @@ impl Core {
         conn: &mut SqliteConnection,
         agent: &Agent,
         p: &Value,
+    ) -> Result<Value> {
+        self.search_memory_with_boundary(conn, agent, p, None).await
+    }
+
+    async fn search_memory_with_boundary(
+        &self,
+        conn: &mut SqliteConnection,
+        agent: &Agent,
+        p: &Value,
+        archive_end: Option<usize>,
     ) -> Result<Value> {
         let fields = obj(p)?;
         if fields
@@ -4136,6 +4574,7 @@ impl Core {
             .get("worker")
             .ok_or_else(|| CoreError::invalid("Worker view missing"))?;
         let level = agent.level(&view.context_id, level_number)?;
+        let published = &level.cbs[..archive_end.unwrap_or(level.cbs.len())];
         let scope_state = if scope == "pending" {
             let mut groups = Map::new();
             for root in &level.pending {
@@ -4148,7 +4587,7 @@ impl Core {
             json!({"roots":level.pending,"groups":groups,"wbs":level.wbs,
                 "pairs":level.pairs,"superseded_wbs":level.superseded_wbs})
         } else {
-            json!(level.cbs)
+            json!(published)
         };
         let snapshot = storage::digest(&json!({
             "format":"sic-memory-search-v3", "chain_id":agent.chain_id,
@@ -4193,7 +4632,7 @@ impl Core {
         let sequence_len = if scope == "pending" {
             level.pending.len()
         } else {
-            level.cbs.len()
+            published.len()
         };
         if cb_index > sequence_len
             || (cb_index == sequence_len && (source_index != 0 || unit_index != 0))
@@ -4367,18 +4806,19 @@ impl Core {
                 "hits":hits,"next_cursor":next,"scanned_cbs":scanned,"complete":cb_index == level.cbs.len()}),
             );
         }
+        let mut verified = storage::VerifiedObjects::in_archive_scope(agent.board_id.as_deref());
         let mut hits = Vec::new();
         let mut cbs_examined = 0usize;
         let mut sources_examined = 0usize;
         let mut units_examined = 0usize;
-        while cb_index < level.cbs.len()
+        while cb_index < published.len()
             && hits.len() < limit
             && cbs_examined < 8
             && sources_examined < 16
             && units_examined < 64
         {
-            let cb_id = &level.cbs[cb_index];
-            let cb = storage::get_object(conn, cb_id, Some("cb")).await?;
+            let cb_id = &published[cb_index];
+            let cb = verified.read(conn, cb_id, Some("cb")).await?;
             cbs_examined += 1;
             let wb_id = required_str(&cb, "wb_id")?;
             if level.pairs.get(wb_id) != Some(cb_id) {
@@ -4388,7 +4828,7 @@ impl Core {
                     500,
                 ));
             }
-            let wb = storage::get_object(conn, wb_id, Some("wb")).await?;
+            let wb = verified.read(conn, wb_id, Some("wb")).await?;
             let frozen_sources: Vec<String> = serde_json::from_value(wb["source_ids"].clone())?;
             let sources: Vec<String> = serde_json::from_value(cb["source_ids"].clone())?;
             if source_index > sources.len() || (source_index == sources.len() && unit_index != 0) {
@@ -4405,7 +4845,7 @@ impl Core {
                 if !agent.groups.values().any(|ids| ids.contains(source_id)) {
                     return Err(CoreError::forbidden("CB source is not on this chain"));
                 }
-                let source = storage::get_object(conn, source_id, Some("source")).await?;
+                let source = verified.read(conn, source_id, Some("source")).await?;
                 sources_examined += 1;
                 let units = source["units"]
                     .as_array()
@@ -4450,6 +4890,7 @@ impl Core {
                             "cb_id":cb_id, "wb_id":wb_id, "source_id":source_id,
                             "unit_id":source_unit_id, "materialized_unit_id":materialized_unit_id,
                             "source_anchor":unit["anchor"],
+                            "original_message":archive_navigation::original_message(&source,unit),
                             "wb_source_membership":if frozen_sources.contains(source_id) {"frozen_wb"} else {"added_after_wb_formation"},
                             "cb_source_membership":"published_cb_source_snapshot",
                             "operation_indexes":displayed_indexes,
@@ -4458,7 +4899,7 @@ impl Core {
                             "match_offset":match_offset, "match_length":query_len,
                             "excerpt_offset":excerpt_offset, "excerpt":excerpt,
                             "offset_unit":"unicode-codepoints", "matches_per_unit":"first",
-                            "read_tool":"sic_memory_page"
+                            "read_tool":"sic_source_text_page"
                         }));
                     }
                     unit_index += 1;
@@ -4478,7 +4919,7 @@ impl Core {
                 break;
             }
         }
-        let next = (cb_index < level.cbs.len()).then(|| {
+        let next = (cb_index < published.len()).then(|| {
             json!({
                 "snapshot":snapshot, "cb_index":cb_index,
                 "source_index":source_index, "unit_index":unit_index
@@ -4489,8 +4930,8 @@ impl Core {
             "scope_description":"published source units at this level; pending WB and CB-only additions excluded",
             "match_mode":"case-sensitive exact substring; first match per unit",
             "hits":hits, "next_cursor":next, "scanned_units":units_examined,
-            "complete":cb_index == level.cbs.len(),
-            "read_tool":"sic_memory_page"
+            "complete":cb_index == published.len(),
+            "read_tool":"sic_source_text_page"
         }))
     }
 
@@ -4518,8 +4959,8 @@ impl Core {
         if !allowed {
             return Err(CoreError::forbidden("object is not on this chain"));
         }
-        let value =
-            storage::get_object(conn, id, Some(if kind == "ops" { "cb" } else { kind })).await?;
+        let mut verified = storage::VerifiedObjects::in_archive_scope(agent.board_id.as_deref());
+        let value = verified.read(conn, id, Some(if kind == "ops" { "cb" } else { kind })).await?;
         let text = if kind == "ops" {
             storage::json_text(&value["ops"])?
         } else {
@@ -4547,13 +4988,14 @@ impl Core {
         {
             return Err(CoreError::forbidden("CB is not on this chain"));
         }
-        let cb = storage::get_object(conn, id, Some("cb")).await?;
-        let wb = storage::get_object(conn, required_str(&cb, "wb_id")?, Some("wb")).await?;
+        let mut verified = storage::VerifiedObjects::in_archive_scope(agent.board_id.as_deref());
+        let cb = verified.read(conn, id, Some("cb")).await?;
+        let wb = verified.read(conn, required_str(&cb, "wb_id")?, Some("wb")).await?;
         // Replay includes separately attributed late source fragments from the
         // published CB, not just the Editor's earlier frozen WB membership.
         let ids: Vec<String> = serde_json::from_value(cb["source_ids"].clone())?;
         let source =
-            source_snapshot(conn, agent, required_str(&wb, "source_id")?, Some(&ids)).await?;
+            source_snapshot_verified(conn, agent, required_str(&wb, "source_id")?, Some(&ids), &mut verified).await?;
         let ops = cb["ops"]
             .as_array()
             .ok_or_else(|| CoreError::invalid("CB operations missing"))?;
@@ -4788,7 +5230,7 @@ fn editable_editor_response(
         &response,
         job.context_id == "main" && job.level == 1,
     )?;
-    if job.context_id == "main" && job.level == 1 {
+    if decision::ENABLED && job.context_id == "main" && job.level == 1 {
         if let Some(tree) = response
             .get("pvi")
             .and_then(|pvi| pvi.get("I"))
@@ -6193,6 +6635,9 @@ impl Core {
                     .await
             }
             "sic_decision_read" => {
+                if !decision::ENABLED {
+                    return Err(CoreError::new("feature_disabled", "decision tree is disabled", 409));
+                }
                 if fields.keys().any(|key| key != "view") {
                     return Err(CoreError::invalid("unknown decision read argument"));
                 }
@@ -8489,6 +8934,7 @@ impl Core {
         agent: &mut Agent,
         p: &Value,
         replayed: &mut bool,
+        native_tool_wait_source: Option<&str>,
     ) -> Result<Value> {
         let actor = agent
             .owners
@@ -8531,6 +8977,7 @@ impl Core {
                 preview.messages(),
                 &cut,
                 board_i.as_ref(),
+                native_tool_wait_source,
             )
             .await?;
         if !*replayed && eligible {
@@ -8746,8 +9193,6 @@ impl Core {
                 "sic_signal_drain",
                 "sic_signal_register",
                 "sic_signal_arrive",
-                "sic_decision_read",
-                "sic_decision_write",
                 "sic_board_read",
                 "sic_board_post",
                 "sic_board_claim",
@@ -8763,6 +9208,9 @@ impl Core {
             .iter()
             .map(|name| name.to_string())
             .collect();
+            if decision::ENABLED {
+                activated.extend(["sic_decision_read".into(), "sic_decision_write".into()]);
+            }
             if tool_configured {
                 activated.extend(
                     ["sic_tool_update", "sic_tool_call"]
@@ -8787,10 +9235,11 @@ impl Core {
                 editor_scope: None,
             })
             .map_err(err)?;
-            let mut views = json!({"current":agent.level(&view.context_id,view.level)?.instant,"decision_tree":agent.decision,
+            let mut views = json!({"current":decision::instant_for_model(&agent.level(&view.context_id,view.level)?.instant),
                 "task_goal":agent.config["task_goal"],"task_constraints":agent.config["task_constraints"],
                 "dynamic_tool_directory":directory,"tool_directory":discoverable_tools,
-                "availability":if tool_configured {"Use activated Socket, Signal, Message, decision and dynamic tools only under host ACL. The tool_directory lists host-declared programs, their overviews and their tools. Select what you need with sic_tool_update; optionally fold what you are done with. If the window cannot hold your selection, the host folds least-recently-used tools and names them in the result."}else{"Use activated Socket, Signal, Message and decision tools only under host ACL. No external tool catalog is configured."}});
+                "availability":if tool_configured {"Use activated tools only under host ACL. The tool_directory lists host-declared programs, their overviews and their tools. Select what you need with sic_tool_update; optionally fold what you are done with. If the window cannot hold your selection, the host folds least-recently-used tools and names them in the result."}else{"Use activated tools only under host ACL. No external tool catalog is configured."}});
+            if decision::ENABLED { views["decision_tree"] = agent.decision.clone(); }
             if let Some(observations) =
                 late_host_tool_observations(&mut tx, chain_id, &context.actor).await?
             {
@@ -9593,10 +10042,11 @@ impl Core {
                 }),
             })
             .map_err(err)?;
-            let mut i_views = json!({"current":agent.current_instant(&job.context_id,job.level)?,"decision_tree":agent.decision,
+            let mut i_views = json!({"current":decision::instant_for_model(agent.current_instant(&job.context_id,job.level)?),
                 "task_goal":job.frozen_editor_config["task_goal"],"task_constraints":job.frozen_editor_config["task_constraints"],
                 "editor_instruction":job.frozen_editor_config["editor_prompt"],
                 "edit_contract":"Return exactly one sic_edit_blocks call with ops array and pvi object. Unmentioned units default to KEEP. Operations are KEEP, DELETE, FLAG, REORDER, COMPRESS, REPLACE, ADD; use only listed unit IDs. REPLACE/COMPRESS require target and content, ADD requires content. P persists in CB, V becomes later WB, I is a replaceable named view. Preserve facts and tool outcomes."});
+            if decision::ENABLED { i_views["decision_tree"] = agent.decision.clone(); }
             let mut assigned_list: Vec<&String> = assigned_units.iter().collect();
             assigned_list.sort();
             i_views["editor_job"] = json!({

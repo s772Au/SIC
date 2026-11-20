@@ -57,7 +57,7 @@ test('opt-in plugin mounts reviewed bundle, real native registry, CB publication
   const sys={id:'system',role:'system',content:[{type:'text',text:system}],source:{kind:'system-prompt'}},runtime={id:'runtime',role:'user',content:[{type:'text',text:'runtime'}],source:{kind:'runtime-context',sections:[{name:'sic:activation',text:JSON.stringify(authorization)}]}};
   const first={id:'human-first',role:'user',content:[{type:'text',text:'first'}],source:{kind:'user'}},second={id:'human-second',role:'user',content:[{type:'text',text:'second'}],source:{kind:'user'}};
   async function send(history){
-   const options={provider:'original',model:'original-model',sessionId:'session',messages:history,tools:ctx.tools.schemas(agent)};
+   const options={provider:'original',model:'original-model',sessionId:'session',messages:history,tools:(await ctx.systemPrompt.assemble({scope:agent})).tools};
    const contextExchange={options,history};const projected=await installed.projectContext(contextExchange,async()=>contextExchange.history);
    const serializeHistory=history=>({model:'original-model',system,messages:[{role:'user',content:history.filter(m=>m.role==='user').flatMap(m=>m.content.filter(b=>b.type!=='text'||b.text))}],stream:true}),native=serializeHistory(projected);
    const boundary=nativeExchange(new Request('https://fixture.invalid/native',{method:'POST',body:JSON.stringify(native)}),{options,history:projected,context_projection:contextExchange.projection,serializeHistory});

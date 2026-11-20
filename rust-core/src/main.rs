@@ -13,6 +13,7 @@ use sic_core_rust::{
     server::{self, HostAuth},
     storage::Store,
 };
+use serde::Deserialize;
 use std::{
     env,
     fs::OpenOptions,
@@ -21,6 +22,13 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChainGrantConfig {
+    chain_id: String,
+    token_env: String,
+}
 
 /// Use the same OS lock for a service and any offline migration command.
 fn lock_database(path: &str) -> Result<std::fs::File, Box<dyn std::error::Error>> {
@@ -48,6 +56,9 @@ async fn main() {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     match args.get(1).map(String::as_str) {
+        Some("capabilities") if args.len() == 2 => {
+            println!("{}", serde_json::to_string(&Core::capabilities())?);
+        }
         Some("init") if args.len() == 3 => {
             let store = Store::create(Path::new(&args[2])).await?;
             store.close().await;
@@ -124,6 +135,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut allow_model = false;
             let mut allow_revoke = false;
             let mut model_config: Option<String> = None;
+            let mut archive_grants: Option<&str> = None;
+            let mut harness_grants: Option<&str> = None;
             let mut dsh_alias: Option<String> = None;
             let mut dsh_max_worker_calls = 8u32;
             let mut dsh_limit_configured = false;
@@ -136,6 +149,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "--model-config" => {
                         index += 1;
                         model_config = Some(args.get(index).ok_or("missing model config path")?.clone());
+                    }
+                    "--archive-grants" => {
+                        index += 1;
+                        archive_grants = Some(args.get(index).ok_or("missing archive grants path")?);
+                    }
+                    "--harness-grants" => {
+                        index += 1;
+                        harness_grants = Some(args.get(index).ok_or("missing harness grants path")?);
                     }
                     "--dsh-alias" => {
                         index += 1;
@@ -168,7 +189,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             if dsh_limit_configured && dsh_alias.is_none() {
                 return Err("DSH Worker call limit requires --dsh-alias".into());
             }
-            let auth = HostAuth::new(token, args[4].clone(), true, allow_model, allow_revoke)?;
+            let mut auth = HostAuth::new(token, args[4].clone(), true, allow_model, allow_revoke)?;
+            for (path, native_host) in [(archive_grants, false), (harness_grants, true)] {
+                if let Some(path) = path {
+                    let bytes = std::fs::read(path)?;
+                    let grants: Vec<ChainGrantConfig> = serde_json::from_slice(&bytes)
+                        .map_err(|_| "invalid scoped grants configuration")?;
+                    for grant in grants {
+                        let bearer = env::var(&grant.token_env).map_err(|_| "configured scoped token is missing")?;
+                        auth = if native_host {
+                            auth.with_harness_grant(&bearer, grant.chain_id)?
+                        } else {
+                            auth.with_archive_grant(&bearer, grant.chain_id)?
+                        };
+                    }
+                }
+            }
             // Probe without writes before creating a lock beside the database;
             // an unrelated or legacy database must not acquire a lock file.
             Store::verify_existing(Path::new(&args[2])).await?;
@@ -229,7 +265,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .with_graceful_shutdown(async { let _ = tokio::signal::ctrl_c().await; }).await?;
             drop(lock);
         }
-        _ => return Err("usage: sic-core-rust init DB | snapshot-python SOURCE DEST | import-stopped-text SOURCE DEST | upgrade-active-python SOURCE DEST | legacy-audit DB CHAIN ACTOR | legacy-activate-board DB CHAIN ACTOR EXPECTED_REVISION KEY | legacy-start DB CHAIN ACTOR KEY | legacy-config-audit DB CHAIN ACTOR | legacy-config-restore DB CHAIN ACTOR KEY RUN_STATE CUT_SEQ CONTROL_EPOCH INPUT_EPOCH CONFIG_SHA256 | serve DB LOOPBACK:PORT ACTOR TOKEN_ENV [--allow-model --model-config FILE --dsh-alias NAME --dsh-max-worker-calls 1..64 --dsh-invalid-choice-retries 0..2] [--allow-revoke]".into()),
+        _ => return Err("usage: sic-core-rust capabilities | init DB | snapshot-python SOURCE DEST | import-stopped-text SOURCE DEST | upgrade-active-python SOURCE DEST | legacy-audit DB CHAIN ACTOR | legacy-activate-board DB CHAIN ACTOR EXPECTED_REVISION KEY | legacy-start DB CHAIN ACTOR KEY | legacy-config-audit DB CHAIN ACTOR | legacy-config-restore DB CHAIN ACTOR KEY RUN_STATE CUT_SEQ CONTROL_EPOCH INPUT_EPOCH CONFIG_SHA256 | serve DB LOOPBACK:PORT ACTOR TOKEN_ENV [--archive-grants FILE] [--harness-grants FILE] [--allow-model --model-config FILE --dsh-alias NAME --dsh-max-worker-calls 1..64 --dsh-invalid-choice-retries 0..2] [--allow-revoke]".into()),
     }
     Ok(())
 }

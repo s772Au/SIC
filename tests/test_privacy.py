@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from scan_release_privacy import scan_bytes, scan_file, pe_identity
+from scan_release_privacy import scan_bytes, scan_file, pe_identity, elf_identity
 
 
 class PrivacyTests(unittest.TestCase):
@@ -56,5 +56,19 @@ class PrivacyTests(unittest.TestCase):
         struct.pack_into("<II", data, 76, 100, 1)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "synthetic.exe"
+            path.write_bytes(data)
+            self.assertFalse(scan_file(path, require_stripped=True)["passed"])
+
+    def test_elf_requires_complete_headers_and_no_static_symbols(self):
+        data = bytearray(64 + 56 + 64)
+        data[:7] = b"\x7fELF\x02\x01\x01"
+        struct.pack_into("<HH", data, 16, 2, 0x003e)
+        struct.pack_into("<QQ", data, 32, 64, 120)
+        struct.pack_into("<HHHHH", data, 52, 64, 56, 1, 64, 1)
+        self.assertTrue(elf_identity(data)["symtab_absent"])
+        self.assertIsNone(elf_identity(data[:-1]))
+        struct.pack_into("<I", data, 124, 2)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "synthetic-elf"
             path.write_bytes(data)
             self.assertFalse(scan_file(path, require_stripped=True)["passed"])

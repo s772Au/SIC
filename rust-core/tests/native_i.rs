@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{Value,json};
 use sic_core_rust::{core::{Core,OperationContext},storage::Store};
 #[tokio::test]
 async fn post_publication_i_refresh_has_an_independent_retryable_receipt_and_never_mutates_cb_or_candidate() {
@@ -37,4 +37,51 @@ async fn post_publication_i_refresh_has_an_independent_retryable_receipt_and_nev
  for op in ["native.history","native.get"] {
   assert_eq!(core.operate(op,&a,&json!({"source_id":s["source_id"]})).await.unwrap_err().status,403);
  }
+}
+
+#[tokio::test]
+async fn archived_navigation_checks_indirect_board_dependencies_after_unbind() {
+    let core = Core::new(Store::memory().await.unwrap());
+    let mut owner = OperationContext {actor:"archive-board-owner".into(),allow_write:true,..Default::default()};
+    owner.chain_id = core.operate("chain.create",&owner,&json!({})).await.unwrap()["result"]["chain_id"].as_str().map(str::to_owned);
+    let chain = owner.chain_id.as_deref().unwrap();
+    core.operate("board.create",&owner,&json!({"acl":{"readers":[chain],"writers":[chain],"claimers":[chain],"managers":[chain]}})).await.unwrap();
+    let cut = core.operate("cut.get",&owner,&json!({})).await.unwrap()["result"].clone();
+    let section = format!("sic:instant-views\n{}",cut["instant_view_text"].as_str().unwrap());
+    let first = json!({"format":"dsh-messages","request":{"messages":[
+        {"id":"board-material","role":"user","content":[{"type":"text","text":"board-dependent material"}]},
+        {"id":"frozen-i","role":"user","content":[{"type":"text","text":section}]}]},
+        "editable_anchors":[["messages",0,"content",0,"text"]],
+        "adopted_i":{"cut_id":cut["cut_id"],"view_digest":cut["instant_view_digest"],"native_anchor":["messages",1,"content",0,"text"],"section_text":section}});
+
+    async fn publish(core: &Core, owner: &OperationContext, begin: Value, sequence:u64) -> (Value,Value) {
+        let source = core.operate("native.begin",owner,&begin).await.unwrap()["result"].clone();
+        core.operate("native.commit",owner,&json!({"source_id":source["source_id"],"expected_source_digest":source["source_digest"],
+            "expected_version":0,"edits":[],"delivery":{"ops":[],"pvi":{}}})).await.unwrap();
+        let result = core.operate("native.publish",owner,&json!({"source_id":source["source_id"],"expected_source_digest":source["source_digest"],
+            "expected_version":1,"expected_cut":sequence,"idempotency_key":format!("archive-board-{sequence}")})).await.unwrap();
+        (source,result["result"]["publication"].clone())
+    }
+    let (_, lower) = publish(&core,&owner,first,0).await;
+    let second = json!({"format":"dsh-messages","request":{"messages":[
+        {"id":"fixed-cb","role":"user","content":[{"type":"text","text":"board-dependent material"}]},
+        {"id":"derived-material","role":"user","content":[{"type":"text","text":"descendant source"}]}]},
+        "protected_cb_bindings":[{"cb_id":lower["cb_id"],"native_anchors":[["messages",0,"content",0,"text"]]}],
+        "editable_anchors":[["messages",1,"content",0,"text"]]});
+    let (native, derived) = publish(&core,&owner,second,1).await;
+    let page = json!({"source_id":native["source_id"],"unit_id":native["binding"]["editable_unit_ids"][0]});
+    let read = core.operate("memory.source_text_page",&owner,&page).await.unwrap()["result"].clone();
+    assert_eq!(read["text"],"descendant source");
+    assert_eq!(read["original_message"]["role"],"user");
+    assert_eq!(read["original_message"]["message_id"],"derived-material");
+    let expand = json!({"cb_id":derived["cb_id"]});
+    let ops = json!({"kind":"ops","object_id":derived["cb_id"]});
+    core.operate("memory.archive_expand",&owner,&expand).await.unwrap();
+    core.operate("memory.archive_ops",&owner,&ops).await.unwrap();
+    core.operate("board.unbind",&owner,&json!({})).await.unwrap();
+    for (tool,args) in [("memory.source_text_page",page),("memory.archive_expand",expand.clone()),
+        ("memory.archive_ops",ops.clone()),("memory.page",ops),("hierarchy.expand",expand.clone()),
+        ("memory.replay",expand),("memory.archive_search",json!({"query":"descendant"}))] {
+        assert_eq!(core.operate(tool,&owner,&args).await.unwrap_err().status,403,"{tool}");
+    }
 }

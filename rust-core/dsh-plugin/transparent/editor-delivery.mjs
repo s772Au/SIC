@@ -1,3 +1,41 @@
+const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+
+export function normalizeEditorDelivery(delivery){
+ const imageView='sic-image-compression-v1';
+ const originalPvi=delivery?.pvi;
+ const image=originalPvi?.[imageView];
+ if(object(originalPvi)&&object(image)&&Array.isArray(image.crops)&&Array.isArray(image.description)
+   &&(!Object.hasOwn(originalPvi,'I')||object(originalPvi.I)&&!Object.hasOwn(originalPvi.I,imageView))){
+  const {[imageView]:recipe,...pvi}=originalPvi;
+  delivery={...delivery,pvi:{...pvi,I:{...pvi.I,[imageView]:recipe}}};
+ }
+ const instant=delivery?.pvi?.I;
+ if(object(instant)&&Object.hasOwn(instant,'decision_tree')){
+  const {decision_tree,...views}=instant;
+  delivery={...delivery,pvi:{...delivery.pvi,I:views}};
+ }
+ if(!Array.isArray(delivery?.ops))return delivery;
+ const isDecision=op=>op?.lifecycle==='I'&&op.view_key==='decision_tree';
+ const canonical=delivery.ops.some(isDecision)?{...delivery,ops:delivery.ops.filter(op=>!isDecision(op))}:delivery;
+ let pvi=canonical.pvi;
+ if(!Object.hasOwn(canonical,'pvi'))pvi={};
+ else if(object(pvi)&&typeof pvi.status==='string'&&(!Object.hasOwn(pvi,'I')||object(pvi.I)&&!Object.hasOwn(pvi.I,'status'))){
+  const {status,...channels}=pvi;
+  pvi={...channels,I:{...channels.I,status}};
+ }
+ if(object(pvi)){
+  for(const channel of ['P','V']){
+   if(typeof pvi[channel]==='string')pvi={...pvi,[channel]:[pvi[channel]]};
+  }
+ }
+ const ops=canonical.ops.map(op=>{
+  if(op?.op!=='ADD'||Object.hasOwn(op,'anchor')||typeof op.target!=='string'||!['before','after'].includes(op.position))return op;
+  const {target,position,...fields}=op;
+  return {...fields,anchor:{target,position}};
+ });
+ return pvi!==canonical.pvi||ops.some((op,index)=>op!==canonical.ops[index])?{...canonical,ops,pvi}:canonical;
+}
+
 // Compile the original sic_edit_blocks arguments into fixed native text edits.
 // Operation purpose stays distinct from actual protocol-mapped capabilities.
 export function editorDelivery(source,args,allowedAnchors){

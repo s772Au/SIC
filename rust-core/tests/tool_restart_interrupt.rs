@@ -4,9 +4,11 @@ use sic_core_rust::{
     core::{Core, OperationContext},
     storage::Store,
 };
-use std::process::Command;
 use std::sync::Arc;
 use tempfile::tempdir;
+
+#[path = "common/delayed_tool.rs"]
+mod delayed_tool;
 
 async fn complete(Json(_body): Json<Value>) -> Json<Value> {
     Json(
@@ -93,13 +95,9 @@ async fn claimed_tool_survives_core_restart_while_external_process_runs() {
     )
     .await;
     let log_path = dir.path().join("restart-tool.log");
-    let command = format!(
-        "Start-Sleep -Milliseconds 1200; Set-Content -LiteralPath '{}' -Value RESTART-TOOL-DONE",
-        log_path.display()
-    );
+    let mut command = delayed_tool::command(1200, Some((&log_path, "RESTART-TOOL-DONE")));
     let process = tokio::task::spawn_blocking(move || {
-        Command::new("pwsh")
-            .args(["-NoProfile", "-Command", &command])
+        command
             .status()
             .expect("restart tool process must start")
     });

@@ -22,7 +22,7 @@ export function adoptedImageView(record){
   return record.layout_receipt?.image_view??(record.layout_receipt?null:record.host_binding?.context_projection?.image_view);
 }
 
-function predecessor(view,args) {
+export function imagePredecessor(view,args) {
   if(!args || args.manifest_id!==view.pointer.manifest_id || !['description','mosaic','crop'].includes(args.from)
       || Object.keys(args).some(key=>!['manifest_id','from','tile'].includes(key))) throw Error('exact active image lineage is required');
   if(args.from==='description'){
@@ -80,7 +80,7 @@ export function createImageSourceTool({imageCompression,bindingFor,clientFor,liv
     const expectedCut=record.layout_receipt?.selected_cut_id??record.host_binding?.context_projection?.selected_cut_id;
     if(currentCut.cut_id!==expectedCut)throw Error('image lookup view was superseded');
     const view=grant.view;
-    const choice=predecessor(view,args);
+    const choice=imagePredecessor(view,args);
     if(args.from==='mosaic'&&view.pointer.display==='description'
         && !priorNativeResult(view,grant.history,'mosaic',view.lineage.mosaic))throw Error('inspect the mosaic before retrieving its crop');
     if(args.from==='crop'){

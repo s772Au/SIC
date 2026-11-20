@@ -99,8 +99,8 @@ pub const OPERATION_PAYLOADS: &[OperationPayload] = &[
         notes: "Registration creates a stable activity; updates require object identity and expected revision. Exact round grants are required for goal continuations.",
     },
     OperationPayload {
-        operation: "native.begin", required: &[s("format"), o("request")], optional: &[a("editable_unit_ids"),a("editable_anchors"),a("protected_cb_bindings"),a("volatile_source_bindings"),a("host_message_origins"),a("host_opaque_origins"),o("adopted_i"),o("provenance"),a("provenances"),s("idempotency_key"),s("wire_sha256")],
-        notes: "Host-only source. Use editable_unit_ids or editable_anchors, not both; an existing chain requires an explicit scope. protected_cb_bindings associates every selected prior CB with read-only unit_ids or native_anchors. Only authorized new units enter WB. Unbound candidates cannot be attached implicitly; model admission belongs to Harness.",
+        operation: "native.begin", required: &[s("format"), o("request")], optional: &[a("editable_unit_ids"),a("editable_anchors"),a("protected_cb_bindings"),a("volatile_source_bindings"),a("host_message_origins"),a("host_opaque_origins"),o("adopted_i"),o("provenance"),a("provenances"),s("idempotency_key"),s("native_step_id"),s("wire_sha256"),o("tool_wait")],
+        notes: "Host-only source. Use editable_unit_ids or editable_anchors, not both; an existing chain requires an explicit scope. protected_cb_bindings associates every selected prior CB with read-only unit_ids or native_anchors. A chain-bound DSH or Pi SDK tool_wait binds assistant_message_id, assistant_event_seq and ordered call_ids to formed editable text. For pi-messages, bind the durable Session entry ID through host_message_origins. The open candidate is staged until atomic publication; the host owns the original tool results. Unbound candidates cannot be attached implicitly; model admission belongs to Harness.",
     },
     OperationPayload {
         operation: "native.get", required: &[s("source_id")], optional: &[],
@@ -123,8 +123,12 @@ pub const OPERATION_PAYLOADS: &[OperationPayload] = &[
         notes:"Host program refreshes only its registered readonly I text leaf after publication; immutable independent projection receipt, no candidate-version or CB mutation. Cut and Board ACL are rechecked.",
     },
     OperationPayload {
-        operation: "native.publish", required: &[s("source_id"),s("expected_source_digest"),n("expected_version"),n("expected_cut"),s("idempotency_key")], optional: &[a("ops"),o("pvi")],
+        operation: "native.publish", required: &[s("source_id"),s("expected_source_digest"),n("expected_version"),n("expected_cut"),s("idempotency_key")], optional: &[a("ops"),o("pvi"),o("replace_unpublished_source")],
         notes: "Chain-bound candidate to existing WB/edit/CB/cut. All text operations and P append into authorized native leaves; REORDER stays within a pure sibling-text editable segment. V becomes an actual pending source for a subsequent host native append and binding. Operations must reproduce the candidate. Published candidates are immutable and same-transaction retries replay.",
+    },
+    OperationPayload {
+        operation: "native.abandon", required: &[s("native_step_id"),a("sources")], optional: &[],
+        notes: "Release the exact unpublished, unassigned pending candidates for a native step, restoring their original V sources. Source and candidate versions remain in the archive.",
     },
     OperationPayload {
         operation: "chain.create",
@@ -401,6 +405,7 @@ pub const OPERATION_PAYLOADS: &[OperationPayload] = &[
     OperationPayload {operation:"edit.host.claim",required:&[s("job_id"),s("editor"),s("claim_id")],optional:&[],notes:"Only the first claim response grants execute=true; retries expose state and cannot dispatch another Editor."},
     OperationPayload {operation:"edit.host.submit",required:&[s("job_id"),s("editor"),s("claim_id")],optional:&[a("ops"),o("pvi")],notes:"Validate and persist the claimed original Harness Editor delivery; exact replay is idempotent, stale cut or epochs conflict."},
     OperationPayload {operation:"edit.host.fail",required:&[s("job_id"),s("editor"),s("claim_id"),s("reason")],optional:&[],notes:"Record an unknown external outcome; scheduler never automatically reissues this attempt."},
+    OperationPayload {operation:"edit.host.reopen",required:&[s("job_id"),s("editor"),s("claim_id"),b("confirm"),s("reason")],optional:&[],notes:"Explicitly reopen a current failed single-Editor job without a candidate. Preserves the failed attempt and requires a different claim."},
     OperationPayload {
         operation: "edit.prepare",
         required: &[s("source_id")],
@@ -600,6 +605,30 @@ pub const OPERATION_PAYLOADS: &[OperationPayload] = &[
         notes: "context_id plus a Chat request object; only openai-chat is supported.",
     },
     OperationPayload {
+        operation: "memory.archive_search",
+        required: &[s("query")],
+        optional: &[n("limit"), o("cursor")],
+        notes: "Search original published source units in the Worker context; continue with the returned cursor.",
+    },
+    OperationPayload {
+        operation: "memory.archive_expand",
+        required: &[],
+        optional: &[s("cut_id"), s("cb_id"), s("wb_id"), n("offset"), n("limit")],
+        notes: "Specify one cut_id, cb_id or wb_id. Page the Worker directory or a published WB and CB pair.",
+    },
+    OperationPayload {
+        operation: "memory.archive_ops",
+        required: &[s("kind"), s("object_id")],
+        optional: &[n("offset"), n("limit")],
+        notes: "Use kind ops to page the ordered operation record of a published Worker CB.",
+    },
+    OperationPayload {
+        operation: "memory.source_text_page",
+        required: &[s("source_id"), s("unit_id")],
+        optional: &[n("offset"), n("limit")],
+        notes: "Read exact text from a published source in the Worker context.",
+    },
+    OperationPayload {
         operation: "decision.get",
         required: &[],
         optional: &[],
@@ -607,9 +636,9 @@ pub const OPERATION_PAYLOADS: &[OperationPayload] = &[
     },
     OperationPayload {
         operation: "decision.update",
-        required: &[n("expected_revision")],
-        optional: &[o("view")],
-        notes: "expected_revision guards the four-view decision CAS.",
+        required: &[n("expected_revision"), a("events")],
+        optional: &[],
+        notes: "expected_revision guards the four-view decision CAS. Available only in a decision-tree build.",
     },
     OperationPayload {
         operation: "config.get",

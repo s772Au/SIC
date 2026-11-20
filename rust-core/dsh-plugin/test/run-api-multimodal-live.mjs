@@ -104,7 +104,7 @@ async function runSdk(){
   api.createUserMessage({source:{kind:'user'},content:[{type:'image',attachment:image.ref}]}),
   api.createUserMessage({source:{kind:'user'},content:[{type:'image',attachment:offloaded.ref,offloaded:true}]}),
  );
- async function send(){const call=await ctx.llm.prepareCall({provider:route.provider,model:config.model,maxTokens:2048,...protocol==='messages'?{reasoningEffort:'off'}:{}}),assembler=new api.BlockAssembler();for await(const chunk of call.stream({...call.config,sessionId:session.id,messages:history,tools:ctx.tools.schemas(agent)})){assembler.push(chunk);if(chunk.type==='finish'&&chunk.reason.kind==='error')throw Error(JSON.stringify(chunk));}return assembler.message({provider:route.provider,model:config.model});}
+ async function send(){const {tools}=await ctx.systemPrompt.assemble({scope:agent});const call=await ctx.llm.prepareCall({provider:route.provider,model:config.model,maxTokens:2048,...protocol==='messages'?{reasoningEffort:'off'}:{}}),assembler=new api.BlockAssembler();for await(const chunk of call.stream({...call.config,sessionId:session.id,messages:history,tools})){assembler.push(chunk);if(chunk.type==='finish'&&chunk.reason.kind==='error')throw Error(JSON.stringify(chunk));}return assembler.message({provider:route.provider,model:config.model});}
  if(mediaOnly){
   const original=api.createUserMessage({source:{kind:'user'},content:[{type:'image',attachment:image.ref}]});
   history=[history[0],runtime,original];

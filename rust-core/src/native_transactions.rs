@@ -90,12 +90,34 @@ async fn commit(
     storage::put_object(conn,"native_version",&storage::uid("native_version"),&json!({"source_id":id,"version":c.version(),"request":output["request"],"receipt":receipt,"delivery":delivery,"delivery_digest":delivery_digest})).await?;
     Ok(output)
 }
-async fn latest(conn: &mut SqliteConnection, id: &str) -> Result<Value> {
+async fn latest(conn: &mut SqliteConnection, verified: &mut storage::VerifiedObjects, id: &str) -> Result<Value> {
     // BEGIN IMMEDIATE covers latest-version read and successor insertion.
     let row = sqlx::query("SELECT id FROM objects WHERE kind='native_version' AND json_extract(data,'$.source_id')=? ORDER BY CAST(json_extract(data,'$.version') AS INTEGER) DESC LIMIT 1")
         .bind(id).fetch_optional(&mut *conn).await?.ok_or_else(||CoreError::new("not_found","native version not found",404))?;
     let record: String = row.try_get("id")?;
-    storage::get_object(conn, &record, Some("native_version")).await
+    verified.read(conn, &record, Some("native_version")).await
+}
+
+pub(crate) async fn unpublished_predecessor(
+    conn: &mut SqliteConnection,
+    auth: &OperationContext,
+    proof: &Value,
+) -> Result<Value> {
+    let id = string(proof, "source_id")?;
+    let mut verified = storage::VerifiedObjects::default();
+    let source = verified.read(conn, id, Some("native_source")).await?;
+    if source["actor"].as_str() != Some(auth.actor.as_str())
+        || source["chain_id"].as_str() != auth.chain_id.as_deref()
+    {
+        return Err(CoreError::forbidden("native predecessor belongs to another actor or chain"));
+    }
+    if source["source_digest"].as_str() != Some(string(proof, "expected_source_digest")?) {
+        return Err(CoreError::conflict("native predecessor digest changed"));
+    }
+    if publication(conn, &mut verified, id).await?.is_some() || version(&latest(conn, &mut verified, id).await?, "version")? != 0 {
+        return Err(CoreError::conflict("native predecessor already has a committed or published edit"));
+    }
+    Ok(source)
 }
 
 pub(crate) async fn operate(
@@ -105,6 +127,53 @@ pub(crate) async fn operate(
     p: &Value,
 ) -> Result<Value> {
     let mut tx = core.store.begin().await?;
+    let mut verified = storage::VerifiedObjects::default();
+    if op == "native.abandon" {
+        let step = string(p, "native_step_id")?;
+        let sources = p["sources"].as_array().filter(|sources| !sources.is_empty())
+            .ok_or_else(|| CoreError::invalid("native release requires explicit source proofs"))?;
+        let mut candidates = Vec::new();
+        for proof in sources {
+            if proof.as_object().is_none_or(|fields| fields.len() != 3) {
+                return Err(CoreError::invalid("native release proof requires the id, digest and exact version"));
+            }
+            let id = string(proof, "source_id")?;
+            let source = verified.read(&mut tx, id, Some("native_source")).await?;
+            if source["actor"].as_str() != Some(auth.actor.as_str())
+                || auth.chain_id.is_none() || source["chain_id"].as_str() != auth.chain_id.as_deref() {
+                return Err(CoreError::forbidden("native release source belongs to another actor or chain"));
+            }
+            core.authorize_native_projection(&mut tx, auth, &source).await?;
+            let current = latest(&mut tx, &mut verified, id).await?;
+            if source["source_digest"].as_str() != Some(string(proof, "expected_source_digest")?)
+                || source["native_step_id"].as_str() != Some(step)
+                || version(&current, "version")? != version(proof, "expected_version")?
+                || publication(&mut tx, &mut verified, id).await?.is_some() {
+                return Err(CoreError::conflict("native release proof changed or the candidate is already published"));
+            }
+            candidates.push((id.to_owned(), source));
+        }
+        let fingerprint = storage::digest(&json!([auth.actor,auth.chain_id,p]))?;
+        let key = format!("native-release:{fingerprint}");
+        let prior: Option<String> = sqlx::query_scalar("SELECT result FROM receipts WHERE key=?")
+            .bind(&key).fetch_optional(&mut *tx).await?;
+        let replayed = prior.is_some();
+        let result:Value = if let Some(prior) = prior { serde_json::from_str(&prior)? } else {
+            for (id, _) in &candidates {
+                reject_released_edit(&mut tx, id).await?;
+            }
+            let result = core.release_native_candidates(&mut tx, auth, &candidates).await?;
+            let value = storage::json_text(&result)?;
+            for id in std::iter::once(key).chain(candidates.iter().map(|(id, _)| format!("native-release-source:{id}"))) {
+                sqlx::query("INSERT INTO receipts(key,fingerprint,result) VALUES(?,?,?)")
+                    .bind(id).bind(&fingerprint).bind(&value).execute(&mut *tx).await?;
+            }
+            result
+        };
+        tx.commit().await?;
+        return Ok(json!({"ok":true,"operation":op,"context":{"actor":auth.actor,"chain_id":auth.chain_id},
+            "evidence":{"provider_called":false,"physical_cache_hit":"unknown","native_host_owned":true,"replayed":replayed},"result":result}));
+    }
     let mut publication_receipt = None;
     let mut replayed = false;
     let requested_operation = op;
@@ -122,10 +191,11 @@ pub(crate) async fn operate(
     if let Some((key,fingerprint)) = &begin_receipt {
         if let Some(row) = sqlx::query("SELECT fingerprint,result FROM receipts WHERE key=?").bind(key).fetch_optional(&mut *tx).await? {
             let saved: Value = serde_json::from_str(&row.try_get::<String,_>("result")?)?;
-            storage::get_object(&mut tx,string(&saved,"source_id")?,Some("native_source")).await?;
+            verified.verify(&mut tx,string(&saved,"source_id")?,"native_source").await?;
             if row.try_get::<String,_>("fingerprint")? != *fingerprint {
                 return Err(CoreError::conflict("native.begin idempotency key reused with different input or raw wire"));
             }
+            reject_released_edit(&mut tx,string(&saved,"source_id")?).await?;
             replay_payload = Some(saved);
             replayed = true;
         }
@@ -135,6 +205,11 @@ pub(crate) async fn operate(
     let mut replayed_commit_version = None;
     let result = if op == "native.begin" {
         let format = string(p, "format")?;
+        if let Some(step) = p.get("native_step_id") {
+            if step.as_str().is_none_or(|step| step.len() != 64 || !step.bytes().all(|byte| byte.is_ascii_hexdigit())) {
+                return Err(CoreError::invalid("native_step_id must be SHA256 hex"));
+            }
+        }
         let request = p
             .get("request")
             .ok_or_else(|| CoreError::invalid("request is required"))?;
@@ -169,14 +244,17 @@ pub(crate) async fn operate(
         }
         let provenance=if provenances.len()==1 {provenances[0].clone()} else {Value::Null};
         let cb_ids: Vec<Value> = binding["protected_cb_bindings"].as_array().into_iter().flatten().map(|binding|binding["cb_id"].clone()).collect();
-        storage::put_object(&mut tx,"native_source",&source,&json!({"actor":auth.actor,"chain_id":auth.chain_id,
+        let mut record = json!({"actor":auth.actor,"chain_id":auth.chain_id,
             "core_source_id":binding["core_source_id"],"editable_unit_ids":binding["editable_unit_ids"],
             "protected_cb_bindings":binding["protected_cb_bindings"],"protected_cb_ids":cb_ids,
             "volatile_source_bindings":binding["volatile_source_bindings"],
             "adopted_i":binding["adopted_i"],
             "host_message_origins":binding["host_message_origins"],
             "provenance":provenance,"provenances":provenances,"wire_sha256":p["wire_sha256"],
-            "opaque_blocks":binding["opaque_blocks"],"format":format,"request":request,"source_digest":c.source_digest()})).await?;
+            "native_step_id":p["native_step_id"],
+            "opaque_blocks":binding["opaque_blocks"],"format":format,"request":request,"source_digest":c.source_digest()});
+        if let Some(proof) = binding.get("tool_wait") { record["tool_wait"] = proof.clone(); }
+        storage::put_object(&mut tx,"native_source",&source,&record).await?;
         storage::put_object(
             &mut tx,
             "native_version",
@@ -187,7 +265,7 @@ pub(crate) async fn operate(
         view(&source, &c, &Value::Null)?
     } else {
         let id = string(p, "source_id")?;
-        let source = storage::get_object(&mut tx, id, Some("native_source")).await?;
+        let source = verified.read(&mut tx, id, Some("native_source")).await?;
         if source["actor"].as_str() != Some(auth.actor.as_str()) {
             return Err(CoreError::forbidden(
                 "native source belongs to another actor",
@@ -200,8 +278,11 @@ pub(crate) async fn operate(
             storage::get_chain(&mut tx, chain, &auth.actor).await?;
         }
         core.authorize_native_projection(&mut tx,auth,&source).await?;
-        let published = publication(&mut tx,id).await?;
-        let current = latest(&mut tx, id).await?;
+        if matches!(op,"native.commit"|"native.publish"|"native.preview") {
+            reject_released_edit(&mut tx,id).await?;
+        }
+        let published = publication(&mut tx,&mut verified,id).await?;
+        let current = latest(&mut tx,&mut verified,id).await?;
         let mut c = NativeContext::restore(
             string(&source, "format")?,
             &source["request"],
@@ -221,7 +302,7 @@ pub(crate) async fn operate(
             view(id, &c, &current["receipt"])?
         } else if op=="native.refresh_i" {
             let publication=published.ok_or_else(||CoreError::conflict("I refresh requires an already published candidate"))?;
-            let (_,was_replayed)=crate::native_i::refresh(core,&mut tx,auth,&source,&c,p,&publication).await?;
+            let (_,was_replayed)=crate::native_i::refresh(core,&mut tx,&mut verified,auth,&source,&c,p,&publication).await?;
             replayed=was_replayed;publication_receipt=Some(publication);
             view(id,&c,&current["receipt"])?
         } else if op=="native.preview" {
@@ -288,7 +369,7 @@ pub(crate) async fn operate(
         }
     };
     let mut result = result;
-    let source = storage::get_object(&mut tx,string(&result,"source_id")?,Some("native_source")).await?;
+    let source = verified.read(&mut tx,string(&result,"source_id")?,Some("native_source")).await?;
     result["opaque_blocks"] = json!(crate::native_opaque::source_blocks(&source)?);
     result["binding"] = json!({"chain_id":source["chain_id"],"core_source_id":source["core_source_id"],
         "editable_unit_ids":source["editable_unit_ids"],"protected_cb_bindings":source["protected_cb_bindings"],
@@ -299,14 +380,15 @@ pub(crate) async fn operate(
         "host_message_origins":source["host_message_origins"],
         "provenance":source["provenance"],"provenances":source["provenances"],
         "unbound_migration":"unbound candidates stay host-only; begin a new chain-bound candidate to publish"});
+    if let Some(proof) = source.get("tool_wait") { result["binding"]["tool_wait"] = proof.clone(); }
     result["publication"] = publication_receipt.unwrap_or(Value::Null);
-    let version_record=latest(&mut tx,string(&result,"source_id")?).await?;
+    let version_record=latest(&mut tx,&mut verified,string(&result,"source_id")?).await?;
     result["delivery"]=version_record["delivery"].clone();
     result["current_delivery"]=result["delivery"].clone();
     result["delivery_digest"]=version_record["delivery_digest"].clone();
     result["delivery_version"]=if result["delivery"].is_null() {Value::Null}else{version_record["version"].clone()};
     if op != "native.preview" {
-        if let Some(projection)=crate::native_i::latest(&mut tx,string(&result,"source_id")?,version(&version_record,"version")?).await? {
+        if let Some(projection)=crate::native_i::latest(&mut tx,&mut verified,string(&result,"source_id")?,version(&version_record,"version")?).await? {
             core.authorize_native_projection(&mut tx,auth,&projection).await?;
             result["candidate_request"]=result["request"].clone();
             result["candidate_units"]=result["units"].clone();
@@ -327,11 +409,18 @@ pub(crate) async fn operate(
     )
 }
 
-async fn publication(conn: &mut SqliteConnection,id: &str) -> Result<Option<Value>> {
+async fn reject_released_edit(conn:&mut SqliteConnection,id:&str)->Result<()> {
+    let released:Option<i64> = sqlx::query_scalar("SELECT 1 FROM receipts WHERE key=?")
+        .bind(format!("native-release-source:{id}")).fetch_optional(&mut *conn).await?;
+    if released.is_some(){return Err(CoreError::conflict("released native candidate is archive-only"));}
+    Ok(())
+}
+
+async fn publication(conn: &mut SqliteConnection,verified: &mut storage::VerifiedObjects,id: &str) -> Result<Option<Value>> {
     let record: Option<String> = sqlx::query_scalar("SELECT id FROM objects WHERE kind='native_publication' AND json_extract(data,'$.source_id')=? LIMIT 1")
         .bind(id).fetch_optional(&mut *conn).await?;
     match record {
-        Some(record) => Ok(Some(storage::get_object(conn,&record,Some("native_publication")).await?)),
+        Some(record) => Ok(Some(verified.read(conn,&record,Some("native_publication")).await?)),
         None => Ok(None),
     }
 }

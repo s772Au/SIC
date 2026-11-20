@@ -4,8 +4,10 @@ import {digest} from './transport.mjs';
 import {imageLookupResults,IMAGE_SOURCE_RESULT} from './image-source-tool.mjs';
 
 export const IMAGE_VIEW = 'sic-image-compression-v1';
+export class ImageDeliveryError extends Error {}
 const MAX_CROPS = 12;
 const MAX_CROP_PIXELS = 8_000_000;
+const MAX_DESCRIPTION_PART = 800;
 const TILE = 512;
 const GUTTER = 8;
 const ID = /^[a-f\d]{64}$/u;
@@ -33,40 +35,49 @@ function originalsIn(history) {
 }
 
 function parseRecipe(recipe, history) {
-  if (!exactKeys(recipe,['crops','description']) && !exactKeys(recipe,['crops','description','display'])) throw Error('invalid image crop recipe');
-  if (Object.hasOwn(recipe,'display') && !DISPLAYS.includes(recipe.display)) throw Error('invalid image view representation');
+  if (!exactKeys(recipe,['crops','description']) && !exactKeys(recipe,['crops','description','display'])) throw new ImageDeliveryError('invalid image crop recipe');
+  if (Object.hasOwn(recipe,'display') && !DISPLAYS.includes(recipe.display)) throw new ImageDeliveryError('invalid image view representation');
   if (!Array.isArray(recipe.crops)
-      || recipe.crops.length < 1 || recipe.crops.length > MAX_CROPS) throw Error('invalid image crop group');
+      || recipe.crops.length < 1 || recipe.crops.length > MAX_CROPS) throw new ImageDeliveryError('invalid image crop group');
   const originals = originalsIn(history), parents = new Map();
   let pixels = 0;
   const crops = recipe.crops.map(row => {
     if (!exactKeys(row,['message_id','block_index','x','y','width','height'])
         || typeof row.message_id !== 'string' || !Number.isSafeInteger(row.block_index) || row.block_index < 0) {
-      throw Error('invalid image crop coordinates or source');
+      throw new ImageDeliveryError('invalid image crop coordinates or source');
     }
     const parent = originals.get(position(row.message_id,row.block_index));
-    if (!parent || parent.offloaded) throw Error('image crop source is outside this native assignment or offloaded');
+    if (!parent || parent.offloaded) throw new ImageDeliveryError('image crop source is outside this native assignment or offloaded. Use only the exact (message_id, block_index) pairs currently listed for visual compression, or omit the optional image recipe');
     const {x,y,width,height} = row;
     const ref = parent.original.attachment;
     if (![x,y,width,height].every(Number.isSafeInteger) || x < 0 || y < 0 || width < 1 || height < 1
-        || x + width > ref.width || y + height > ref.height) throw Error('image crop is outside the original raster');
+        || x + width > ref.width || y + height > ref.height) throw new ImageDeliveryError('image crop is outside the original raster');
     pixels += width * height;
-    if (pixels > MAX_CROP_PIXELS) throw Error('image crop group exceeds its total pixel limit');
+    if (pixels > MAX_CROP_PIXELS) throw new ImageDeliveryError('image crop group exceeds its total pixel limit');
     parents.set(parent.id,parent.original);
     return {parent_id:parent.id,region:{x,y,width,height}};
   });
-  if (new Set(crops.map(digest)).size !== crops.length) throw Error('image crop group has identical repeated regions');
+  if (new Set(crops.map(digest)).size !== crops.length) throw new ImageDeliveryError('image crop group has identical repeated regions');
   const parts = recipe.description;
-  if (!Array.isArray(parts) || parts.length < 1 || parts.length > MAX_CROPS) throw Error('image description requires cited mosaic tiles');
-  const description = parts.map(part => {
+  if (!Array.isArray(parts) || parts.length < 1 || parts.length > MAX_CROPS) throw new ImageDeliveryError('image description requires cited mosaic tiles');
+  const description = parts.flatMap(part => {
     if (!exactKeys(part,['text','tiles']) || typeof part.text !== 'string' || !part.text.trim()
-        || part.text.length > 800 || !Array.isArray(part.tiles) || !part.tiles.length
+        || part.text.length > MAX_DESCRIPTION_PART*MAX_CROPS || !Array.isArray(part.tiles) || !part.tiles.length
         || new Set(part.tiles).size !== part.tiles.length
         || part.tiles.some(tile => !Number.isSafeInteger(tile) || tile < 1 || tile > crops.length)) {
-      throw Error('invalid image description or tile citation');
+      throw new ImageDeliveryError('invalid image description or tile citation');
     }
-    return {text:part.text,tiles:part.tiles};
+    const pieces=[];
+    let text='';
+    for(const character of part.text){
+      if(text.length+character.length>MAX_DESCRIPTION_PART){pieces.push(text);text='';}
+      text+=character;
+    }
+    pieces.push(text);
+    if(pieces.some(piece=>!piece.trim()))throw new ImageDeliveryError('image description has a blank cited part');
+    return pieces.map(text=>({text,tiles:part.tiles}));
   });
+  if(description.length>MAX_CROPS)throw new ImageDeliveryError('image description requires no more than 12 cited parts');
   return {originals:[...parents].map(([id,original])=>({id,...original})),crops,description};
 }
 
@@ -95,7 +106,7 @@ export function createImageCompression({store,attachments,sharp}) {
     }));
   }
   async function prepare({args,history,sessionId,signal}) {
-    if (Array.isArray(args?.ops) && args.ops.some(op=>op?.view_key === IMAGE_VIEW)) throw Error('image view updates require pvi.I image recipes');
+    if (Array.isArray(args?.ops) && args.ops.some(op=>op?.view_key === IMAGE_VIEW)) throw new ImageDeliveryError('image view updates require pvi.I image recipes');
     const instant = args?.pvi?.I;
     if (!Object.hasOwn(instant ?? {},IMAGE_VIEW) || instant[IMAGE_VIEW] === null) return args;
     if (!sessionId) throw Error('image compression requires the trusted native session');
